@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rclone Monitor — Dashboard</title>
+  <meta name="description" content="Dashboard de surveillance temps réel pour rclone-bisync">
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- ═══════ TOPBAR ═══════ -->
+    <header class="bar" id="topbar">
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+        rclone Monitor
+      </div>
+      <div id="sbadge" class="badge idle"><span class="dot" id="sdot"></span><span id="slbl">Chargement…</span></div>
+      <span id="slow-badge" class="badge warn" style="display:none"><span class="dot"></span>Sync lente</span>
+      <div class="sp"></div>
+      <span id="ts" class="ts-lbl"></span>
+      <div id="spin" class="spin"></div>
+      <button class="btn" id="bsync" onclick="doSync()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round">
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+        Sync
+      </button>
+      <button class="btn btn-g" onclick="openTreeModal()" title="Parcourir l'arborescence">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        Fichiers
+      </button>
+      <button class="btn btn-g" onclick="openFiltersModal()" title="Gérer les filtres et fichiers ignorés">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+        Filtres
+      </button>
+      <button class="tsbtn" onclick="toggleTheme()" title="Thème" id="theme-btn">
+        <svg id="ti" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      </button>
+    </header>
+
+    <!-- ═══════ MAIN ═══════ -->
+    <main class="main" id="main-content">
+
+      <!-- Alert banner -->
+      <div id="alert-banner" class="alert-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span class="alert-msg" id="alert-msg"></span>
+      </div>
+
+      <!-- KPIs Row 1 -->
+      <div class="krow" id="kpi-row-1">
+        <div class="kpi" id="kpi-timer">
+          <div class="kl">Timer</div>
+          <div class="kv" id="kt">—</div>
+          <div class="ks" id="kts">toutes les 5 min</div>
+        </div>
+        <div class="kpi" id="kpi-last">
+          <div class="kl">Dernière sync</div>
+          <div class="kv" id="kl">—</div>
+          <div class="ks" id="kls">—</div>
+        </div>
+        <div class="kpi" id="kpi-duration">
+          <div class="kl">Durée</div>
+          <div class="kv" id="kd">—</div>
+          <div class="ks">dernière exécution</div>
+        </div>
+        <div class="kpi" id="disk-kpi">
+          <div class="kl">Disque local</div>
+          <div class="kv" id="kdk">—</div>
+          <div class="ks" id="kdks">—</div>
+          <div class="dbar">
+            <div class="dfill" id="dfill" style="width:0"></div>
+          </div>
+        </div>
+        <div class="kpi" id="kpi-today">
+          <div class="kl">Syncs aujourd'hui</div>
+          <div class="kv" id="kr">—</div>
+          <div class="ks" id="krs">—</div>
+        </div>
+      </div>
+
+      <!-- KPIs Row 2 -->
+      <div class="krow" id="kpi-row-2">
+        <div class="kpi" id="kpi-files">
+          <div class="kl">Fichiers GoogleDrive</div>
+          <div class="kv" id="kf">—</div>
+          <div class="ks">~/GoogleDrive</div>
+        </div>
+        <div class="kpi" id="kpi-speed">
+          <div class="kl">Vitesse moyenne</div>
+          <div class="kv" id="ksp">—</div>
+          <div class="ks">dernière sync</div>
+        </div>
+        <div class="kpi" id="conflict-kpi">
+          <div class="kl">Conflits aujourd'hui</div>
+          <div class="kv" id="kc">0</div>
+          <div class="ks">lignes conflict dans logs</div>
+        </div>
+        <div class="kpi" id="kpi-rate">
+          <div class="kl">Taux de succès 7j</div>
+          <div class="kv" id="ksr">—</div>
+          <div class="dbar">
+            <div class="dfill" id="srfill" style="width:0"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Sync Section -->
+      <div id="live-section" class="live-section">
+        <div class="live-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          Sync en cours
+          <span class="live-elapsed" id="live-elapsed"></span>
+        </div>
+        <div class="live-body">
+          <!-- Phase stepper -->
+          <div id="phase-stepper" class="phase-stepper"></div>
+
+          <!-- Progress bar -->
+          <div>
+            <div class="tf-pbar">
+              <div class="tf-pfill" id="tf-bar" style="width:0"></div>
+            </div>
+          </div>
+
+          <!-- Transfer stats -->
+          <div class="tf-grid" id="tf-grid">
+            <div class="tf-stat">
+              <div class="kl">Transféré</div>
+              <div class="kv" id="tf-done">—</div>
+            </div>
+            <div class="tf-stat">
+              <div class="kl">Total</div>
+              <div class="kv" id="tf-total">—</div>
+            </div>
+            <div class="tf-stat">
+              <div class="kl">Progression</div>
+              <div class="kv" id="tf-pct">—</div>
+            </div>
+            <div class="tf-stat">
+              <div class="kl">Vitesse</div>
+              <div class="kv" id="tf-speed">—</div>
+            </div>
+            <div class="tf-stat">
+              <div class="kl">ETA</div>
+              <div class="kv" id="tf-eta">—</div>
+            </div>
+            <div class="tf-stat">
+              <div class="kl">Checks</div>
+              <div class="kv" id="tf-checks">—</div>
+            </div>
+          </div>
+
+          <!-- Active file -->
+          <div id="active-wrap" class="active-file-wrap" style="display:none">
+            <div class="kl">Fichier en cours de transfert</div>
+            <div class="active-fname" id="active-file">—</div>
+            <div class="tf-pbar">
+              <div class="tf-pfill" id="active-bar" style="width:0"></div>
+            </div>
+          </div>
+
+          <!-- Fichiers synchronisés récemment durant la session active -->
+          <div id="live-synced-wrap"
+            style="display:none; padding: 8px 12px; background: var(--surface-off); border-radius: 6px; margin-top: 10px;">
+            <div class="kl">Fichiers synchronisés durant cette session</div>
+            <div id="live-synced-list" class="live-synced-list"></div>
+          </div>
+
+          <!-- Changes detected -->
+          <div class="changes-grid" id="changes-grid">
+            <div>
+              <div class="changes-col-title">Path1 — Changements détectés</div>
+              <div id="ch-p1" class="live-changes-list"><span style="color:var(--faint);font-size:11px">Aucun
+                  changement</span></div>
+            </div>
+            <div>
+              <div class="changes-col-title">Path2 — Changements détectés</div>
+              <div id="ch-p2" class="live-changes-list"><span style="color:var(--faint);font-size:11px">Aucun
+                  changement</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panels: History + Logs -->
+      <div class="panels" id="panels">
+        <!-- History -->
+        <div class="panel" id="panel-history">
+          <div class="ph">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <span>Historique des syncs</span>
+          </div>
+          <div class="sparkline-wrap" id="sparkline-wrap"></div>
+          <div class="pb" id="history-scroll">
+            <table class="rt" id="runs-table">
+              <thead>
+                <tr>
+                  <th>Démarrage</th>
+                  <th>Statut</th>
+                  <th title="Fichiers copiés">Copiés</th>
+                  <th title="Fichiers modifiés">Modif.</th>
+                  <th title="Fichiers supprimés">Suppr.</th>
+                  <th>Durée</th>
+                  <th>Err.</th>
+                </tr>
+              </thead>
+              <tbody id="rtb"></tbody>
+            </table>
+            <div class="empty" id="rem" style="display:none">Aucune sync dans les journaux</div>
+          </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="panel" id="panel-logs">
+          <div class="ph">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="9" y1="21" x2="9" y2="9" />
+            </svg>
+            <span>Logs récents</span>
+            <button class="btn-g btn" style="padding:2px 7px;font-size:10px" onclick="logsBot()"
+              id="logs-bottom-btn">↓</button>
+          </div>
+          <div class="pb" id="lscroll">
+            <div class="lw" id="lwrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Files -->
+      <div class="recent-panel" id="panel-recent">
+        <div class="ph">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <span>Fichiers récents</span>
+          <span id="recent-count" style="font-weight:400;font-size:10px;color:var(--faint)"></span>
+        </div>
+        <div class="recent-list" id="recent-list">
+          <div class="empty">Aucun fichier récent dans les logs</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ═══════ MODALS ═══════ -->
+  <div id="tree-modal" class="modal-overlay" onclick="if(event.target===this) closeTreeModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          Navigateur Google Drive
+        </div>
+        <button class="modal-close" onclick="closeTreeModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="tree-toolbar">
+          <button class="tree-btn" onclick="treeUp()" id="tree-up-btn" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg> Retour
+          </button>
+          <div class="tree-path" id="tree-path">/</div>
+        </div>
+        <div class="tree-list" id="tree-list">
+          <!-- Tree items generated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="filters-modal" class="modal-overlay" onclick="if(event.target===this) closeFiltersModal()">
+    <div class="modal" style="width:800px; height:85vh; max-height:none;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+          Filtres et Fichiers Ignorés
+        </div>
+        <button class="modal-close" onclick="closeFiltersModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden;">
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <input type="text" id="new-filter-input" placeholder="Ex: - *.tmp ou - MonDossier/**"
+            style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-off);color:var(--text);font-family:'Courier New',monospace;font-size:12px;outline:none;">
+          <button class="btn" onclick="addFilter()">Ajouter</button>
+          <button class="btn ok" style="background:var(--primary-h)" id="save-filters-btn" onclick="saveFilters()">Sauvegarder</button>
+        </div>
+        <textarea id="filters-text"
+          style="flex:1;width:100%;min-height:0;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-off);color:var(--text);font-family:'Courier New',monospace;font-size:11px;resize:none;white-space:pre-wrap;outline:none;"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

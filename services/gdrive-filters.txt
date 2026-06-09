@@ -1,0 +1,61 @@
+# --- FICHIERS À IGNORER (Ne seront jamais touchés) ---
+
+# Sorties de compilation et fichiers temporaires
+- *.out
+- *.tmp
+- *.part
+- *.crdownload
+- ~$*
+- .~lock.*
+
+# Dossiers lourds / volatils à ignorer
+- *.out
+- out/**
+- .idea/**
+- .Trash-*
+- .thumbnails/**
+- .cache/**
+- node_modules/**
+
+# Fichiers système inutiles
+- **/.DS_Store
+- **/Thumbs.db
+- desktop.ini
+
+# Internes à rclone
+- .rclone*
+- RCLONE_TEST
+
+# Dossiers spécifiques que tu veux garder sur le Cloud mais pas sur ton PC
+- Cours/2GT7/**
+- Cours/1G3/**
+
+# Fichiers natifs Google (ne pas créer de liens .gdoc localement)
+- *.gdoc
+- *.gsheet
+- *.gslides
+- *.gdraw
+
+# Dossiers de build / VCS
+- .git/**
+- target/**
+- build/**
+- .gradle/**
+
+# Formats Office (édités localement mais souvent en double avec Google Docs)
+- *.doc
+- *.docx
+- *.xls
+- *.xlsx
+- *.ppt
+- *.pptx
+- *.pdf
+
+# Formats Google manquants
+- *.gjam
+- *.gform
+- *.gsite
+- venv_python/**
+- venv/**
+- __pycache__/**
+- *.pyc
