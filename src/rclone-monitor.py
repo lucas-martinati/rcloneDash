@@ -202,6 +202,7 @@ class LogStreamer(threading.Thread):
             self.is_syncing = False
         elif "failed" in ll and self.service in ll:
             self.is_syncing = False
+            subprocess.run(["notify-send", "RcloneDash", "Échec de la synchronisation. Consultez le tableau de bord.", "--icon=dialog-error", "-u", "critical"], check=False)
 
     def get_live(self):
         """Retourne l'état live de la sync en cours, ou None."""
@@ -258,6 +259,8 @@ class Monitor:
         self.streamer = LogStreamer(self.svc)
         self.streamer.start()
 
+        self.quota = None
+
         # Caches
         self._parsed = None
         self._parsed_time = 0
@@ -312,6 +315,21 @@ class Monitor:
             if "Duration:" in l:
                 s["duration"] = l.strip().split("Duration:")[-1].strip()
         return s
+
+    def update_quota(self):
+        while True:
+            try:
+                out = subprocess.check_output(
+                    ["rclone", "about", "GoogleDrive:", "--json"], 
+                    timeout=30,
+                    stderr=subprocess.STDOUT
+                ).decode('utf-8')
+                self.quota = json.loads(out)
+            except subprocess.CalledProcessError as e:
+                self.quota = {"error": str(e.output.decode('utf-8', errors='ignore')).strip()}
+            except Exception as e:
+                self.quota = {"error": str(e)}
+            time.sleep(300)
 
     def disk(self):
         """Usage disque du dossier GoogleDrive."""
@@ -555,6 +573,7 @@ class Monitor:
                 "logs": self.logs(150),
                 "live": live if show_live else None,
                 "recent_files": parsed["recent_files"],
+                "quota": self.quota,
                 "kpis": {
                     "total_files": self.count_files(),
                     "avg_speed": parsed["avg_speed"],
@@ -701,6 +720,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     socketserver.TCPServer.allow_reuse_address = True
+    t_q = threading.Thread(target=_m.update_quota, daemon=True)
+    t_q.start()
     print(f"\033[32m✓ rclone Monitor\033[0m → http://localhost:{PORT}  |  Ctrl+C pour stopper")
     with socketserver.TCPServer(("", PORT), Handler) as s:
         s.serve_forever()

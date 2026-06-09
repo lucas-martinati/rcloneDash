@@ -38,8 +38,3 @@ python3 src/rclone-monitor.py
 
 - **Backend** : `rclone-monitor.py` est un serveur HTTP ultra-léger développé en Python natif (`http.server`). Il sert l'interface web, lit vos logs via des commandes Unix (`journalctl`) pour extraire les métriques Rclone, et agit en API pour lire/écrire dans vos fichiers système.
 - **Frontend** : Les fichiers `index.html`, `style.css` et `app.js` génèrent l'interface, dessinée entièrement avec du CSS natif pour un design moderne (micro-animations, fenêtres modales, etc.).
-
-## 💡 Idées d'améliorations futures (Roadmap)
-- Intégrer un système de notifications bureau natif (`notify-send`) en cas d'échec critique de synchronisation.
-- Support multi-dossiers : pouvoir choisir depuis l'interface le "remote" à monitorer (ex: passer de l'onglet GoogleDrive à un onglet OneDrive).
-- Afficher les statistiques et quotas restants de l'espace Cloud (via un appel ponctuel à `rclone about`).

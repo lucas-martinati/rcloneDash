@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>rclone Monitor — Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='23 4 23 10 17 10'/><polyline points='1 20 1 14 7 14'/><path d='M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15'/></svg>" type="image/svg+xml">
   <meta name="description" content="Dashboard de surveillance temps réel pour rclone-bisync">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -61,6 +62,16 @@
 
     <!-- ═══════ MAIN ═══════ -->
     <main class="main" id="main-content">
+
+      <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:10px 15px; border-radius:12px; margin-bottom:20px; font-size:14px;" id="quota-container">
+        <span style="font-weight:600; color:var(--text-muted);">Stockage Cloud</span>
+        <div style="display:flex; align-items:center; gap:15px; flex:1; max-width:400px; justify-content:flex-end;">
+          <span id="quota-text" style="font-family:'Courier New', monospace; font-size:13px; color:var(--text);">Chargement...</span>
+          <div style="width:150px; height:8px; background:var(--border); border-radius:4px; overflow:hidden;">
+            <div id="quota-bar" style="height:100%; width:0%; background:var(--primary); transition:width 1s ease;"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Alert banner -->
       <div id="alert-banner" class="alert-banner">

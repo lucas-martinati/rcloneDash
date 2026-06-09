@@ -78,6 +78,28 @@ function setSmartRefresh(state) {
    ALERTS
    ═══════════════════════════════════════════════════ */
 function updateAlerts(data) {
+  if (data.quota) {
+      if (data.quota.error) {
+          document.getElementById('quota-text').textContent = 'Erreur : ' + data.quota.error;
+          document.getElementById('quota-text').style.color = 'var(--err)';
+      } else {
+          const formatBytes = (bytes) => (bytes / (1024 ** 3)).toFixed(1) + ' Go';
+          const used = data.quota.used || 0;
+          const total = data.quota.total || 1;
+          const percent = Math.min(100, Math.round((used / total) * 100));
+          
+          document.getElementById('quota-text').textContent = `${formatBytes(used)} / ${formatBytes(total)} (${percent}%)`;
+          document.getElementById('quota-text').style.color = 'var(--text)';
+          document.getElementById('quota-bar').style.width = percent + '%';
+          
+          if (percent > 90) {
+              document.getElementById('quota-bar').style.background = 'var(--err)';
+          } else {
+              document.getElementById('quota-bar').style.background = 'var(--primary)';
+          }
+      }
+  }
+
   var ban = document.getElementById('alert-banner');
   var msg = document.getElementById('alert-msg');
   var kpis = data.kpis;
