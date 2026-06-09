@@ -61,6 +61,16 @@ function badge(state) {
   b.className = 'badge ' + info[0];
   l.textContent = info[1];
   d.className = 'dot' + (state === 'running' ? ' pulse' : '');
+  
+  var bsync = document.getElementById('bsync');
+  var bcancel = document.getElementById('bcancel');
+  if (state === 'running') {
+    if (bsync) bsync.style.display = 'none';
+    if (bcancel) bcancel.style.display = 'inline-flex';
+  } else {
+    if (bsync) bsync.style.display = 'inline-flex';
+    if (bcancel) bcancel.style.display = 'none';
+  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -483,6 +493,15 @@ function updateRecentFiles(files) {
   list.innerHTML = html;
 }
 
+function filterRecent() {
+  var q = document.getElementById('recent-search').value.toLowerCase();
+  var items = document.querySelectorAll('#recent-list .recent-item');
+  for (var i = 0; i < items.length; i++) {
+    var path = items[i].querySelector('.recent-path').textContent.toLowerCase();
+    items[i].style.display = path.indexOf(q) !== -1 ? '' : 'none';
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    MAIN REFRESH
    ═══════════════════════════════════════════════════ */
@@ -528,6 +547,22 @@ async function doSync() {
     b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Sync';
   }, 3000);
   setTimeout(refresh, 1500);
+}
+
+async function cancelSync() {
+  var b = document.getElementById('bcancel');
+  b.disabled = true;
+  b.textContent = 'Annulation…';
+  try {
+    await fetch('/api/cancel');
+  } catch (e) {
+    console.error(e);
+  }
+  setTimeout(function() {
+    b.disabled = false;
+    b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Annuler';
+  }, 3000);
+  setTimeout(refresh, 1000);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -663,6 +698,60 @@ async function ignorePath(path, isDir) {
       alert("Erreur : " + d.error);
     }
   } catch (e) {}
+}
+
+function openBwModal() { 
+  document.getElementById('bw-modal').classList.add('show');
+  fetch('/api/bwlimit').then(r=>r.json()).then(d=>{
+    if(d.limit) document.getElementById('bw-select').value = d.limit;
+  });
+}
+function closeBwModal() { document.getElementById('bw-modal').classList.remove('show'); }
+async function saveBw() {
+  var btn = document.getElementById('save-bw-btn');
+  var limit = document.getElementById('bw-select').value;
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement...';
+  try {
+    var r = await fetch('/api/bwlimit_save?limit=' + encodeURIComponent(limit));
+    var d = await r.json();
+    if(d.ok) {
+      alert("Limite appliquée avec succès ! Elle sera active à la prochaine synchronisation.");
+      closeBwModal();
+    } else {
+      alert("Erreur : " + d.error);
+    }
+  } catch(e) {
+    alert("Erreur réseau");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Appliquer la limite';
+  }
+}
+
+function openDryRunModal() { document.getElementById('dryrun-modal').classList.add('show'); }
+function closeDryRunModal() { document.getElementById('dryrun-modal').classList.remove('show'); }
+async function startDryRun() {
+  var btn = document.getElementById('start-dryrun-btn');
+  var out = document.getElementById('dryrun-output');
+  btn.disabled = true;
+  btn.textContent = 'Simulation en cours... (peut prendre 1-2 minutes)';
+  out.textContent = 'Lancement de rclone en mode --dry-run...\nAnalyse des changements en cours...';
+  
+  try {
+    var r = await fetch('/api/dryrun');
+    var d = await r.json();
+    if(d.ok) {
+      out.textContent = d.log || 'Aucun changement détecté (tout est à jour).';
+    } else {
+      out.textContent = 'Erreur : ' + d.error;
+    }
+  } catch(e) {
+    out.textContent = 'Erreur réseau : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Relancer la simulation';
+  }
 }
 
 /* ═══════════════════════════════════════════════════

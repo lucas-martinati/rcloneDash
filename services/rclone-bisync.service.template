@@ -6,12 +6,12 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=__USER__
+EnvironmentFile=-__HOME__/.config/rclone/bwlimit.env
 ExecStart=/usr/bin/rclone bisync GoogleDrive: __HOME__/GoogleDrive \
   --config __HOME__/.config/rclone/rclone.conf \
   --filter-from __HOME__/.config/rclone/gdrive-filters.txt \
   --drive-skip-shortcuts \
   --drive-skip-gdocs \
   -v \
-  --create-empty-src-dirs \
   --conflict-resolve newer \
   --resilient

@@ -552,6 +552,11 @@ class Monitor:
         _, err, code = self.cmd(["systemctl", "start", "--no-block", self.svc])
         return code == 0, err
 
+    def cancel(self):
+        """Annule une sync en cours (--no-block pour ne pas attendre la fin)."""
+        _, err, code = self.cmd(["systemctl", "stop", "--no-block", self.svc])
+        return code == 0, err
+
     def full(self):
         """Retourne toutes les données pour /api/status."""
         with self.lock:
@@ -601,6 +606,57 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif p == "/api/trigger":
             ok, err = _m.trigger()
             self._json({"ok": ok, "error": err})
+        elif p == "/api/cancel":
+            ok, err = _m.cancel()
+            self._json({"ok": ok, "error": err})
+        elif p == "/api/bwlimit":
+            try:
+                env_path = os.path.expanduser("~/.config/rclone/bwlimit.env")
+                limit = ""
+                if os.path.exists(env_path):
+                    with open(env_path, "r") as f:
+                        content = f.read()
+                        import re
+                        m = re.search(r"RCLONE_BWLIMIT=(.*)", content)
+                        if m: limit = m.group(1).strip()
+                self._json({"limit": limit})
+            except Exception as e:
+                self._json({"error": str(e)})
+        elif p == "/api/bwlimit_save":
+            qs = parse_qs(urlparse(self.path).query)
+            limit = qs.get("limit", [""])[0]
+            try:
+                env_path = os.path.expanduser("~/.config/rclone/bwlimit.env")
+                os.makedirs(os.path.dirname(env_path), exist_ok=True)
+                with open(env_path, "w") as f:
+                    if limit:
+                        f.write(f"RCLONE_BWLIMIT={limit}\n")
+                    else:
+                        f.write("")
+                self._json({"ok": True})
+            except Exception as e:
+                self._json({"error": str(e)})
+        elif p == "/api/dryrun":
+            try:
+                # Copie des listes réelles vers les listes -dry pour refléter l'état actuel
+                import glob, shutil, re
+                cache_dir = os.path.expanduser("~/.cache/rclone/bisync")
+                if os.path.exists(cache_dir):
+                    for f in glob.glob(os.path.join(cache_dir, "*.lst")):
+                        try: shutil.copy2(f, f + "-dry")
+                        except Exception: pass
+                        
+                cmd = ["rclone", "bisync", "GoogleDrive:", os.path.expanduser("~/GoogleDrive"), "--dry-run", "-v", "--filter-from", os.path.expanduser("~/.config/rclone/gdrive-filters.txt")]
+                out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=120).decode('utf-8', errors='ignore')
+                out = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', out)
+                self._json({"ok": True, "log": out})
+            except subprocess.CalledProcessError as e:
+                out = e.output.decode('utf-8', errors='ignore')
+                import re
+                out = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', out)
+                self._json({"ok": False, "error": out})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)})
         elif p == "/api/tree":
             qs = parse_qs(urlparse(self.path).query)
             target = qs.get("dir", [""])[0]

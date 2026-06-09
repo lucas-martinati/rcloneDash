@@ -26,10 +26,6 @@
 - .rclone*
 - RCLONE_TEST
 
-# Dossiers spécifiques que tu veux garder sur le Cloud mais pas sur ton PC
-- Cours/2GT7/**
-- Cours/1G3/**
-
 # Fichiers natifs Google (ne pas créer de liens .gdoc localement)
 - *.gdoc
 - *.gsheet
@@ -59,3 +55,7 @@
 - venv/**
 - __pycache__/**
 - *.pyc
+
+# Dossiers spécifiques que tu veux garder sur le Cloud mais pas sur ton PC
+- Cours/2GT7/**
+- Cours/1G3/**

@@ -39,6 +39,20 @@
         </svg>
         Sync
       </button>
+      <button class="btn" id="bcancel" onclick="cancelSync()" style="display:none; color: var(--err)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>
+        Annuler
+      </button>
+      <button class="btn btn-g" onclick="openDryRunModal()" title="Simuler une synchronisation (sans modifier de fichiers)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        Simuler
+      </button>
       <button class="btn btn-g" onclick="openTreeModal()" title="Parcourir l'arborescence">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">
@@ -52,6 +66,10 @@
           <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
         </svg>
         Filtres
+      </button>
+      <button class="btn btn-g" onclick="openBwModal()" title="Limiter la bande passante">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Vitesse
       </button>
       <button class="tsbtn" onclick="toggleTheme()" title="Thème" id="theme-btn">
         <svg id="ti" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -278,14 +296,17 @@
 
       <!-- Recent Files -->
       <div class="recent-panel" id="panel-recent">
-        <div class="ph">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
-          <span>Fichiers récents</span>
-          <span id="recent-count" style="font-weight:400;font-size:10px;color:var(--faint)"></span>
+        <div class="ph" style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            <span>Fichiers récents</span>
+            <span id="recent-count" style="font-weight:400;font-size:10px;color:var(--faint)"></span>
+          </div>
+          <input type="text" id="recent-search" placeholder="Filtrer..." style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface-off); color:var(--text); font-size:11px; outline:none; width:120px;" oninput="filterRecent()">
         </div>
         <div class="recent-list" id="recent-list">
           <div class="empty">Aucun fichier récent dans les logs</div>
@@ -327,6 +348,52 @@
         <div class="tree-list" id="tree-list">
           <!-- Tree items generated here -->
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dryrun-modal" class="modal-overlay" onclick="if(event.target===this) closeDryRunModal()">
+    <div class="modal" style="width:800px; height:85vh; max-height:none;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Simulation de Synchronisation (Dry Run)
+        </div>
+        <button class="modal-close" onclick="closeDryRunModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden;">
+        <div style="color:var(--faint);font-size:12px;">Cette action simule une synchronisation et affiche les opérations qui <b>seraient</b> effectuées. <u>Aucun fichier ne sera modifié.</u></div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn ok" style="background:var(--primary)" id="start-dryrun-btn" onclick="startDryRun()">Lancer la simulation</button>
+        </div>
+        <pre id="dryrun-output" style="flex:1; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--surface-off); color:var(--text); font-family:'Courier New',monospace; font-size:11px; overflow-y:auto; white-space:pre-wrap; margin:0;">Appuyez sur "Lancer la simulation" pour démarrer.</pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="bw-modal" class="modal-overlay" onclick="if(event.target===this) closeBwModal()">
+    <div class="modal" style="width:400px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Limiteur de Vitesse
+        </div>
+        <button class="modal-close" onclick="closeBwModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+        <div style="color:var(--faint);font-size:12px;">Limitez la bande passante de Rclone pour économiser votre connexion internet. <i>La modification sera prise en compte lors du prochain cycle de synchronisation.</i></div>
+        <select id="bw-select" style="padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--surface-off); color:var(--text); width:100%; outline:none;">
+          <option value="">Aucune limite (Vitesse Max)</option>
+          <option value="1M">1 Mo/s</option>
+          <option value="5M">5 Mo/s</option>
+          <option value="10M">10 Mo/s</option>
+          <option value="500K">500 Ko/s</option>
+        </select>
+        <button class="btn ok" style="background:var(--primary)" id="save-bw-btn" onclick="saveBw()">Appliquer la limite</button>
       </div>
     </div>
   </div>

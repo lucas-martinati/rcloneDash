@@ -18,7 +18,8 @@ cp services/rclonedash.service "$HOME/.config/systemd/user/"
 
 # Activation du service RcloneDash (User)
 systemctl --user daemon-reload
-systemctl --user enable --now rclonedash.service
+systemctl --user enable rclonedash.service
+systemctl --user restart rclonedash.service
 echo "-> RcloneDash démarré avec succès."
 
 # Installation du fichier de filtres
