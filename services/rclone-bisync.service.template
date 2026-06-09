@@ -12,6 +12,7 @@ ExecStart=/usr/bin/rclone bisync GoogleDrive: __HOME__/GoogleDrive \
   --filter-from __HOME__/.config/rclone/gdrive-filters.txt \
   --drive-skip-shortcuts \
   --drive-skip-gdocs \
+  --tpslimit 8 \
   -v \
   --conflict-resolve newer \
   --resilient

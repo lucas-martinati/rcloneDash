@@ -646,8 +646,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         try: shutil.copy2(f, f + "-dry")
                         except Exception: pass
                         
-                cmd = ["rclone", "bisync", "GoogleDrive:", os.path.expanduser("~/GoogleDrive"), "--dry-run", "-v", "--filter-from", os.path.expanduser("~/.config/rclone/gdrive-filters.txt")]
-                out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=120).decode('utf-8', errors='ignore')
+                cmd = ["rclone", "bisync", "GoogleDrive:", os.path.expanduser("~/GoogleDrive"), "--dry-run", "-v", "--tpslimit", "8", "--filter-from", os.path.expanduser("~/.config/rclone/gdrive-filters.txt")]
+                out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=600).decode('utf-8', errors='ignore')
                 out = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', out)
                 self._json({"ok": True, "log": out})
             except subprocess.CalledProcessError as e:

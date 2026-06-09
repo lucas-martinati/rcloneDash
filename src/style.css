@@ -604,7 +604,8 @@ body {
   border-radius: 9px;
   display: flex;
   flex-direction: column;
-  overflow: hidden
+  overflow: hidden;
+  height: 100%;
 }
 
 .ph {
@@ -628,7 +629,7 @@ body {
 .pb {
   overflow-y: auto;
   overscroll-behavior: contain;
-  max-height: 300px
+  flex: 1;
 }
 
 /* Sparkline */
@@ -774,11 +775,14 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 9px;
-  overflow: hidden
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .recent-list {
-  max-height: 260px;
+  flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain
 }
@@ -1056,6 +1060,8 @@ body {
   font-family: 'Courier New', monospace;
   font-size: 11px;
   white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
   margin-top: 10px;
   border: 1px solid color-mix(in srgb, var(--err) 30%, transparent)
 }
@@ -1113,4 +1119,45 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--divider);
   border-radius: 99px
+}
+
+/* ═══════════════════════════════════════════════════
+   DRAG & DROP MODULES
+   ═══════════════════════════════════════════════════ */
+.modules-container {
+  display: grid;
+  grid-template-columns: var(--col1, 1fr) var(--col2, 1fr);
+  grid-template-rows: var(--row1, 300px) minmax(var(--row2, 260px), 1fr);
+  gap: 14px;
+  align-items: stretch;
+  flex: 1;
+}
+
+.drag-panel {
+  transition: transform 0.2s, opacity 0.2s;
+  order: 0;
+  grid-column: span 1;
+}
+
+.drag-panel.full-width {
+  grid-column: 1 / -1;
+  resize: vertical;
+  overflow: hidden;
+}
+
+.drag-panel.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+  z-index: 100;
+}
+
+.drag-panel.over {
+  border: 2px dashed var(--primary) !important;
+}
+
+.drag-panel .ph {
+  cursor: grab;
+}
+.drag-panel .ph:active {
+  cursor: grabbing;
 }

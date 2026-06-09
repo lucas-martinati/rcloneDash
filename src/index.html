@@ -243,10 +243,10 @@
         </div>
       </div>
 
-      <!-- Panels: History + Logs -->
-      <div class="panels" id="panels">
+      <!-- Draggable Modules -->
+      <div class="modules-container" id="modules-container">
         <!-- History -->
-        <div class="panel" id="panel-history">
+        <div class="panel drag-panel" id="panel-history" draggable="true">
           <div class="ph">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
               stroke-linecap="round" stroke-linejoin="round">
@@ -276,7 +276,7 @@
         </div>
 
         <!-- Logs -->
-        <div class="panel" id="panel-logs">
+        <div class="panel drag-panel" id="panel-logs" draggable="true">
           <div class="ph">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
               stroke-linecap="round" stroke-linejoin="round">
@@ -292,10 +292,9 @@
             <div class="lw" id="lwrap"></div>
           </div>
         </div>
-      </div>
 
-      <!-- Recent Files -->
-      <div class="recent-panel" id="panel-recent">
+        <!-- Recent Files -->
+        <div class="recent-panel drag-panel" id="panel-recent" draggable="true">
         <div class="ph" style="display:flex; justify-content:space-between; align-items:center;">
           <div style="display:flex; align-items:center; gap:8px;">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -312,6 +311,7 @@
           <div class="empty">Aucun fichier récent dans les logs</div>
         </div>
       </div>
+      </div> <!-- End modules-container -->
 
     </main>
   </div>

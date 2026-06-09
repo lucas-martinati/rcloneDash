@@ -360,6 +360,7 @@ function hideTooltip() {
    RUNS TABLE
    ═══════════════════════════════════════════════════ */
 function updateRuns(runs) {
+  window._errorLogsCache = {};
   var tb = document.getElementById('rtb');
   var em = document.getElementById('rem');
   if (!runs || !runs.length) {
@@ -396,8 +397,12 @@ function updateRuns(runs) {
       + '</div>';
     
     if (r.error_logs && r.error_logs.length > 0) {
-      detHtml += '<div style="color:var(--err);font-weight:bold;margin-bottom:4px">Logs d\'erreurs :</div>';
-      detHtml += '<div class="error-log-box" style="margin-top:0">' + esc(r.error_logs.join('\n')) + '</div>';
+      window._errorLogsCache[i] = r.error_logs.join('\n');
+      detHtml += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">';
+      detHtml += '<div style="color:var(--err);font-weight:bold;">Logs d\'erreurs :</div>';
+      detHtml += '<button class="btn btn-g" style="padding:2px 8px; font-size:10px; height:auto; color:var(--text)" onclick="copyErrorLogs(' + i + ', this); event.stopPropagation();">Copier</button>';
+      detHtml += '</div>';
+      detHtml += '<div class="error-log-box" style="margin-top:0">' + colorizeLog(r.error_logs.join('\n')) + '</div>';
     }
     
     if (r.synced_files && r.synced_files.length > 0) {
@@ -424,7 +429,7 @@ function updateRuns(runs) {
     }
     detHtml += '</div>';
     
-    html += '<tr id="run-det-' + i + '" style="display:none"><td colspan="7" style="padding:0 8px 8px">' + detHtml + '</td></tr>';
+    html += '<tr id="run-det-' + i + '" style="display:none"><td colspan="7" style="padding:0 8px 8px; max-width:0;">' + detHtml + '</td></tr>';
   }
   tb.innerHTML = html;
 
@@ -434,6 +439,23 @@ function updateRuns(runs) {
 function toggleRunDetails(i) {
   var el = document.getElementById('run-det-' + i);
   if(el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+}
+
+function copyErrorLogs(idx, btn) {
+  var text = window._errorLogsCache && window._errorLogsCache[idx];
+  if (text) {
+    navigator.clipboard.writeText(text).then(() => {
+      var oldText = btn.textContent;
+      btn.textContent = 'Copié !';
+      btn.style.color = 'var(--ok)';
+      btn.style.borderColor = 'var(--ok)';
+      setTimeout(() => {
+        btn.textContent = oldText;
+        btn.style.color = 'var(--text)';
+        btn.style.borderColor = 'var(--border)';
+      }, 2000);
+    });
+  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -446,7 +468,7 @@ function updateLogs(logs) {
   if (logs.length !== _llc) {
     var html = '';
     for (var i = 0; i < logs.length; i++) {
-      html += '<div class="ll ' + logs[i].l + '">' + esc(logs[i].t) + '</div>';
+      html += '<div class="ll ' + logs[i].l + '">' + colorizeLog(logs[i].t) + '</div>';
     }
     w.innerHTML = html;
     _llc = logs.length;
@@ -505,6 +527,181 @@ function filterRecent() {
 /* ═══════════════════════════════════════════════════
    MAIN REFRESH
    ═══════════════════════════════════════════════════ */
+
+// Drag & Drop state
+var dragSrcEl = null;
+
+function handleDragStart(e) {
+  dragSrcEl = this;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/html', this.innerHTML);
+  this.classList.add('dragging');
+}
+
+function handleDragOver(e) {
+  if (e.preventDefault) { e.preventDefault(); }
+  e.dataTransfer.dropEffect = 'move';
+  return false;
+}
+
+function handleDragEnter(e) { this.classList.add('over'); }
+function handleDragLeave(e) { this.classList.remove('over'); }
+
+function handleDrop(e) {
+  if (e.stopPropagation) { e.stopPropagation(); }
+  if (dragSrcEl !== this) {
+    var srcOrder = window.getComputedStyle(dragSrcEl).order;
+    var destOrder = window.getComputedStyle(this).order;
+    
+    if(srcOrder === destOrder) {
+      var panels = document.querySelectorAll('.drag-panel');
+      panels.forEach((p, i) => p.style.order = p.style.order || i);
+      srcOrder = dragSrcEl.style.order;
+      destOrder = this.style.order;
+    }
+    
+    dragSrcEl.style.order = destOrder;
+    this.style.order = srcOrder;
+    
+    var orderData = {};
+    document.querySelectorAll('.drag-panel').forEach(p => {
+      p.style.height = ''; // Reset manual resize
+      orderData[p.id] = p.style.order;
+    });
+    localStorage.setItem('dash_panel_order', JSON.stringify(orderData));
+    updateFullWidthPanel();
+  }
+  return false;
+}
+
+function handleDragEnd(e) {
+  this.classList.remove('dragging');
+  document.querySelectorAll('.drag-panel').forEach(p => p.classList.remove('over'));
+}
+
+function initDragAndDrop() {
+  var panels = document.querySelectorAll('.drag-panel');
+  var savedOrder = JSON.parse(localStorage.getItem('dash_panel_order') || '{}');
+  
+  panels.forEach(function(panel, idx) {
+    if(savedOrder[panel.id]) {
+      panel.style.order = savedOrder[panel.id];
+    } else {
+      panel.style.order = idx;
+    }
+    
+    var header = panel.querySelector('.ph');
+    if(header) {
+      header.addEventListener('mouseenter', () => panel.setAttribute('draggable', 'true'));
+      header.addEventListener('mouseleave', () => panel.removeAttribute('draggable'));
+    }
+    
+    panel.addEventListener('dragstart', handleDragStart, false);
+    panel.addEventListener('dragenter', handleDragEnter, false);
+    panel.addEventListener('dragover', handleDragOver, false);
+    panel.addEventListener('dragleave', handleDragLeave, false);
+    panel.addEventListener('drop', handleDrop, false);
+    panel.addEventListener('dragend', handleDragEnd, false);
+  });
+  
+  updateFullWidthPanel();
+  initResizer();
+}
+
+function updateFullWidthPanel() {
+  var panels = Array.from(document.querySelectorAll('.drag-panel'));
+  panels.sort((a, b) => parseInt(a.style.order || 0) - parseInt(b.style.order || 0));
+  panels.forEach((p, idx) => {
+    if (idx === 2) p.classList.add('full-width');
+    else p.classList.remove('full-width');
+  });
+}
+
+function initResizer() {
+  var container = document.getElementById('modules-container');
+  var isResizingH = false;
+  var isResizingV = false;
+  var startX, startY, startCol1, startCol2, startRow1, startRow2;
+  
+  var savedCol = localStorage.getItem('dash_col_ratio');
+  if (savedCol) {
+    var parts = savedCol.split(':');
+    container.style.setProperty('--col1', parts[0] + 'fr');
+    container.style.setProperty('--col2', parts[1] + 'fr');
+  }
+  var savedRow = localStorage.getItem('dash_row_sizes');
+  if (savedRow) {
+    var rParts = savedRow.split(':');
+    container.style.setProperty('--row1', rParts[0] + 'px');
+    container.style.setProperty('--row2', rParts[1] + 'px');
+  }
+
+  container.addEventListener('mousemove', function(e) {
+    if (isResizingH) {
+      var rect = container.getBoundingClientRect();
+      var dx = e.clientX - startX;
+      var c1 = startCol1 + (dx / rect.width) * (startCol1 + startCol2);
+      var c2 = startCol2 - (dx / rect.width) * (startCol1 + startCol2);
+      if (c1 > 0.1 && c2 > 0.1) {
+        container.style.setProperty('--col1', c1 + 'fr');
+        container.style.setProperty('--col2', c2 + 'fr');
+        localStorage.setItem('dash_col_ratio', c1 + ':' + c2);
+      }
+      return;
+    }
+    if (isResizingV) {
+      var dy = e.clientY - startY;
+      var r1 = startRow1 + dy;
+      var r2 = startRow2 - dy;
+      if (r1 > 100 && r2 > 100) {
+        container.style.setProperty('--row1', r1 + 'px');
+        container.style.setProperty('--row2', r2 + 'px');
+        localStorage.setItem('dash_row_sizes', r1 + ':' + r2);
+      }
+      return;
+    }
+    
+    var panels = Array.from(document.querySelectorAll('.drag-panel'));
+    panels.sort((a, b) => parseInt(a.style.order || 0) - parseInt(b.style.order || 0));
+    if(panels.length < 3) return;
+    var p1 = panels[0].getBoundingClientRect();
+    var p2 = panels[1].getBoundingClientRect();
+    var p3 = panels[2].getBoundingClientRect();
+    
+    var isH = (e.clientX > p1.right - 5 && e.clientX < p2.left + 5 && e.clientY > p1.top && e.clientY < p1.bottom);
+    var isV = (e.clientY > p1.bottom - 5 && e.clientY < p3.top + 5 && e.clientX > p3.left && e.clientX < p3.right);
+    
+    if (isH && isV) container.style.cursor = 'move';
+    else if (isH) container.style.cursor = 'col-resize';
+    else if (isV) container.style.cursor = 'row-resize';
+    else container.style.cursor = '';
+  });
+
+  container.addEventListener('mousedown', function(e) {
+    if (container.style.cursor === 'col-resize' || container.style.cursor === 'move') {
+      isResizingH = true;
+      startX = e.clientX;
+      startCol1 = parseFloat(getComputedStyle(container).getPropertyValue('--col1')) || 1;
+      startCol2 = parseFloat(getComputedStyle(container).getPropertyValue('--col2')) || 1;
+      e.preventDefault();
+    }
+    if (container.style.cursor === 'row-resize' || container.style.cursor === 'move') {
+      isResizingV = true;
+      startY = e.clientY;
+      startRow1 = parseFloat(getComputedStyle(container).getPropertyValue('--row1')) || 300;
+      startRow2 = parseFloat(getComputedStyle(container).getPropertyValue('--row2')) || 260;
+      e.preventDefault();
+    }
+    if (isResizingH || isResizingV) document.body.style.cursor = container.style.cursor;
+  });
+
+  window.addEventListener('mouseup', function() {
+    isResizingH = false;
+    isResizingV = false;
+    document.body.style.cursor = '';
+  });
+}
+
 async function refresh() {
   spin(true);
   try {
@@ -631,8 +828,19 @@ async function openFiltersModal() {
   document.getElementById('filters-modal').classList.add('show');
   await loadFilters();
 }
-function closeFiltersModal() {
-  document.getElementById('filters-modal').classList.remove('show');
+function closeFiltersModal() { document.getElementById('filters-modal').classList.remove('show'); }
+
+function colorizeLog(text) {
+  var e = esc(text);
+  e = e.replace(/^(\d{4}[-\/]\d{2}[-\/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/gm, '<span style="opacity:0.5">$1</span>');
+  e = e.replace(/ ERROR /g, ' <strong style="color:var(--err)">ERROR </strong>');
+  e = e.replace(/ NOTICE(:| )/g, ' <strong style="color:#f39c12">NOTICE</strong>$1');
+  e = e.replace(/ INFO(:| )/g, ' <strong style="color:#3498db">INFO  </strong>$1');
+  e = e.replace(/ DEBUG(:| )/g, ' <strong style="color:#95a5a6">DEBUG </strong>$1');
+  e = e.replace(/(Deleted .*|File was deleted.*)/g, '<span style="color:var(--err)">$1</span>');
+  e = e.replace(/(Copied .*|File is new.*)/g, '<span style="color:var(--ok)">$1</span>');
+  e = e.replace(/(Updated .*|File was modified.*)/g, '<span style="color:#e67e22">$1</span>');
+  return e;
 }
 async function loadFilters() {
   var tf = document.getElementById('filters-text');
@@ -742,9 +950,9 @@ async function startDryRun() {
     var r = await fetch('/api/dryrun');
     var d = await r.json();
     if(d.ok) {
-      out.textContent = d.log || 'Aucun changement détecté (tout est à jour).';
+      out.innerHTML = colorizeLog(d.log || 'Aucun changement détecté (tout est à jour).');
     } else {
-      out.textContent = 'Erreur : ' + d.error;
+      out.innerHTML = colorizeLog('Erreur :\n' + d.error);
     }
   } catch(e) {
     out.textContent = 'Erreur réseau : ' + e.message;
@@ -757,5 +965,6 @@ async function startDryRun() {
 /* ═══════════════════════════════════════════════════
    BOOT
    ═══════════════════════════════════════════════════ */
+initDragAndDrop();
 refresh();
 _interval = setInterval(refresh, 10000);
