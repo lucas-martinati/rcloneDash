@@ -367,9 +367,13 @@ function showTooltip(e, txt) {
   if(!tt) return;
   tt.textContent = txt;
   tt.style.display = 'block';
-  var wrap = document.getElementById('sparkline-wrap').getBoundingClientRect();
-  tt.style.left = (e.clientX - wrap.left + 10) + 'px';
-  tt.style.top = (e.clientY - wrap.top - 25) + 'px';
+  var x = e.clientX + 10;
+  var y = e.clientY - 25;
+  // bascule à gauche du curseur si la bulle dépasserait du bord droit
+  if (x + tt.offsetWidth > window.innerWidth - 4) x = e.clientX - tt.offsetWidth - 10;
+  if (y < 4) y = e.clientY + 15;
+  tt.style.left = x + 'px';
+  tt.style.top = y + 'px';
 }
 function hideTooltip() {
   var tt = document.getElementById('chart-tt');
