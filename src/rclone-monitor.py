@@ -26,10 +26,18 @@ import re
 import time
 from collections import deque
 from datetime import datetime
-from datetime import datetime
 from urllib.parse import urlparse, parse_qs
 
 PORT = 8765
+GD_DIR = os.path.expanduser("~/GoogleDrive")
+
+
+def local_size(fpath):
+    """Taille du fichier local (en octets), ou None si introuvable."""
+    try:
+        return os.path.getsize(os.path.join(GD_DIR, fpath))
+    except OSError:
+        return None
 
 # Phases d'une sync bisync, dans l'ordre
 PHASES = [
@@ -127,6 +135,12 @@ class LogStreamer(threading.Thread):
             if em:
                 self.transfer["eta"] = em.group(1)
 
+        # Compteur de fichiers : Transferred: 5 / 10, 50%
+        m = re.search(r"transferred:\s+(\d+)\s*/\s*(\d+),", ll)
+        if m:
+            self.transfer["files_done"] = int(m.group(1))
+            self.transfer["files_total"] = int(m.group(2))
+
         # Checks: 45 / 100, 45%
         m = re.search(r"checks:\s+(\d+)\s*/\s*(\d+)", ll)
         if m:
@@ -138,17 +152,39 @@ class LogStreamer(threading.Thread):
         if m:
             self.transfer["elapsed"] = m.group(1)
 
-        # Fichier actif : * path/to/file: 45% /1.234Mi, ...
-        m = re.search(r"\*\s+(.+?):\s*(\d+)%\s*/", line)
+        # Fichier actif : * path/to/file: 45% /1.234Mi, 4.5Mi/s, 2m3s
+        m = re.search(
+            r"\*\s+(.+?):\s*(\d+)%\s*/([^,]+),\s*([^,]+),\s*(\S+)", line
+        )
+        if not m:
+            # Forme courte sans vitesse/ETA : * file: 45% /1.234Mi
+            m = re.search(r"\*\s+(.+?):\s*(\d+)%\s*/(\S+)", line)
         if m:
             fname = m.group(1).strip()
             pct = int(m.group(2))
+            groups = m.groups()
             self.active_files[fname] = {
                 "pct": pct,
-                "last_seen": time.time()
+                "size": groups[2].strip() if len(groups) > 2 else "",
+                "speed": groups[3].strip() if len(groups) > 3 else "",
+                "eta": groups[4].strip() if len(groups) > 4 else "",
+                "last_seen": time.time(),
             }
             self.active_file = fname
             self.active_file_pct = pct
+
+        # Fichier en cours de vérification : * path/to/file: checking
+        m = re.search(r"\*\s+(.+?):\s*(checking|transferring)\s*$", line)
+        if m:
+            fname = m.group(1).strip()
+            self.active_files[fname] = {
+                "pct": 0,
+                "size": "",
+                "speed": "",
+                "eta": "",
+                "status": m.group(2),
+                "last_seen": time.time(),
+            }
 
         # Fichiers synchronisés durant le run courant
         m = re.search(r"INFO\s+:\s+(.*?):\s+(Copied \(new\)|Copied \(replaced existing\)|Updated modification time in destination|Deleted|Updated file)", line)
@@ -165,6 +201,7 @@ class LogStreamer(threading.Thread):
                 self.synced_files.append({
                     "path": fpath,
                     "action": act,
+                    "size": None if act == "deleted" else local_size(fpath),
                     "time": datetime.now().strftime("%H:%M:%S")
                 })
 
@@ -217,7 +254,14 @@ class LogStreamer(threading.Thread):
             }
             
             active_list = [
-                {"name": k, "pct": v["pct"]}
+                {
+                    "name": k,
+                    "pct": v["pct"],
+                    "size": v.get("size", ""),
+                    "speed": v.get("speed", ""),
+                    "eta": v.get("eta", ""),
+                    "status": v.get("status", ""),
+                }
                 for k, v in self.active_files.items()
             ]
             
@@ -254,7 +298,7 @@ class Monitor:
     def __init__(self):
         self.svc = "rclone-bisync"
         self.tmr = "rclone-bisync.timer"
-        self.gd = os.path.expanduser("~/GoogleDrive")
+        self.gd = GD_DIR
         self.lock = threading.Lock()
         self.streamer = LogStreamer(self.svc)
         self.streamer.start()
@@ -447,15 +491,15 @@ class Monitor:
                     if "Copied (new)" in action:
                         cur["copied"] += 1
                         cur["files"] += 1
-                        rf = {"action": "new", "path": fpath, "time": ts}
+                        rf = {"action": "new", "path": fpath, "time": ts, "size": local_size(fpath)}
                     elif "Copied (replaced existing)" in action or "Updated modification" in action or "Updated file" in action:
                         cur["modified"] += 1
                         cur["files"] += 1
-                        rf = {"action": "modified", "path": fpath, "time": ts}
+                        rf = {"action": "modified", "path": fpath, "time": ts, "size": local_size(fpath)}
                     elif "Deleted" in action:
                         cur["deleted"] += 1
                         cur["files"] += 1
-                        rf = {"action": "deleted", "path": fpath, "time": ts}
+                        rf = {"action": "deleted", "path": fpath, "time": ts, "size": None}
                     
                     if rf:
                         recent_files.append(rf)
@@ -773,11 +817,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
 
 
+class ThreadingServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    """Serveur multi-thread : un dry-run long ne bloque plus les autres requêtes."""
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    socketserver.TCPServer.allow_reuse_address = True
     t_q = threading.Thread(target=_m.update_quota, daemon=True)
     t_q.start()
     print(f"\033[32m✓ rclone Monitor\033[0m → http://localhost:{PORT}  |  Ctrl+C pour stopper")
-    with socketserver.TCPServer(("", PORT), Handler) as s:
+    # Écoute sur localhost uniquement : l'API permet d'écrire des fichiers
+    # et de lancer des commandes, elle ne doit pas être exposée au réseau.
+    with ThreadingServer(("127.0.0.1", PORT), Handler) as s:
         s.serve_forever()

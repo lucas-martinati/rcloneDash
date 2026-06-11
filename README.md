@@ -6,7 +6,9 @@ Ce tableau de bord se branche directement sur les journaux de `rclone` (via `jou
 
 ## 🌟 Fonctionnalités
 
-- **Suivi en direct** : Visualisez l'avancement de votre synchronisation Rclone en temps réel (fichiers transférés, ETA, vitesse de transfert en direct, checks locaux/distants).
+- **Suivi en direct** : Visualisez l'avancement de votre synchronisation Rclone en temps réel (fichiers transférés, ETA, vitesse de transfert en direct, checks locaux/distants, compteur de fichiers X/Y).
+- **Détails par fichier en cours** : Chaque fichier en cours de transfert affiche sa propre barre de progression avec sa taille, sa vitesse instantanée et son ETA individuel. Les fichiers en cours de vérification (checksum) sont également listés.
+- **Tailles des fichiers synchronisés** : Les listes de fichiers (live, historique, fichiers récents) affichent la taille de chaque fichier copié ou modifié.
 - **Historique Interactif** : Lisez le résumé de toutes vos exécutions (fichiers copiés, modifiés, supprimés, erreurs) avec un mini-graphe temporel dynamique (sparkline).
 - **Gestion des Erreurs et Logs détaillés** : Un clic sur une exécution passée déroule la liste précise de tous les fichiers affectés et affiche les logs d'erreurs éventuels de ce run spécifique.
 - **Éditeur de Filtres Intégré** : Lisez, ajoutez et modifiez directement depuis l'interface graphique votre fichier de filtres global `gdrive-filters.txt`.

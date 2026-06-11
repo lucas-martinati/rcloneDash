@@ -33,6 +33,14 @@ function fmtDT(ts) {
 
 function spin(v) { document.getElementById('spin').classList.toggle('on', v); }
 
+function fmtSize(bytes) {
+  if (bytes == null || isNaN(bytes)) return '';
+  if (bytes < 1024) return bytes + ' o';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' Go';
+}
+
 /* ═══════════════════════════════════════════════════
    THEME TOGGLE
    ═══════════════════════════════════════════════════ */
@@ -231,17 +239,27 @@ function updateLive(live) {
   document.getElementById('tf-eta').textContent = t.eta || '—';
   document.getElementById('tf-checks').textContent =
     t.checks_done != null ? t.checks_done + ' / ' + t.checks_total : '—';
+  document.getElementById('tf-files').textContent =
+    t.files_done != null ? t.files_done + ' / ' + t.files_total : '—';
   document.getElementById('tf-bar').style.width = (t.pct || 0) + '%';
 
   // Active files
   var aw = document.getElementById('active-wrap');
   if (live.active_files && live.active_files.length > 0) {
     aw.style.display = '';
-    var html = '<div class="kl">' + (live.active_files.length > 1 ? 'Fichiers en cours de transfert' : 'Fichier en cours de transfert') + '</div>';
+    var html = '<div class="kl">' + (live.active_files.length > 1 ? 'Fichiers en cours de transfert (' + live.active_files.length + ')' : 'Fichier en cours de transfert') + '</div>';
     for (var i = 0; i < live.active_files.length; i++) {
       var f = live.active_files[i];
+      var details = [];
+      if (f.status === 'checking') details.push('vérification…');
+      if (f.size) details.push(f.size);
+      if (f.speed) details.push(f.speed);
+      if (f.eta && f.eta !== '-') details.push('ETA ' + f.eta);
       html += '<div style="margin-top: 6px; margin-bottom: 8px;">'
-        + '<div class="active-fname" title="' + esc(f.name) + '">' + esc(f.name) + ' (' + f.pct + '%)</div>'
+        + '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">'
+        + '<div class="active-fname" style="flex:1; overflow:hidden; text-overflow:ellipsis;" title="' + esc(f.name) + '">' + esc(f.name) + ' (' + f.pct + '%)</div>'
+        + '<div style="flex-shrink:0; font-size:11px; color:var(--muted); font-family:\'Courier New\',monospace;">' + esc(details.join(' · ')) + '</div>'
+        + '</div>'
         + '<div class="tf-pbar"><div class="tf-pfill" style="width:' + f.pct + '%"></div></div>'
         + '</div>';
     }
@@ -268,10 +286,12 @@ function updateLive(live) {
       var actionCall = cls === 'deleted' 
         ? `openFile('${esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', true)` 
         : `openFile('${esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`;
+      var sizeTxt = fmtSize(f.size);
       html += '<div class="recent-item" style="padding: 4px 0; border-bottom: 1px solid var(--border);" onclick="' + actionCall + '">'
         + '<span class="recent-dot ' + cls + '"></span>'
         + '<span class="recent-label ' + cls + '" style="font-size: 9px; padding: 1px 4px; min-width: 45px;">' + (labels[cls] || cls) + '</span>'
         + '<span class="recent-path" style="font-size: 11px; font-family:\'Courier New\',monospace; color:var(--text);" title="' + esc(f.path) + '">' + esc(f.path) + '</span>'
+        + (sizeTxt ? '<span style="font-size: 10px; color:var(--muted); flex-shrink:0;">' + sizeTxt + '</span>' : '')
         + '<span class="recent-time" style="font-size: 10px;">' + esc(f.time) + '</span>'
         + '</div>';
     }
@@ -416,10 +436,12 @@ function updateRuns(runs) {
           ? `openFile('${esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', true)` 
           : `openFile('${esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`;
           
+        var fSize = fmtSize(f.size);
         detHtml += '<div class="run-details-file recent-item" style="padding:4px" onclick="' + actionCall + '">'
           + '<span class="recent-dot ' + cls + '"></span>'
           + '<span class="recent-label ' + cls + '" style="font-size: 9px; padding: 1px 4px; min-width: 45px;">' + (labels[cls] || cls) + '</span>'
           + '<span class="recent-path" style="font-size: 11px; font-family:\'Courier New\',monospace; color:var(--text);">' + esc(f.path) + '</span>'
+          + (fSize ? '<span style="font-size: 10px; color:var(--muted); flex-shrink:0;">' + fSize + '</span>' : '')
           + '</div>';
       }
       if(r.synced_files.length > 50) detHtml += '<div style="padding:4px;color:var(--muted)">+ ' + (r.synced_files.length - 50) + ' autres fichiers...</div>';
@@ -505,10 +527,12 @@ function updateRecentFiles(files) {
     var actionCall = cls === 'deleted' 
       ? `openFile('${esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', true)` 
       : `openFile('${esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')`;
+    var sizeTxt = fmtSize(f.size);
     html += '<div class="recent-item" onclick="' + actionCall + '">'
       + '<span class="recent-dot ' + cls + '"></span>'
       + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>'
       + '<span class="recent-path" title="' + esc(f.path) + '">' + esc(f.path) + '</span>'
+      + (sizeTxt ? '<span style="font-size:10px;color:var(--muted);flex-shrink:0;">' + sizeTxt + '</span>' : '')
       + '<span class="recent-time">' + fmtT(f.time) + '</span>'
       + '</div>';
   }

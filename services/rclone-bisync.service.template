@@ -14,5 +14,7 @@ ExecStart=/usr/bin/rclone bisync GoogleDrive: __HOME__/GoogleDrive \
   --drive-skip-gdocs \
   --tpslimit 8 \
   -v \
+  --stats 5s \
+  --stats-file-name-length 0 \
   --conflict-resolve newer \
   --resilient
