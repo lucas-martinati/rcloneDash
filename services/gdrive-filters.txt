@@ -8,6 +8,12 @@
 - ~$*
 - .~lock.*
 
+# Python
+- venv_python/**
+- venv/**
+- __pycache__/**
+- *.pyc
+
 # Dossiers lourds / volatils à ignorer
 - *.out
 - out/**
@@ -51,10 +57,6 @@
 - *.gjam
 - *.gform
 - *.gsite
-- venv_python/**
-- venv/**
-- __pycache__/**
-- *.pyc
 
 # Dossiers spécifiques que tu veux garder sur le Cloud mais pas sur ton PC
 - Cours/2GT7/**
