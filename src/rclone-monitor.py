@@ -481,6 +481,12 @@ class Monitor:
                 continue
 
             if cur:
+                # Réveil "à vide" : la garde a décidé de ne PAS lancer le bisync
+                # (aucun changement local et sync complet récent). On marque le run
+                # pour l'écarter de l'historique — ce n'est pas une vraie sync.
+                if "rclonedash" in ll and "ignoré" in ll:
+                    cur["skipped"] = True
+
                 # Extraction des fichiers synchronisés (Copied / Updated / Deleted)
                 m = re.search(r"INFO\s+:\s+(.*?):\s+(Copied \(new\)|Copied \(replaced existing\)|Updated modification time in destination|Deleted|Updated file)", l)
                 if m:
@@ -526,6 +532,9 @@ class Monitor:
 
                 # Fin de run : Succeeded
                 if "finished" in ll and self.svc in ll:
+                    if cur.get("skipped"):
+                        cur = None
+                        continue
                     cur["status"] = "success"
                     cur["end"] = ts
                     runs.append(cur)
@@ -534,6 +543,9 @@ class Monitor:
 
                 # Fin de run : Failed
                 if "failed" in ll and self.svc in ll:
+                    if cur.get("skipped"):
+                        cur = None
+                        continue
                     cur["status"] = "failed"
                     cur["end"] = ts
                     if not last_error:
@@ -546,7 +558,7 @@ class Monitor:
             if "conflict" in ll and ts.startswith(today):
                 conflicts += 1
 
-        if cur:
+        if cur and not cur.get("skipped"):
             runs.append(cur)
 
         # Échecs consécutifs (plus récent en premier)
