@@ -51,14 +51,27 @@ run_bisync() {
 
 reason=""
 
+# Bornes de la fenêtre de détection locale, au format ISO 8601 (compatible aussi
+# bien GNU findutils que bfs). On considère "récent" un fichier modifié dans une
+# bande [now - fenêtre, now + fenêtre] autour de l'instant présent.
+#
+# La borne HAUTE (now + fenêtre) est volontairement un peu dans le futur, pour
+# deux raisons : (1) elle inclut les fichiers tout juste modifiés malgré la
+# troncature à la seconde ; (2) elle EXCLUT les fichiers datés loin dans le futur
+# (horloge reculée de plusieurs heures/mois, modtime aberrant venu du cloud) qui,
+# avec un simple -mmin, auraient un "âge" négatif et seraient comptés comme
+# récents — provoquant des syncs inutiles à répétition.
+WIN_LO=$(date -d "$LOCAL_WINDOW minutes ago" '+%Y-%m-%dT%H:%M:%S')
+WIN_HI=$(date -d "$LOCAL_WINDOW minutes"     '+%Y-%m-%dT%H:%M:%S')
+
 # 1. Sync manuel forcé depuis le dashboard ?
 if [ -f "$FORCE_FILE" ]; then
     rm -f "$FORCE_FILE"
     reason="déclenchement manuel"
 
-# 2. Un fichier local a-t-il changé dans la fenêtre ?
+# 2. Un fichier local a-t-il changé dans la fenêtre [maintenant - fenêtre, maintenant] ?
 elif [ -d "$SYNC_DIR" ] && \
-     [ -n "$(find "$SYNC_DIR" -type f -mmin -"$LOCAL_WINDOW" -print -quit 2>/dev/null)" ]; then
+     [ -n "$(find "$SYNC_DIR" -type f -newermt "$WIN_LO" ! -newermt "$WIN_HI" -print -quit 2>/dev/null)" ]; then
     reason="changement local détecté (< ${LOCAL_WINDOW} min)"
 
 # 3. Filet pour les changements distants : sync complet périodique.
