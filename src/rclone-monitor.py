@@ -593,6 +593,14 @@ class Monitor:
 
     def trigger(self):
         """Lance une sync manuelle (--no-block pour ne pas attendre la fin)."""
+        # On pose un marqueur "force" pour que la garde lance le bisync sans
+        # condition, même si aucun fichier local n'a changé récemment.
+        try:
+            force_file = os.path.expanduser("~/.config/rclone/.force-sync")
+            os.makedirs(os.path.dirname(force_file), exist_ok=True)
+            open(force_file, "w").close()
+        except Exception:
+            pass
         _, err, code = self.cmd(["systemctl", "start", "--no-block", self.svc])
         return code == 0, err
 

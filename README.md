@@ -14,6 +14,7 @@ Ce tableau de bord se branche directement sur les journaux de `rclone` (via `jou
 - **Éditeur de Filtres Intégré** : Lisez, ajoutez et modifiez directement depuis l'interface graphique votre fichier de filtres global `gdrive-filters.txt`.
 - **Navigateur de fichiers local** : Explorez l'arborescence de votre dossier synchronisé en direct. Ouvrez vos fichiers locaux d'un simple clic et excluez rapidement des fichiers pour vos prochains syncs en cliquant sur le bouton "Ignorer".
 - **Thème Sombre & Clair** : S'adapte à vos préférences visuelles en un seul clic.
+- **Synchronisation économe (garde légère)** : Le timer se réveille toutes les 10 min mais ne lance un `rclone bisync` complet **que si c'est utile** : un fichier local a changé récemment, le déclenchement est manuel, ou un sync complet périodique (toutes les heures) est dû pour récupérer d'éventuelles modifs côté cloud. Quand rien n'a changé, la sync est ignorée — moins d'appels API Drive, de bande passante et de CPU.
 
 ## 🚀 Installation Automatique
 
@@ -39,4 +40,5 @@ python3 src/rclone-monitor.py
 ## ⚙️ Comment ça marche ?
 
 - **Backend** : `rclone-monitor.py` est un serveur HTTP ultra-léger développé en Python natif (`http.server`). Il sert l'interface web, lit vos logs via des commandes Unix (`journalctl`) pour extraire les métriques Rclone, et agit en API pour lire/écrire dans vos fichiers système.
+- **Garde de synchronisation** : `rclone-bisync-guard.sh` (installé dans `~/.local/share/RcloneDash/`) est appelé par `rclone-bisync.service` à chaque réveil du timer. Il décide s'il faut réellement lancer le bisync. Réglages en tête du script : `LOCAL_WINDOW` (fenêtre de détection d'un changement local, 12 min par défaut) et `FULL_INTERVAL` (intervalle max entre deux syncs complets pour le cloud, 60 min). Une sync manuelle depuis le dashboard pose un marqueur `~/.config/rclone/.force-sync` qui force le lancement sans condition.
 - **Frontend** : Les fichiers `index.html`, `style.css` et `app.js` génèrent l'interface, dessinée entièrement avec du CSS natif pour un design moderne (micro-animations, fenêtres modales, etc.).

@@ -7,14 +7,6 @@ Wants=network-online.target
 Type=oneshot
 User=__USER__
 EnvironmentFile=-__HOME__/.config/rclone/bwlimit.env
-ExecStart=/usr/bin/rclone bisync GoogleDrive: __HOME__/GoogleDrive \
-  --config __HOME__/.config/rclone/rclone.conf \
-  --filter-from __HOME__/.config/rclone/gdrive-filters.txt \
-  --drive-skip-shortcuts \
-  --drive-skip-gdocs \
-  --tpslimit 8 \
-  -v \
-  --stats 5s \
-  --stats-file-name-length 0 \
-  --conflict-resolve newer \
-  --resilient
+# La garde ne lance le bisync que si c'est utile (changement local récent,
+# sync complet périodique, ou déclenchement manuel). Voir rclone-bisync-guard.sh.
+ExecStart=__HOME__/.local/share/RcloneDash/rclone-bisync-guard.sh

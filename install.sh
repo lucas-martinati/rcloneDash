@@ -1,55 +1,111 @@
 #!/bin/bash
 set -e
 
-echo "=== Installation de RcloneDash ==="
+# --------------------------------------------------------------------------- #
+#  Couleurs & helpers d'affichage
+#  Les couleurs sont automatiquement désactivées si la sortie n'est pas un
+#  terminal (pipe, redirection) ou si la variable NO_COLOR est définie.
+# --------------------------------------------------------------------------- #
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$'\033[1m';  DIM=$'\033[2m';   RESET=$'\033[0m'
+    RED=$'\033[31m';  GREEN=$'\033[32m'; YELLOW=$'\033[33m'
+    BLUE=$'\033[34m'; CYAN=$'\033[36m';  GREY=$'\033[90m'
+else
+    BOLD=''; DIM=''; RESET=''; RED=''; GREEN=''; YELLOW=''; BLUE=''; CYAN=''; GREY=''
+fi
 
-# Définition du dossier cible
+TOTAL_STEPS=4
+
+# En-tête d'étape :  step <numéro> <titre>
+step()    { printf '\n%s%s[%s/%s]%s %s%s%s\n' "$BOLD" "$BLUE" "$1" "$TOTAL_STEPS" "$RESET" "$BOLD" "$2" "$RESET"; }
+ok()      { printf '   %s✔%s %s\n'  "$GREEN"  "$RESET" "$1"; }
+info()    { printf '   %s•%s %s\n'  "$CYAN"   "$RESET" "$1"; }
+warn()    { printf '   %s!%s %s\n'  "$YELLOW" "$RESET" "$1"; }
+err()     { printf '   %s✗%s %s\n'  "$RED"    "$RESET" "$1" >&2; }
+detail()  { printf '     %s%s%s\n' "$GREY"   "$1" "$RESET"; }
+
+banner() {
+    local rule="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf '\n%s%s%s%s\n'      "$BOLD" "$CYAN" "$rule" "$RESET"
+    printf '%s%s  Installation de RcloneDash%s\n' "$BOLD" "$CYAN" "$RESET"
+    printf '%s%s%s%s\n\n'      "$BOLD" "$CYAN" "$rule" "$RESET"
+}
+
+# En cas d'échec, on affiche un message clair plutôt qu'un arrêt silencieux.
+trap 'err "Installation interrompue (une commande a échoué)."; exit 1' ERR
+
+banner
+
+# --------------------------------------------------------------------------- #
+#  Étape 1 — Fichiers de l'application + garde de synchronisation
+# --------------------------------------------------------------------------- #
 TARGET_DIR="$HOME/.local/share/RcloneDash"
+
+step 1 "Copie des fichiers de l'application"
 mkdir -p "$TARGET_DIR"
-
-# Copie des fichiers vitaux de l'application
-echo "[1] Copie des fichiers vers $TARGET_DIR..."
+detail "Destination : $TARGET_DIR"
 cp src/rclone-monitor.py src/app.js src/style.css src/index.html "$TARGET_DIR/"
+ok "Interface et backend copiés"
 
-# Création du service systemd utilisateur pour exécuter le serveur web en arrière-plan
-echo "[2] Installation du service systemd pour le Dashboard..."
+# Garde légère : ne lance le bisync que si c'est utile (changement local
+# récent, sync périodique, ou déclenchement manuel).
+sed -e "s|__HOME__|$HOME|g" services/rclone-bisync-guard.sh.template > "$TARGET_DIR/rclone-bisync-guard.sh"
+chmod +x "$TARGET_DIR/rclone-bisync-guard.sh"
+ok "Garde de synchronisation installée"
+
+# --------------------------------------------------------------------------- #
+#  Étape 2 — Service systemd du Dashboard (utilisateur)
+# --------------------------------------------------------------------------- #
+step 2 "Service systemd du Dashboard"
 mkdir -p "$HOME/.config/systemd/user"
 cp services/rclonedash.service "$HOME/.config/systemd/user/"
-
-# Activation du service RcloneDash (User)
 systemctl --user daemon-reload
-systemctl --user enable rclonedash.service
+systemctl --user enable rclonedash.service >/dev/null 2>&1
 systemctl --user restart rclonedash.service
-echo "-> RcloneDash démarré avec succès."
+ok "RcloneDash démarré en arrière-plan"
 
-# Installation du fichier de filtres
-echo "[3] Configuration des filtres Rclone..."
+# --------------------------------------------------------------------------- #
+#  Étape 3 — Filtres rclone
+# --------------------------------------------------------------------------- #
+step 3 "Configuration des filtres rclone"
 mkdir -p "$HOME/.config/rclone"
 if [ ! -f "$HOME/.config/rclone/gdrive-filters.txt" ]; then
     cp services/gdrive-filters.txt "$HOME/.config/rclone/"
-    echo "-> Fichier de filtres par défaut installé."
+    ok "Fichier de filtres par défaut installé"
 else
-    echo "-> Fichier gdrive-filters.txt déjà existant (non écrasé)."
+    info "gdrive-filters.txt déjà présent — conservé tel quel"
 fi
 
-# Configuration du service de synchronisation système (rclone-bisync)
-echo "[4] Création et activation de rclone-bisync.service et rclone-bisync.timer..."
+# --------------------------------------------------------------------------- #
+#  Étape 4 — Service & timer de synchronisation (système, sudo requis)
+# --------------------------------------------------------------------------- #
+step 4 "Service & timer de synchronisation"
 
-# Personnalisation du template avec l'utilisateur actuel
-sed -e "s|__USER__|$USER|g" -e "s|__HOME__|$HOME|g" services/rclone-bisync.service.template > /tmp/rclone-bisync.service
+sed -e "s|__USER__|$USER|g" -e "s|__HOME__|$HOME|g" \
+    services/rclone-bisync.service.template > /tmp/rclone-bisync.service
 
-echo "L'installation dans /etc/systemd/system/ nécessite les droits administrateur."
-echo "Il vous sera probablement demandé de saisir votre mot de passe (sudo) :"
-if sudo cp /tmp/rclone-bisync.service /etc/systemd/system/rclone-bisync.service && sudo cp services/rclone-bisync.timer /etc/systemd/system/rclone-bisync.timer; then
+warn "Installation dans /etc/systemd/system/ — droits administrateur requis"
+detail "Votre mot de passe (sudo) peut vous être demandé ci-dessous."
+
+# On désactive temporairement le trap ERR pour gérer nous-mêmes l'échec de sudo.
+trap - ERR
+if sudo cp /tmp/rclone-bisync.service /etc/systemd/system/rclone-bisync.service \
+   && sudo cp services/rclone-bisync.timer /etc/systemd/system/rclone-bisync.timer; then
     sudo systemctl daemon-reload
-    sudo systemctl enable --now rclone-bisync.timer
-    echo "-> Service et Timer de synchronisation installés et activés avec succès."
+    sudo systemctl enable --now rclone-bisync.timer >/dev/null 2>&1
+    ok "Service et timer installés et activés"
 else
-    echo "ERREUR : Impossible de copier les fichiers dans /etc/systemd/system/ (Droits refusés)."
+    err "Impossible de copier les fichiers dans /etc/systemd/system/ (droits refusés)."
     exit 1
 fi
 
-echo ""
-echo "=== Installation terminée ! ==="
-echo "Vous pouvez accéder à votre interface ici : http://localhost:8765"
-echo "Le tableau de bord et le timer de synchronisation se lanceront désormais automatiquement à chaque démarrage."
+# --------------------------------------------------------------------------- #
+#  Récapitulatif
+# --------------------------------------------------------------------------- #
+printf '\n%s%s  ✔ Installation terminée !%s\n' "$BOLD" "$GREEN" "$RESET"
+printf '\n'
+printf '   %sInterface%s   %s%shttp://localhost:8765%s\n' "$BOLD" "$RESET" "$BOLD" "$CYAN" "$RESET"
+printf '   %sLancement%s   automatique à chaque démarrage (dashboard + sync)\n' "$BOLD" "$RESET"
+printf '   %sSync%s        bisync déclenché uniquement si un fichier a changé\n' "$BOLD" "$RESET"
+printf '               %srécemment, ou toutes les heures pour le cloud%s\n' "$GREY" "$RESET"
+printf '\n'

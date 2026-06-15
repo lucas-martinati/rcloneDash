@@ -1,0 +1,81 @@
+#!/bin/bash
+# =============================================================================
+# Garde légère pour rclone bisync
+# -----------------------------------------------------------------------------
+# Ne lance le bisync que si c'est utile, pour économiser les ressources
+# (appels API Drive, bande passante, CPU) quand rien n'a changé :
+#
+#   1. FORCE   : un sync manuel a été demandé depuis le dashboard
+#                (fichier marqueur .force-sync) -> on lance, sans condition.
+#   2. LOCAL   : un fichier du dossier synchronisé a été modifié récemment
+#                (fenêtre LOCAL_WINDOW minutes) -> on lance.
+#   3. CLOUD   : aucun changement local, mais le dernier sync complet date de
+#                plus de FULL_INTERVAL minutes -> on relance quand même pour
+#                récupérer d'éventuelles modifs faites côté cloud / autre PC.
+#   4. Sinon   : on ne fait rien (bisync ignoré).
+# =============================================================================
+set -u
+
+SYNC_DIR="__HOME__/GoogleDrive"
+RCLONE_CONF="__HOME__/.config/rclone"
+STAMP="$RCLONE_CONF/.last-full-sync"
+FORCE_FILE="$RCLONE_CONF/.force-sync"
+
+# Fenêtre de détection d'un changement local, en minutes.
+# Volontairement un peu plus large que l'intervalle du timer (10 min) pour ne
+# jamais laisser passer un fichier modifié juste au bord d'une fenêtre.
+LOCAL_WINDOW=12
+
+# Intervalle maximum entre deux syncs complets, en minutes. Sert de filet pour
+# récupérer les changements venus du cloud même si rien ne bouge en local.
+FULL_INTERVAL=60
+
+run_bisync() {
+    mkdir -p "$RCLONE_CONF"
+    /usr/bin/rclone bisync GoogleDrive: "$SYNC_DIR" \
+        --config "$RCLONE_CONF/rclone.conf" \
+        --filter-from "$RCLONE_CONF/gdrive-filters.txt" \
+        --drive-skip-shortcuts \
+        --drive-skip-gdocs \
+        --tpslimit 8 \
+        -v \
+        --stats 5s \
+        --stats-file-name-length 0 \
+        --conflict-resolve newer \
+        --resilient
+    local rc=$?
+    # On n'horodate le dernier sync complet que si rclone a réussi.
+    [ $rc -eq 0 ] && date +%s > "$STAMP"
+    return $rc
+}
+
+reason=""
+
+# 1. Sync manuel forcé depuis le dashboard ?
+if [ -f "$FORCE_FILE" ]; then
+    rm -f "$FORCE_FILE"
+    reason="déclenchement manuel"
+
+# 2. Un fichier local a-t-il changé dans la fenêtre ?
+elif [ -d "$SYNC_DIR" ] && \
+     [ -n "$(find "$SYNC_DIR" -type f -mmin -"$LOCAL_WINDOW" -print -quit 2>/dev/null)" ]; then
+    reason="changement local détecté (< ${LOCAL_WINDOW} min)"
+
+# 3. Filet pour les changements distants : sync complet périodique.
+else
+    now=$(date +%s)
+    last=0
+    [ -f "$STAMP" ] && last=$(cat "$STAMP" 2>/dev/null || echo 0)
+    if [ "$(( (now - last) / 60 ))" -ge "$FULL_INTERVAL" ]; then
+        reason="sync complet périodique (dernier > ${FULL_INTERVAL} min)"
+    fi
+fi
+
+if [ -n "$reason" ]; then
+    echo "RcloneDash: lancement du bisync — $reason"
+    run_bisync
+    exit $?
+fi
+
+echo "RcloneDash: aucun changement local et sync complet récent — bisync ignoré"
+exit 0
