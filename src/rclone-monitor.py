@@ -101,8 +101,11 @@ class LogStreamer(threading.Thread):
     def _parse(self, line):
         ll = line.lower()
 
-        # Détection du démarrage d'une sync
-        if ("starting" in ll or "started" in ll) and ("synchronisation" in ll or "rclone" in ll):
+        # Détection du démarrage d'une sync : uniquement la ligne systemd,
+        # sinon un log rclone comme "Starting transaction limiter" réinitialise
+        # la progression en plein milieu d'une sync.
+        if "systemd" in ll and ("starting" in ll or "started" in ll) \
+                and self.service + ".service" in ll:
             self._reset()
             self.is_syncing = True
             self.phase = "Building listings"
@@ -235,9 +238,9 @@ class LogStreamer(threading.Thread):
             self.phase = "Bisync successful"
             self.phase_index = 5
             self.is_syncing = False
-        elif "finished" in ll and self.service in ll:
+        elif "systemd" in ll and "finished" in ll and self.service in ll:
             self.is_syncing = False
-        elif "failed" in ll and self.service in ll:
+        elif "systemd" in ll and "failed" in ll and self.service in ll:
             self.is_syncing = False
             subprocess.run(["notify-send", "RcloneDash", "Échec de la synchronisation. Consultez le tableau de bord.", "--icon=dialog-error", "-u", "critical"], check=False)
 
@@ -464,11 +467,13 @@ class Monitor:
             ll = l.lower()
             ts = l.split(" ")[0] if l else ""
 
-            # Détection du début d'un run
-            if ("starting" in ll or "started" in ll) and (
-                "synchronisation" in ll
-                or ("rclone" in ll and "bisync" in ll)
-            ):
+            # Détection du début d'un run : uniquement la ligne systemd
+            # ("Starting rclone-bisync.service - ..."), sinon les logs rclone
+            # du type "Starting transaction limiter" créent des runs fantômes
+            # (l'identifiant journal "rclone-bisync-guard.sh" contient déjà
+            # "rclone" et "bisync").
+            if "systemd" in ll and ("starting" in ll or "started" in ll) \
+                    and self.svc + ".service" in ll:
                 if cur:
                     runs.append(cur)
                 cur = {
@@ -530,8 +535,8 @@ class Monitor:
                     last_error = l.strip()
                     cur["error_logs"].append(l.strip())
 
-                # Fin de run : Succeeded
-                if "finished" in ll and self.svc in ll:
+                # Fin de run : Succeeded (ligne systemd uniquement)
+                if "systemd" in ll and "finished" in ll and self.svc in ll:
                     if cur.get("skipped"):
                         cur = None
                         continue
@@ -541,8 +546,9 @@ class Monitor:
                     cur = None
                     continue
 
-                # Fin de run : Failed
-                if "failed" in ll and self.svc in ll:
+                # Fin de run : Failed (ligne systemd uniquement, sinon un log
+                # rclone contenant "failed" clôturerait le run prématurément)
+                if "systemd" in ll and "failed" in ll and self.svc in ll:
                     if cur.get("skipped"):
                         cur = None
                         continue
