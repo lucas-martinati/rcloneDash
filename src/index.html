@@ -1,13 +1,21 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark">
+<html lang="fr">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rclone Monitor — Dashboard</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='23 4 23 10 17 10'/><polyline points='1 20 1 14 7 14'/><path d='M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15'/></svg>" type="image/svg+xml">
+  <title>rclone Monitor</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235cb3bf' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='23 4 23 10 17 10'/><polyline points='1 20 1 14 7 14'/><path d='M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15'/></svg>" type="image/svg+xml">
   <meta name="description" content="Dashboard de surveillance temps réel pour rclone-bisync">
+  <script>
+    // Thème avant le premier rendu pour éviter le flash (?theme=dark|light force)
+    document.documentElement.dataset.theme =
+      new URLSearchParams(location.search).get('theme') ||
+      localStorage.getItem('dash_theme') ||
+      (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  </script>
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -28,70 +36,83 @@
       <div id="sbadge" class="badge idle"><span class="dot" id="sdot"></span><span id="slbl">Chargement…</span></div>
       <span id="slow-badge" class="badge warn" style="display:none"><span class="dot"></span>Sync lente</span>
       <div class="sp"></div>
-      <span id="ts" class="ts-lbl"></span>
-      <div id="spin" class="spin"></div>
-      <button class="btn" id="bsync" onclick="doSync()">
+      <span id="ts" class="ts-lbl" title="Dernière mise à jour des données"></span>
+      <div id="spin" class="spin" aria-hidden="true"></div>
+      <button class="btn" id="bsync" onclick="doSync()" title="Lancer une synchronisation maintenant">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
           stroke-linecap="round">
           <polyline points="23 4 23 10 17 10" />
           <polyline points="1 20 1 14 7 14" />
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
         </svg>
-        Sync
+        <span class="btn-lbl" id="bsync-lbl">Synchroniser</span>
       </button>
-      <button class="btn" id="bcancel" onclick="cancelSync()" style="display:none; color: var(--err)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <button class="btn btn-danger" id="bcancel" onclick="cancelSync()" style="display:none"
+        title="Arrêter la synchronisation en cours">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="15" y1="9" x2="9" y2="15"></line>
           <line x1="9" y1="9" x2="15" y2="15"></line>
         </svg>
-        Annuler
+        <span class="btn-lbl" id="bcancel-lbl">Arrêter</span>
       </button>
-      <button class="btn btn-g" onclick="openDryRunModal()" title="Simuler une synchronisation (sans modifier de fichiers)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <div class="bar-sep" aria-hidden="true"></div>
+      <button class="btn btn-g" onclick="openDryRunModal()" title="Simuler une synchronisation, sans modifier de fichiers">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         </svg>
-        Simuler
+        <span class="btn-lbl">Simuler</span>
       </button>
-      <button class="btn btn-g" onclick="openTreeModal()" title="Parcourir l'arborescence">
+      <button class="btn btn-g" onclick="openTreeModal()" title="Parcourir les fichiers du dossier synchronisé">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
         </svg>
-        Fichiers
+        <span class="btn-lbl">Fichiers</span>
       </button>
-      <button class="btn btn-g" onclick="openFiltersModal()" title="Gérer les filtres et fichiers ignorés">
+      <button class="btn btn-g" onclick="openFiltersModal()" title="Choisir les fichiers à exclure de la synchronisation">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">
           <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
         </svg>
-        Filtres
+        <span class="btn-lbl">Exclusions</span>
       </button>
-      <button class="btn btn-g" onclick="openBwModal()" title="Limiter la bande passante">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        Vitesse
+      <button class="btn btn-g" onclick="openBwModal()" title="Limiter la bande passante utilisée par rclone">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+        <span class="btn-lbl">Débit</span>
       </button>
-      <button class="tsbtn" onclick="toggleTheme()" title="Thème" id="theme-btn">
+      <button class="tsbtn" onclick="toggleTheme()" title="Changer de thème" id="theme-btn" aria-label="Changer de thème">
         <svg id="ti" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
       </button>
     </header>
 
+    <!-- ═══════ POULS — cycle de synchronisation ═══════ -->
+    <div class="pulse" id="pulse">
+      <div class="pulse-seg">
+        <span class="pulse-dot" id="pulse-dot"></span>
+        <span class="pulse-cap">Dernière sync</span>
+        <span class="pulse-val" id="pulse-last">—</span>
+      </div>
+      <div class="pulse-seg pulse-mid" id="pulse-mid" style="display:none"></div>
+      <div class="sp"></div>
+      <div class="pulse-seg">
+        <span class="pulse-cap" id="pulse-next-cap">Prochaine sync</span>
+        <span class="pulse-val" id="pulse-next">—</span>
+      </div>
+      <div class="pulse-line" id="pulse-line"></div>
+    </div>
+
     <!-- ═══════ MAIN ═══════ -->
     <main class="main" id="main-content">
 
-      <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:10px 15px; border-radius:12px; margin-bottom:20px; font-size:14px;" id="quota-container">
-        <span style="font-weight:600; color:var(--text-muted);">Stockage Cloud</span>
-        <div style="display:flex; align-items:center; gap:15px; flex:1; max-width:400px; justify-content:flex-end;">
-          <span id="quota-text" style="font-family:'Courier New', monospace; font-size:13px; color:var(--text);">Chargement...</span>
-          <div style="width:150px; height:8px; background:var(--border); border-radius:4px; overflow:hidden;">
-            <div id="quota-bar" style="height:100%; width:0%; background:var(--primary); transition:width 1s ease;"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Alert banner -->
+      <!-- Bandeau d'alerte -->
       <div id="alert-banner" class="alert-banner">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
           stroke-linecap="round" stroke-linejoin="round">
@@ -102,22 +123,15 @@
         <span class="alert-msg" id="alert-msg"></span>
       </div>
 
-      <!-- KPIs Row 1 -->
-      <div class="krow" id="kpi-row-1">
-        <div class="kpi" id="kpi-timer">
-          <div class="kl">Timer</div>
-          <div class="kv" id="kt">—</div>
-          <div class="ks" id="kts">toutes les 5 min</div>
-        </div>
-        <div class="kpi" id="kpi-last">
-          <div class="kl">Dernière sync</div>
-          <div class="kv" id="kl">—</div>
-          <div class="ks" id="kls">—</div>
-        </div>
-        <div class="kpi" id="kpi-duration">
-          <div class="kl">Durée</div>
-          <div class="kv" id="kd">—</div>
-          <div class="ks">dernière exécution</div>
+      <!-- KPIs -->
+      <div class="krow" id="kpi-row">
+        <div class="kpi" id="quota-kpi">
+          <div class="kl">Stockage cloud</div>
+          <div class="kv" id="quota-text">—</div>
+          <div class="ks" id="quota-sub">Google Drive</div>
+          <div class="dbar">
+            <div class="dfill" id="quota-bar" style="width:0"></div>
+          </div>
         </div>
         <div class="kpi" id="disk-kpi">
           <div class="kl">Disque local</div>
@@ -127,32 +141,28 @@
             <div class="dfill" id="dfill" style="width:0"></div>
           </div>
         </div>
+        <div class="kpi" id="kpi-files">
+          <div class="kl">Fichiers suivis</div>
+          <div class="kv" id="kf">—</div>
+          <div class="ks">~/GoogleDrive</div>
+        </div>
         <div class="kpi" id="kpi-today">
           <div class="kl">Syncs aujourd'hui</div>
           <div class="kv" id="kr">—</div>
           <div class="ks" id="krs">—</div>
         </div>
-      </div>
-
-      <!-- KPIs Row 2 -->
-      <div class="krow" id="kpi-row-2">
-        <div class="kpi" id="kpi-files">
-          <div class="kl">Fichiers GoogleDrive</div>
-          <div class="kv" id="kf">—</div>
-          <div class="ks">~/GoogleDrive</div>
-        </div>
         <div class="kpi" id="kpi-speed">
           <div class="kl">Vitesse moyenne</div>
           <div class="kv" id="ksp">—</div>
-          <div class="ks">dernière sync</div>
+          <div class="ks">dernier transfert</div>
         </div>
         <div class="kpi" id="conflict-kpi">
           <div class="kl">Conflits aujourd'hui</div>
           <div class="kv" id="kc">0</div>
-          <div class="ks">lignes conflict dans logs</div>
+          <div class="ks">détectés dans les journaux</div>
         </div>
         <div class="kpi" id="kpi-rate">
-          <div class="kl">Taux de succès 7j</div>
+          <div class="kl">Fiabilité 7 jours</div>
           <div class="kv" id="ksr">—</div>
           <div class="dbar">
             <div class="dfill" id="srfill" style="width:0"></div>
@@ -160,7 +170,7 @@
         </div>
       </div>
 
-      <!-- Live Sync Section -->
+      <!-- Sync en cours -->
       <div id="live-section" class="live-section">
         <div class="live-header">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -169,21 +179,18 @@
             <polyline points="1 20 1 14 7 14" />
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
           </svg>
-          Sync en cours
+          Synchronisation en cours
           <span class="live-elapsed" id="live-elapsed"></span>
         </div>
         <div class="live-body">
-          <!-- Phase stepper -->
           <div id="phase-stepper" class="phase-stepper"></div>
 
-          <!-- Progress bar -->
           <div>
             <div class="tf-pbar">
               <div class="tf-pfill" id="tf-bar" style="width:0"></div>
             </div>
           </div>
 
-          <!-- Transfer stats -->
           <div class="tf-grid" id="tf-grid">
             <div class="tf-stat">
               <div class="kl">Transféré</div>
@@ -206,7 +213,7 @@
               <div class="kv" id="tf-eta">—</div>
             </div>
             <div class="tf-stat">
-              <div class="kl">Checks</div>
+              <div class="kl">Vérifications</div>
               <div class="kv" id="tf-checks">—</div>
             </div>
             <div class="tf-stat">
@@ -215,7 +222,6 @@
             </div>
           </div>
 
-          <!-- Active file -->
           <div id="active-wrap" class="active-file-wrap" style="display:none">
             <div class="kl">Fichier en cours de transfert</div>
             <div class="active-fname" id="active-file">—</div>
@@ -224,32 +230,28 @@
             </div>
           </div>
 
-          <!-- Fichiers synchronisés récemment durant la session active -->
-          <div id="live-synced-wrap"
-            style="display:none; padding: 8px 12px; background: var(--surface-off); border-radius: 6px; margin-top: 10px;">
+          <div id="live-synced-wrap" class="live-synced-wrap" style="display:none">
             <div class="kl">Fichiers synchronisés durant cette session</div>
             <div id="live-synced-list" class="live-synced-list"></div>
           </div>
 
-          <!-- Changes detected -->
           <div class="changes-grid" id="changes-grid">
             <div>
-              <div class="changes-col-title">Path1 — Changements détectés</div>
-              <div id="ch-p1" class="live-changes-list"><span style="color:var(--faint);font-size:11px">Aucun
-                  changement</span></div>
+              <div class="changes-col-title">Changements locaux détectés</div>
+              <div id="ch-p1" class="live-changes-list"><span class="change-empty">Aucun changement</span></div>
             </div>
             <div>
-              <div class="changes-col-title">Path2 — Changements détectés</div>
-              <div id="ch-p2" class="live-changes-list"><span style="color:var(--faint);font-size:11px">Aucun
-                  changement</span></div>
+              <div class="changes-col-title">Changements distants détectés</div>
+              <div id="ch-p2" class="live-changes-list"><span class="change-empty">Aucun changement</span></div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Draggable Modules -->
+      <!-- Modules déplaçables -->
       <div class="modules-container" id="modules-container">
-        <!-- History -->
+
+        <!-- Historique -->
         <div class="panel drag-panel" id="panel-history" draggable="true">
           <div class="ph">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -266,16 +268,17 @@
                 <tr>
                   <th>Démarrage</th>
                   <th>Statut</th>
-                  <th title="Fichiers copiés">Copiés</th>
-                  <th title="Fichiers modifiés">Modif.</th>
-                  <th title="Fichiers supprimés">Suppr.</th>
-                  <th>Durée</th>
-                  <th>Err.</th>
+                  <th class="num" title="Fichiers copiés">Copiés</th>
+                  <th class="num" title="Fichiers modifiés">Modif.</th>
+                  <th class="num" title="Fichiers supprimés">Suppr.</th>
+                  <th class="num">Durée</th>
+                  <th class="num" title="Erreurs">Err.</th>
                 </tr>
               </thead>
               <tbody id="rtb"></tbody>
             </table>
-            <div class="empty" id="rem" style="display:none">Aucune sync dans les journaux</div>
+            <div class="empty" id="rem" style="display:none">Aucune synchronisation dans les journaux.<br>La première
+              apparaîtra ici dès qu'elle s'exécutera.</div>
           </div>
         </div>
 
@@ -288,50 +291,53 @@
               <line x1="3" y1="9" x2="21" y2="9" />
               <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
-            <span>Logs récents</span>
-            <button class="btn-g btn" style="padding:2px 7px;font-size:10px" onclick="logsBot()"
-              id="logs-bottom-btn">↓</button>
+            <span>Journal</span>
+            <div class="chiprow" role="group" aria-label="Filtrer le journal">
+              <button class="chip on" id="lf-all" onclick="setLogFilter('all', this)">Tout</button>
+              <button class="chip" id="lf-files" onclick="setLogFilter('files', this)">Fichiers</button>
+              <button class="chip" id="lf-issues" onclick="setLogFilter('issues', this)">Problèmes</button>
+            </div>
+            <button class="iconbtn" onclick="logsBot()" id="logs-bottom-btn" title="Aller aux lignes les plus récentes">↓</button>
           </div>
           <div class="pb" id="lscroll">
             <div class="lw" id="lwrap"></div>
           </div>
         </div>
 
-        <!-- Recent Files -->
+        <!-- Fichiers récents -->
         <div class="recent-panel drag-panel" id="panel-recent" draggable="true">
-        <div class="ph" style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="display:flex; align-items:center; gap:8px;">
+          <div class="ph">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
               stroke-linecap="round" stroke-linejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
             </svg>
-            <span>Fichiers récents</span>
-            <span id="recent-count" style="font-weight:400;font-size:10px;color:var(--faint)"></span>
+            <span>Fichiers récents <span class="ph-count" id="recent-count"></span></span>
+            <input type="text" id="recent-search" class="search-input" placeholder="Filtrer par nom…"
+              oninput="filterRecent()">
           </div>
-          <input type="text" id="recent-search" placeholder="Filtrer..." style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface-off); color:var(--text); font-size:11px; outline:none; width:120px;" oninput="filterRecent()">
+          <div class="recent-list" id="recent-list">
+            <div class="empty">Aucun fichier synchronisé récemment.<br>Les fichiers copiés, modifiés ou supprimés
+              apparaîtront ici.</div>
+          </div>
         </div>
-        <div class="recent-list" id="recent-list">
-          <div class="empty">Aucun fichier récent dans les logs</div>
-        </div>
-      </div>
-      </div> <!-- End modules-container -->
+      </div> <!-- /modules-container -->
 
     </main>
   </div>
 
-  <!-- ═══════ MODALS ═══════ -->
+  <!-- ═══════ MODALES ═══════ -->
   <div id="tree-modal" class="modal-overlay" onclick="if(event.target===this) closeTreeModal()">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-label="Fichiers synchronisés">
       <div class="modal-header">
         <div class="modal-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
           </svg>
-          Navigateur Google Drive
+          Fichiers synchronisés
         </div>
-        <button class="modal-close" onclick="closeTreeModal()">
+        <button class="modal-close" onclick="closeTreeModal()" aria-label="Fermer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -349,70 +355,22 @@
           </button>
           <div class="tree-path" id="tree-path">/</div>
         </div>
-        <div class="tree-list" id="tree-list">
-          <!-- Tree items generated here -->
-        </div>
+        <div class="tree-list" id="tree-list"></div>
       </div>
     </div>
   </div>
 
   <div id="dryrun-modal" class="modal-overlay" onclick="if(event.target===this) closeDryRunModal()">
-    <div class="modal" style="width:800px; height:85vh; max-height:none;">
-      <div class="modal-header">
-        <div class="modal-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          Simulation de Synchronisation (Dry Run)
-        </div>
-        <button class="modal-close" onclick="closeDryRunModal()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-      </div>
-      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden;">
-        <div style="color:var(--faint);font-size:12px;">Cette action simule une synchronisation et affiche les opérations qui <b>seraient</b> effectuées. <u>Aucun fichier ne sera modifié.</u></div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn ok" style="background:var(--primary)" id="start-dryrun-btn" onclick="startDryRun()">Lancer la simulation</button>
-        </div>
-        <pre id="dryrun-output" style="flex:1; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--surface-off); color:var(--text); font-family:'Courier New',monospace; font-size:11px; overflow-y:auto; white-space:pre-wrap; margin:0;">Appuyez sur "Lancer la simulation" pour démarrer.</pre>
-      </div>
-    </div>
-  </div>
-
-  <div id="bw-modal" class="modal-overlay" onclick="if(event.target===this) closeBwModal()">
-    <div class="modal" style="width:400px;">
-      <div class="modal-header">
-        <div class="modal-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          Limiteur de Vitesse
-        </div>
-        <button class="modal-close" onclick="closeBwModal()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-      </div>
-      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
-        <div style="color:var(--faint);font-size:12px;">Limitez la bande passante de Rclone pour économiser votre connexion internet. <i>La modification sera prise en compte lors du prochain cycle de synchronisation.</i></div>
-        <select id="bw-select" style="padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--surface-off); color:var(--text); width:100%; outline:none;">
-          <option value="">Aucune limite (Vitesse Max)</option>
-          <option value="1M">1 Mo/s</option>
-          <option value="5M">5 Mo/s</option>
-          <option value="10M">10 Mo/s</option>
-          <option value="500K">500 Ko/s</option>
-        </select>
-        <button class="btn ok" style="background:var(--primary)" id="save-bw-btn" onclick="saveBw()">Appliquer la limite</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="filters-modal" class="modal-overlay" onclick="if(event.target===this) closeFiltersModal()">
-    <div class="modal" style="width:800px; height:85vh; max-height:none;">
+    <div class="modal modal-lg" role="dialog" aria-label="Simulation de synchronisation">
       <div class="modal-header">
         <div class="modal-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            stroke-linecap="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           </svg>
-          Filtres et Fichiers Ignorés
+          Simulation de synchronisation
         </div>
-        <button class="modal-close" onclick="closeFiltersModal()">
+        <button class="modal-close" onclick="closeDryRunModal()" aria-label="Fermer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -420,18 +378,84 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden;">
-        <div style="display:flex;gap:8px;flex-shrink:0;">
-          <input type="text" id="new-filter-input" placeholder="Ex: - *.tmp ou - MonDossier/**"
-            style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-off);color:var(--text);font-family:'Courier New',monospace;font-size:12px;outline:none;">
-          <button class="btn" onclick="addFilter()">Ajouter</button>
-          <button class="btn ok" style="background:var(--primary-h)" id="save-filters-btn" onclick="saveFilters()">Sauvegarder</button>
+      <div class="modal-body col">
+        <div class="modal-hint">Affiche les opérations qu'une synchronisation effectuerait, <b>sans modifier aucun
+            fichier</b>. L'analyse peut prendre une à deux minutes.</div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" id="start-dryrun-btn" onclick="startDryRun()">Lancer la simulation</button>
         </div>
-        <textarea id="filters-text"
-          style="flex:1;width:100%;min-height:0;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-off);color:var(--text);font-family:'Courier New',monospace;font-size:11px;resize:none;white-space:pre-wrap;outline:none;"></textarea>
+        <pre id="dryrun-output" class="code-output">Lancez la simulation pour voir les opérations prévues.</pre>
       </div>
     </div>
   </div>
+
+  <div id="bw-modal" class="modal-overlay" onclick="if(event.target===this) closeBwModal()">
+    <div class="modal modal-sm" role="dialog" aria-label="Limite de débit">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
+          Limite de débit
+        </div>
+        <button class="modal-close" onclick="closeBwModal()" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body col">
+        <div class="modal-hint">Plafonne la bande passante utilisée par rclone pour préserver votre connexion. La
+          limite s'applique à partir de la prochaine synchronisation.</div>
+        <select id="bw-select" class="select-input">
+          <option value="">Aucune limite (vitesse maximale)</option>
+          <option value="10M">10 Mo/s</option>
+          <option value="5M">5 Mo/s</option>
+          <option value="1M">1 Mo/s</option>
+          <option value="500K">500 Ko/s</option>
+        </select>
+        <button class="btn" id="save-bw-btn" onclick="saveBw()">Appliquer la limite</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="filters-modal" class="modal-overlay" onclick="if(event.target===this) closeFiltersModal()">
+    <div class="modal modal-lg" role="dialog" aria-label="Fichiers exclus">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+          Fichiers exclus de la synchronisation
+        </div>
+        <button class="modal-close" onclick="closeFiltersModal()" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body col">
+        <div class="modal-hint">Une règle par ligne, au format rclone : <b>- *.tmp</b> exclut un motif,
+          <b>- MonDossier/**</b> exclut un dossier entier.</div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <input type="text" id="new-filter-input" class="code-input" style="flex:1"
+            placeholder="Ex. : - *.tmp  ou  - MonDossier/**" onkeydown="if(event.key==='Enter') addFilter()">
+          <button class="btn btn-g" onclick="addFilter()">Ajouter</button>
+          <button class="btn" id="save-filters-btn" onclick="saveFilters()">Enregistrer</button>
+        </div>
+        <textarea id="filters-text" class="code-input" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications -->
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>

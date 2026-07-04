@@ -373,9 +373,13 @@ class Monitor:
                 ).decode('utf-8')
                 self.quota = json.loads(out)
             except subprocess.CalledProcessError as e:
-                self.quota = {"error": str(e.output.decode('utf-8', errors='ignore')).strip()}
+                # On garde la dernière valeur valide plutôt que d'afficher
+                # une erreur transitoire pendant 5 minutes.
+                if not self.quota or "error" in self.quota:
+                    self.quota = {"error": str(e.output.decode('utf-8', errors='ignore')).strip()}
             except Exception as e:
-                self.quota = {"error": str(e)}
+                if not self.quota or "error" in self.quota:
+                    self.quota = {"error": str(e)}
             time.sleep(300)
 
     def disk(self):
