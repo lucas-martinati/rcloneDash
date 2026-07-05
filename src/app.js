@@ -2,7 +2,7 @@
    STATE
    ═══════════════════════════════════════════════════ */
 let _theme = document.documentElement.dataset.theme || 'dark';
-let _llc = -1;
+let _llc = '';
 let _interval = null;
 let _curState = '';
 let _logFilter = 'all';
@@ -11,6 +11,8 @@ let _nextSyncTs = null;   // timestamp (ms) de la prochaine sync planifiée
 let _lastStartTs = null;  // timestamp (ms) du dernier déclenchement
 let _isSyncing = false;
 let _livePct = null;      // % de transfert connu pendant une sync
+let _runsSig = '';        // signatures des dernières données rendues,
+let _recentSig = '';      // pour ne pas reconstruire le DOM inutilement
 
 /* ═══════════════════════════════════════════════════
    UTILS
@@ -529,6 +531,10 @@ function hideTooltip() {
    HISTORIQUE
    ═══════════════════════════════════════════════════ */
 function updateRuns(runs) {
+  var sig = JSON.stringify(runs || []);
+  if (sig === _runsSig) return;
+  _runsSig = sig;
+
   window._errorLogsCache = {};
   var tb = document.getElementById('rtb');
   var em = document.getElementById('rem');
@@ -661,8 +667,10 @@ function renderLogs() {
 
 function updateLogs(logs) {
   _lastLogs = logs || [];
-  if (_lastLogs.length !== _llc) {
-    _llc = _lastLogs.length;
+  var sig = _lastLogs.length + '|'
+    + (_lastLogs.length ? _lastLogs[0].t + '|' + _lastLogs[_lastLogs.length - 1].t : '');
+  if (sig !== _llc) {
+    _llc = sig;
     renderLogs();
   }
 }
@@ -683,6 +691,10 @@ function logsBot() {
    FICHIERS RÉCENTS
    ═══════════════════════════════════════════════════ */
 function updateRecentFiles(files) {
+  var sig = JSON.stringify(files || []);
+  if (sig === _recentSig) return;
+  _recentSig = sig;
+
   var list = document.getElementById('recent-list');
   var countEl = document.getElementById('recent-count');
 
@@ -829,6 +841,24 @@ function initResizer() {
     container.style.setProperty('--row2', rParts[1] + 'px');
   }
 
+  var hoverRaf = 0;
+  var lastMx = 0, lastMy = 0;
+
+  function updateHoverCursor(clientX, clientY) {
+    var panels = Array.from(document.querySelectorAll('.drag-panel'));
+    panels.sort(function (a, b) { return parseInt(a.style.order || 0) - parseInt(b.style.order || 0); });
+    if (panels.length < 3) return;
+    var p1 = panels[0].getBoundingClientRect();
+    var p2 = panels[1].getBoundingClientRect();
+    var p3 = panels[2].getBoundingClientRect();
+
+    var isH = (clientX > p1.right - 5 && clientX < p2.left + 5 && clientY > p1.top && clientY < p1.bottom);
+    var isV = (clientY > p1.bottom - 5 && clientY < p3.top + 5 && clientX > p3.left && clientX < p3.right);
+
+    var cursor = isH && isV ? 'move' : isH ? 'col-resize' : isV ? 'row-resize' : '';
+    if (container.style.cursor !== cursor) container.style.cursor = cursor;
+  }
+
   container.addEventListener('mousemove', function (e) {
     if (isResizingH) {
       var rect = container.getBoundingClientRect();
@@ -854,20 +884,12 @@ function initResizer() {
       return;
     }
 
-    var panels = Array.from(document.querySelectorAll('.drag-panel'));
-    panels.sort(function (a, b) { return parseInt(a.style.order || 0) - parseInt(b.style.order || 0); });
-    if (panels.length < 3) return;
-    var p1 = panels[0].getBoundingClientRect();
-    var p2 = panels[1].getBoundingClientRect();
-    var p3 = panels[2].getBoundingClientRect();
-
-    var isH = (e.clientX > p1.right - 5 && e.clientX < p2.left + 5 && e.clientY > p1.top && e.clientY < p1.bottom);
-    var isV = (e.clientY > p1.bottom - 5 && e.clientY < p3.top + 5 && e.clientX > p3.left && e.clientX < p3.right);
-
-    if (isH && isV) container.style.cursor = 'move';
-    else if (isH) container.style.cursor = 'col-resize';
-    else if (isV) container.style.cursor = 'row-resize';
-    else container.style.cursor = '';
+    lastMx = e.clientX; lastMy = e.clientY;
+    if (hoverRaf) return;
+    hoverRaf = requestAnimationFrame(function () {
+      hoverRaf = 0;
+      updateHoverCursor(lastMx, lastMy);
+    });
   });
 
   container.addEventListener('mousedown', function (e) {

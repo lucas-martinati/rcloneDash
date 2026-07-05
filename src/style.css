@@ -1042,20 +1042,21 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(12, 10, 8, .55);
+  background: rgba(12, 10, 8, .62);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity .2s;
-  backdrop-filter: blur(4px);
+  transition: opacity .2s, visibility .2s;
   padding: 20px;
 }
 
 .modal-overlay.show {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 
