@@ -1384,7 +1384,8 @@ function openExcludeModal(path, isDir) {
       + '<div class="exc-rule">Règle ajoutée : <span class="mono">' + esc(excRule()) + '</span></div>';
     var fl = '';
     d.files.forEach(function (f) {
-      fl += '<div class="del-file"><span class="df-name">' + esc(f.path) + '</span><span class="df-size">' + (fmtSize(f.size) || '') + '</span></div>';
+      var pathArg = f.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      fl += '<div class="del-file file-link" onclick="openFile(\'' + pathArg + '\', false, event)" title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"><span class="df-name">' + esc(f.path) + '</span><span class="df-size">' + (fmtSize(f.size) || '') + '</span></div>';
     });
     if (d.truncated) fl += '<div class="del-more">… et d\'autres fichiers non listés</div>';
     document.getElementById('exc-files').innerHTML = fl;
@@ -1538,7 +1539,8 @@ function openDeleteModal(path) {
 
     var fl = '';
     d.files.forEach(function (f) {
-      fl += '<div class="del-file"><span class="df-name">' + esc(f.path) + '</span><span class="df-size">' + (fmtSize(f.size) || '') + '</span></div>';
+      var pathArg = f.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      fl += '<div class="del-file file-link" onclick="openFile(\'' + pathArg + '\', false, event)" title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"><span class="df-name">' + esc(f.path) + '</span><span class="df-size">' + (fmtSize(f.size) || '') + '</span></div>';
     });
     if (d.truncated) fl += '<div class="del-more">… et d\'autres fichiers non listés</div>';
     document.getElementById('del-files').innerHTML = fl;
@@ -1696,8 +1698,9 @@ function openImpactModal(rule) {
     document.getElementById('impact-summary').innerHTML = summary;
     var fl = '';
     d.items.forEach(function (it) {
+      var pathArg = it.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var meta = it.is_dir ? ((it.count || 0) + (it.count > 1 ? ' fichiers' : ' fichier')) : (fmtSize(it.size) || '');
-      fl += '<div class="del-file"><span class="df-name">' + (it.is_dir ? '📁 ' : '') + esc(it.path) + '</span><span class="df-size">' + esc(meta) + '</span></div>';
+      fl += '<div class="del-file file-link" onclick="openFile(\'' + pathArg + '\', false, event)" title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"><span class="df-name">' + (it.is_dir ? '📁 ' : '') + esc(it.path) + '</span><span class="df-size">' + esc(meta) + '</span></div>';
     });
     if (d.truncated) fl += '<div class="del-more">… et d\'autres éléments non listés</div>';
     document.getElementById('impact-files').innerHTML = fl;
