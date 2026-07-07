@@ -116,7 +116,7 @@
 .tf-pfill {
   height: 100%;
   border-radius: 99px;
-  background: var(--run);
+  background: var(--grad-run);
   transition: width .3s ease;
 }
 

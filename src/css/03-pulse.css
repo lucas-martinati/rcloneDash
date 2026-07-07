@@ -80,7 +80,7 @@
   bottom: 0;
   height: 2px;
   width: 0;
-  background: var(--primary);
+  background: var(--grad-accent);
   transition: width 1s linear, background .4s;
 }
 

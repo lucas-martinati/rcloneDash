@@ -30,6 +30,9 @@
 
 .ph > span { flex: 1; }
 
+/* Petite pointe de couleur : les icônes d'en-tête passent en accent lagon */
+.ph > svg { color: var(--primary); }
+
 .ph-count {
   font-weight: 400;
   font-size: 10px;

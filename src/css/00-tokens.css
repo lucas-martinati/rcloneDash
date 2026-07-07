@@ -7,6 +7,12 @@
   --r-s: 6px;
   --r-m: 10px;
   --r-l: 14px;
+
+  /* Accents en dégradé — lagon → indigo. Les stops référencent les variables
+     de thème, donc un seul token suffit pour les deux thèmes (substitution au
+     moment de l'usage). Réservés aux quelques points « signature ». */
+  --grad-accent: linear-gradient(135deg, var(--primary) 0%, var(--accent-2) 100%);
+  --grad-run: linear-gradient(135deg, var(--run) 0%, var(--accent-2) 100%);
 }
 
 :root,
@@ -23,6 +29,8 @@
   --primary: #0b7078;
   --primary-h: #095b62;
   --primary-soft: rgba(11, 112, 120, .1);
+  --accent-2: #3d52c9;
+  --glow-accent: 0 4px 16px rgba(21, 90, 130, .22);
   --ok: #4a7d22;
   --ok-bg: #e2ecd6;
   --err: #a62c7e;
@@ -48,6 +56,8 @@
   --primary: #5cb3bf;
   --primary-h: #79c4cf;
   --primary-soft: rgba(92, 179, 191, .12);
+  --accent-2: #7e8bec;
+  --glow-accent: 0 4px 18px rgba(92, 179, 191, .28);
   --ok: #8fbe63;
   --ok-bg: #26331c;
   --err: #dd7fb4;

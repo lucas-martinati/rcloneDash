@@ -105,36 +105,46 @@
   font-family: var(--font-ui);
   border: none;
   cursor: pointer;
-  background: var(--primary);
+  background: var(--grad-accent);
   color: var(--bg);
+  box-shadow: var(--glow-accent);
   white-space: nowrap;
-  transition: background .15s, opacity .15s, transform .1s;
+  transition: box-shadow .18s, filter .18s, opacity .15s, transform .1s;
 }
 
-.btn:hover { background: var(--primary-h); }
+.btn:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 5px 13px color-mix(in srgb, var(--primary) 24%, transparent);
+}
 .btn:active { transform: translateY(1px); }
 
 .btn:disabled {
   opacity: .55;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
+  filter: none;
 }
 
 .btn-g {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
+  box-shadow: none;
 }
 
 .btn-g:hover {
+  filter: none;
   background: var(--surface-off);
   color: var(--text);
+  box-shadow: none;
 }
 
 .btn-danger {
   background: transparent;
   color: var(--err);
   border: 1px solid color-mix(in srgb, var(--err) 40%, transparent);
+  box-shadow: none;
 }
 
 .btn-danger:hover {
