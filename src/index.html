@@ -643,16 +643,31 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body col">
-        <div class="modal-hint">Une règle par ligne, au format rclone : <b>- *.tmp</b> exclut un motif,
-          <b>- MonDossier/**</b> exclut un dossier entier.</div>
+      <div class="modal-body col" style="gap: 16px;">
+        <div class="modal-hint" style="background: var(--surface-off); padding: 12px; border-radius: var(--r-s); border: 1px solid var(--border);">
+          <div style="display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; margin-bottom: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            Syntaxe des filtres rclone
+          </div>
+          Une règle par ligne. Utilisez <b>- *.tmp</b> pour exclure un type de fichier, ou <b>- MonDossier/**</b> pour exclure un dossier complet.
+        </div>
+        
         <div style="display:flex;gap:8px;flex-shrink:0;">
           <input type="text" id="new-filter-input" class="code-input" style="flex:1"
-            placeholder="Ex. : - *.tmp  ou  - MonDossier/**" onkeydown="if(event.key==='Enter') addFilter()">
-          <button class="btn btn-g" onclick="addFilter()">Ajouter</button>
-          <button class="btn" id="save-filters-btn" onclick="saveFilters()">Enregistrer</button>
+            placeholder="Nouvelle règle (ex: - *.tmp)" onkeydown="if(event.key==='Enter') addFilter()">
+          <button class="btn btn-g" onclick="addFilter()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Ajouter
+          </button>
         </div>
-        <textarea id="filters-text" class="code-input" spellcheck="false"></textarea>
+
+        <div style="flex: 1; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-s); overflow: hidden; background: var(--surface-off);">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--border);">
+            <div style="font-size: 12px; font-weight: 600; color: var(--muted);">RÈGLES D'EXCLUSION ACTUELLES</div>
+            <button class="btn" id="save-filters-btn" onclick="saveFilters()" style="padding: 4px 12px; font-size: 12px; min-height: 28px;" disabled>Enregistrer</button>
+          </div>
+          <textarea id="filters-text" class="code-input" spellcheck="false" style="border: none; border-radius: 0; background: transparent; padding: 16px; flex: 1; outline: none; box-shadow: none;" oninput="checkFiltersModified()"></textarea>
+        </div>
       </div>
     </div>
   </div>

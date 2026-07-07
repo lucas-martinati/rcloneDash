@@ -22,7 +22,7 @@ import {
   excOnChoice, reincludePath, closeReincModal
 } from './exclude.js';
 import {
-  openFiltersModal, closeFiltersModal, addFilter, saveFilters,
+  openFiltersModal, closeFiltersModal, addFilter, saveFilters, checkFiltersModified,
   openImpactModal, closeImpactModal, impOnChoice, confirmAddFilter
 } from './filters.js';
 import {
@@ -53,7 +53,7 @@ Object.assign(window, {
   ignorePath, openExcludeModal, closeExcludeModal, confirmExclude,
   excOnChoice, reincludePath, closeReincModal,
   // filters modal
-  openFiltersModal, closeFiltersModal, addFilter, saveFilters,
+  openFiltersModal, closeFiltersModal, addFilter, saveFilters, checkFiltersModified,
   openImpactModal, closeImpactModal, impOnChoice, confirmAddFilter,
   // bandwidth & dry run modals
   openBwModal, closeBwModal, saveBw,

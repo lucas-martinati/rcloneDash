@@ -13,7 +13,13 @@ export async function openFiltersModal() {
 
 export function closeFiltersModal() { document.getElementById('filters-modal').classList.remove('show'); }
 
+export let _originalFiltersText = '';
 
+export function checkFiltersModified() {
+  var tf = document.getElementById('filters-text');
+  var btn = document.getElementById('save-filters-btn');
+  btn.disabled = tf.value === _originalFiltersText;
+}
 export async function loadFilters() {
   var tf = document.getElementById('filters-text');
   tf.value = 'Chargement…';
@@ -21,6 +27,8 @@ export async function loadFilters() {
     var r = await fetch('/api/filters');
     var d = await r.json();
     tf.value = d.content || (d.error ? 'Erreur : ' + d.error : '');
+    _originalFiltersText = tf.value;
+    checkFiltersModified();
     tf.scrollTop = tf.scrollHeight;
   } catch (e) {
     tf.value = 'Serveur injoignable';
@@ -160,6 +168,8 @@ export async function saveFilters() {
     var d = await r.json();
     if (d.ok) {
       toast('Exclusions enregistrées', 'ok');
+      _originalFiltersText = tf.value;
+      checkFiltersModified();
     } else {
       toast('Enregistrement impossible : ' + d.error, 'err');
     }
