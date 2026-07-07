@@ -1,9 +1,14 @@
+import { ICO_WARN, ICO_CHECK, ICO_CLOUD } from './icons.js';
+import { esc, fmtSize, renderFileRow } from './utils.js';
+import { toast } from './toasts.js';
+import { loadTree, _fm } from './file-browser.js';
+
 /* ═══════════════════════════════════════════════════
    SUPPRESSION LOCALE  (aperçu + diff Drive + confirmation)
    ═══════════════════════════════════════════════════ */
-let _del = { path: '' };
+export let _del = { path: '' };
 
-function openDeleteModal(path) {
+export function openDeleteModal(path) {
   _del = { path: path };
   document.getElementById('delete-modal').classList.add('show');
   document.getElementById('del-path').textContent = '/' + path;
@@ -43,7 +48,7 @@ function openDeleteModal(path) {
   });
 }
 
-function runDriveCheck() {
+export function runDriveCheck() {
   var el = document.getElementById('del-drive');
   el.innerHTML = '<div class="del-drive-load"><span class="fm-spin"></span> Comparaison avec le Drive en cours…</div>';
   fetch('/api/drive_check?path=' + encodeURIComponent(_del.path)).then(function (r) { return r.json(); }).then(function (d) {
@@ -76,7 +81,7 @@ function runDriveCheck() {
   });
 }
 
-function confirmDelete() {
+export function confirmDelete() {
   var cb = document.getElementById('del-confirm');
   cb.disabled = true;
   cb.textContent = 'Suppression…';
@@ -98,6 +103,6 @@ function confirmDelete() {
     });
 }
 
-function closeDeleteModal() {
+export function closeDeleteModal() {
   document.getElementById('delete-modal').classList.remove('show');
 }

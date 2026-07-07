@@ -1,16 +1,19 @@
+import { toast } from './toasts.js';
+import { colorizeLog } from './utils.js';
+
 /* ═══════════════════════════════════════════════════
    LIMITE DE DÉBIT
    ═══════════════════════════════════════════════════ */
-function openBwModal() {
+export function openBwModal() {
   document.getElementById('bw-modal').classList.add('show');
   fetch('/api/bwlimit').then(function (r) { return r.json(); }).then(function (d) {
     if (d.limit != null) document.getElementById('bw-select').value = d.limit;
   });
 }
 
-function closeBwModal() { document.getElementById('bw-modal').classList.remove('show'); }
+export function closeBwModal() { document.getElementById('bw-modal').classList.remove('show'); }
 
-async function saveBw() {
+export async function saveBw() {
   var btn = document.getElementById('save-bw-btn');
   var limit = document.getElementById('bw-select').value;
   btn.disabled = true;
@@ -37,10 +40,10 @@ async function saveBw() {
 /* ═══════════════════════════════════════════════════
    SIMULATION (dry run)
    ═══════════════════════════════════════════════════ */
-function openDryRunModal() { document.getElementById('dryrun-modal').classList.add('show'); }
-function closeDryRunModal() { document.getElementById('dryrun-modal').classList.remove('show'); }
+export function openDryRunModal() { document.getElementById('dryrun-modal').classList.add('show'); }
+export function closeDryRunModal() { document.getElementById('dryrun-modal').classList.remove('show'); }
 
-async function startDryRun() {
+export async function startDryRun() {
   var btn = document.getElementById('start-dryrun-btn');
   var out = document.getElementById('dryrun-output');
   btn.disabled = true;

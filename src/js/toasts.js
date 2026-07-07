@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════
    TOASTS
    ═══════════════════════════════════════════════════ */
-function toast(msg, type) {
+export function toast(msg, type) {
   var c = document.getElementById('toasts');
   var t = document.createElement('div');
   t.className = 'toast ' + (type || '');

@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════
    UTILS
    ═══════════════════════════════════════════════════ */
-function esc(s) {
+export function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function fmtT(ts) {
+export function fmtT(ts) {
   if (!ts) return '—';
   try {
     return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -14,7 +14,7 @@ function fmtT(ts) {
   }
 }
 
-function fmtDT(ts) {
+export function fmtDT(ts) {
   if (!ts) return '—';
   var d = new Date(ts);
   if (isNaN(d)) return ts.slice(0, 16);
@@ -26,9 +26,9 @@ function fmtDT(ts) {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
 }
 
-function spin(v) { document.getElementById('spin').classList.toggle('on', v); }
+export function spin(v) { document.getElementById('spin').classList.toggle('on', v); }
 
-function fmtSize(bytes) {
+export function fmtSize(bytes) {
   if (bytes == null || isNaN(bytes)) return '';
   if (bytes < 1024) return bytes + ' o';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
@@ -38,7 +38,7 @@ function fmtSize(bytes) {
 }
 
 /* "2m9.5s" / "1h2m3s" / "45.6s" → secondes */
-function parseElapsed(e) {
+export function parseElapsed(e) {
   if (!e) return 0;
   var s = 0, m;
   if ((m = e.match(/(\d+)h/))) s += parseInt(m[1]) * 3600;
@@ -47,7 +47,7 @@ function parseElapsed(e) {
   return s;
 }
 
-function fmtRemaining(s) {
+export function fmtRemaining(s) {
   if (s <= 0) return 'imminente…';
   if (s < 60) return Math.round(s) + ' s';
   if (s < 3600) return Math.floor(s / 60) + ' min ' + String(Math.round(s % 60)).padStart(2, '0') + ' s';
@@ -55,7 +55,7 @@ function fmtRemaining(s) {
 }
 
 /* Extracted utils */
-function colorizeLog(text) {
+export function colorizeLog(text) {
   var e = esc(text);
   e = e.replace(/^(\d{4}[-\/]\d{2}[-\/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/gm, '<span style="opacity:0.5">$1</span>');
   e = e.replace(/ ERROR /g, ' <strong style="color:var(--err)">ERROR </strong>');
@@ -69,7 +69,7 @@ function colorizeLog(text) {
 }
 
 /* Génération HTML unifiée pour les lignes de fichiers récents et en cours */
-function renderFileRow(f, extraStyle, opts) {
+export function renderFileRow(f, extraStyle, opts) {
   opts = opts || {};
   var cls = f.action || 'new';
   var pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");

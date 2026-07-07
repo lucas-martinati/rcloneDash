@@ -1,15 +1,20 @@
+import { ICO_CHECK } from './icons.js';
+import { esc, fmtSize, renderFileRow, colorizeLog } from './utils.js';
+import { toast } from './toasts.js';
+import { loadTree, _fm } from './file-browser.js';
+
 /* ═══════════════════════════════════════════════════
    EXCLUSIONS (filtres rclone)
    ═══════════════════════════════════════════════════ */
-async function openFiltersModal() {
+export async function openFiltersModal() {
   document.getElementById('filters-modal').classList.add('show');
   await loadFilters();
 }
 
-function closeFiltersModal() { document.getElementById('filters-modal').classList.remove('show'); }
+export function closeFiltersModal() { document.getElementById('filters-modal').classList.remove('show'); }
 
 
-async function loadFilters() {
+export async function loadFilters() {
   var tf = document.getElementById('filters-text');
   tf.value = 'Chargement…';
   try {
@@ -22,7 +27,7 @@ async function loadFilters() {
   }
 }
 
-function addFilter() {
+export function addFilter() {
   var input = document.getElementById('new-filter-input');
   var rule = input.value.trim();
   if (!rule) return;
@@ -35,7 +40,7 @@ function addFilter() {
   openImpactModal(rule);
 }
 
-function commitFilter(rule) {
+export function commitFilter(rule) {
   var input = document.getElementById('new-filter-input');
   var tf = document.getElementById('filters-text');
   tf.value += (tf.value.endsWith('\n') || !tf.value ? '' : '\n') + rule + '\n';
@@ -44,8 +49,8 @@ function commitFilter(rule) {
   return saveFilters();
 }
 
-let _pendingFilter = null;
-function openImpactModal(rule) {
+export let _pendingFilter = null;
+export function openImpactModal(rule) {
   _pendingFilter = rule;
   document.getElementById('impact-modal').classList.add('show');
   document.getElementById('impact-rule').textContent = rule;
@@ -84,15 +89,15 @@ function openImpactModal(rule) {
     document.getElementById('impact-confirm').disabled = false;
   });
 }
-function closeImpactModal() {
+export function closeImpactModal() {
   document.getElementById('impact-modal').classList.remove('show');
   _pendingFilter = null;
 }
-function impChoice() {
+export function impChoice() {
   var el = document.querySelector('input[name="imp-action"]:checked');
   return el ? el.value : 'none';
 }
-function impOnChoice() {
+export function impOnChoice() {
   var v = impChoice();
   var btn = document.getElementById('impact-confirm');
   var labels = {
@@ -104,7 +109,7 @@ function impOnChoice() {
   btn.textContent = labels[v] || 'Ajouter cette exclusion';
   btn.className = 'btn ' + (v === 'none' ? 'btn-g' : 'btn-danger');
 }
-async function confirmAddFilter() {
+export async function confirmAddFilter() {
   var rule = _pendingFilter;
   if (!rule) { closeImpactModal(); return; }
   var choice = impChoice();
@@ -141,7 +146,7 @@ async function confirmAddFilter() {
   }
 }
 
-async function saveFilters() {
+export async function saveFilters() {
   var tf = document.getElementById('filters-text');
   var btn = document.getElementById('save-filters-btn');
   btn.disabled = true;

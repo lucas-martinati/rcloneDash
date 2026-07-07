@@ -1,10 +1,13 @@
+import { S } from './state.js';
+import { renderFileRow } from './utils.js';
+
 /* ═══════════════════════════════════════════════════
    FICHIERS RÉCENTS
    ═══════════════════════════════════════════════════ */
-function updateRecentFiles(files) {
+export function updateRecentFiles(files) {
   var sig = JSON.stringify(files || []);
-  if (sig === _recentSig) return;
-  _recentSig = sig;
+  if (sig === S.recentSig) return;
+  S.recentSig = sig;
 
   var list = document.getElementById('recent-list');
   var countEl = document.getElementById('recent-count');
@@ -27,7 +30,7 @@ function updateRecentFiles(files) {
   filterRecent();
 }
 
-function filterRecent() {
+export function filterRecent() {
   var q = document.getElementById('recent-search').value.toLowerCase();
   var items = document.querySelectorAll('#recent-list .recent-item');
   for (var i = 0; i < items.length; i++) {

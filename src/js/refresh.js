@@ -1,7 +1,17 @@
+import { spin, fmtT } from './utils.js';
+import { badge, setSmartRefresh } from './status.js';
+import { updatePulse } from './pulse.js';
+import { updateAlerts, updateKPIs } from './dashboard.js';
+import { updateLive } from './live-sync.js';
+import { updateRuns } from './history.js';
+import { updateLogs } from './logs.js';
+import { updateRecentFiles } from './recent.js';
+import { toast } from './toasts.js';
+
 /* ═══════════════════════════════════════════════════
    REFRESH PRINCIPAL
    ═══════════════════════════════════════════════════ */
-async function refresh() {
+export async function refresh() {
   spin(true);
   try {
     var r = await fetch('/api/status');
@@ -28,7 +38,7 @@ async function refresh() {
 /* ═══════════════════════════════════════════════════
    ACTIONS SYNC
    ═══════════════════════════════════════════════════ */
-async function doSync() {
+export async function doSync() {
   var b = document.getElementById('bsync');
   var lbl = document.getElementById('bsync-lbl');
   b.disabled = true;
@@ -51,7 +61,7 @@ async function doSync() {
   setTimeout(refresh, 1500);
 }
 
-async function cancelSync() {
+export async function cancelSync() {
   var b = document.getElementById('bcancel');
   var lbl = document.getElementById('bcancel-lbl');
   b.disabled = true;

@@ -1,11 +1,16 @@
+import { esc, fmtSize, renderFileRow } from './utils.js';
+import { toast } from './toasts.js';
+import { loadTree, _fm } from './file-browser.js';
+import { ICO_WARN } from './icons.js';
+
 /* ═══════════════════════════════════════════════════
    EXCLUSION  (impact + choix : exclure seul / +local / +drive / +les deux)
    ═══════════════════════════════════════════════════ */
-let _exc = { path: '', isDir: false };
+export let _exc = { path: '', isDir: false };
 
-function ignorePath(path, isDir) { openExcludeModal(path, isDir); }
+export function ignorePath(path, isDir) { openExcludeModal(path, isDir); }
 
-function openExcludeModal(path, isDir) {
+export function openExcludeModal(path, isDir) {
   _exc = { path: path, isDir: !!isDir };
   document.getElementById('exclude-modal').classList.add('show');
   document.getElementById('exc-path').textContent = '/' + path;
@@ -39,14 +44,14 @@ function openExcludeModal(path, isDir) {
   });
 }
 
-function excRule() {
+export function excRule() {
   return _exc.isDir ? '- ' + _exc.path + '/**' : '- ' + _exc.path;
 }
-function excChoice() {
+export function excChoice() {
   var el = document.querySelector('input[name="exc-action"]:checked');
   return el ? el.value : 'none';
 }
-function excOnChoice() {
+export function excOnChoice() {
   var v = excChoice();
   var btn = document.getElementById('exc-confirm');
   var labels = {
@@ -60,7 +65,7 @@ function excOnChoice() {
   btn.disabled = false;
 }
 
-async function confirmExclude() {
+export async function confirmExclude() {
   var choice = excChoice();
   var btn = document.getElementById('exc-confirm');
   btn.disabled = true;
@@ -97,13 +102,13 @@ async function confirmExclude() {
   }
 }
 
-function closeExcludeModal() {
+export function closeExcludeModal() {
   document.getElementById('exclude-modal').classList.remove('show');
 }
 
 /* Ré-inclure : ne retire QUE la règle exacte de l'élément. Si un motif global
    (ex. « out/** ») est en cause, on ne retire rien et on explique lequel. */
-async function reincludePath(path, isDir) {
+export async function reincludePath(path, isDir) {
   var exact = isDir ? path + '/**' : path;   // motif « nu » (sans « - »)
   try {
     var r = await fetch('/api/match_rules?path=' + encodeURIComponent(path));
@@ -136,7 +141,7 @@ async function reincludePath(path, isDir) {
   }
 }
 
-function openReincModal(path, rules) {
+export function openReincModal(path, rules) {
   document.getElementById('reinc-modal').classList.add('show');
   document.getElementById('reinc-summary').innerHTML =
     '<div class="del-banner warn">' + ICO_WARN
@@ -148,6 +153,6 @@ function openReincModal(path, rules) {
   });
   document.getElementById('reinc-rules').innerHTML = html;
 }
-function closeReincModal() {
+export function closeReincModal() {
   document.getElementById('reinc-modal').classList.remove('show');
 }

@@ -392,10 +392,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._file(
                 os.path.join(self._d, "style.css"), "text/css;charset=utf-8"
             )
-        elif p == "/app.js":
-            self._file(
-                os.path.join(self._d, "app.js"), "application/javascript;charset=utf-8"
-            )
+        elif p.startswith("/js/") and p.endswith(".js"):
+            safe = os.path.normpath(p.lstrip("/"))
+            fpath = os.path.join(self._d, safe)
+            if os.path.isfile(fpath) and os.path.commonpath([self._d, fpath]) == self._d:
+                self._file(fpath, "application/javascript;charset=utf-8")
+            else:
+                self.send_response(404)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()

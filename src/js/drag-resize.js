@@ -51,7 +51,7 @@ function handleDragEnd(e) {
   document.querySelectorAll('.drag-panel').forEach(function (p) { p.classList.remove('over'); });
 }
 
-function initDragAndDrop() {
+export function initDragAndDrop() {
   var panels = document.querySelectorAll('.drag-panel');
   var savedOrder = JSON.parse(localStorage.getItem('dash_panel_order') || '{}');
 
@@ -84,7 +84,7 @@ function updateFullWidthPanel() {
   });
 }
 
-function initResizer() {
+export function initResizer() {
   var container = document.getElementById('modules-container');
   var isResizingH = false;
   var isResizingV = false;

@@ -1,7 +1,10 @@
+import { S } from './state.js';
+import { esc, fmtT, fmtRemaining } from './utils.js';
+
 /* ═══════════════════════════════════════════════════
    POULS — cycle de synchronisation
    ═══════════════════════════════════════════════════ */
-function updatePulse(d) {
+export function updatePulse(d) {
   var runs = d.runs || [];
   var last = null;
   for (var i = 0; i < runs.length; i++) {
@@ -11,8 +14,8 @@ function updatePulse(d) {
   // Dernière sync
   var dot = document.getElementById('pulse-dot');
   var lastEl = document.getElementById('pulse-last');
-  _isSyncing = d.service.state === 'running' || (d.live && d.live.is_syncing);
-  if (_isSyncing) {
+  S.isSyncing = d.service.state === 'running' || (d.live && d.live.is_syncing);
+  if (S.isSyncing) {
     dot.className = 'pulse-dot run';
   } else if (last) {
     dot.className = 'pulse-dot ' + (last.status === 'success' ? 'ok' : 'err');
@@ -30,7 +33,7 @@ function updatePulse(d) {
 
   // Phase en cours (pendant une sync)
   var mid = document.getElementById('pulse-mid');
-  if (_isSyncing && d.live && d.live.phase) {
+  if (S.isSyncing && d.live && d.live.phase) {
     mid.style.display = '';
     mid.textContent = d.live.phase;
   } else {
@@ -43,46 +46,46 @@ function updatePulse(d) {
   var raw = (d.timer && d.timer.next_run) || '';
   var m = raw.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
   if (d.timer && !d.timer.active) {
-    _nextSyncTs = null;
+    S.nextSyncTs = null;
     cap.textContent = 'Planification';
     next.textContent = 'Timer inactif';
     next.style.color = 'var(--warn)';
-  } else if (!m && _isSyncing) {
+  } else if (!m && S.isSyncing) {
     // Pendant une sync, systemd affiche "n/a" pour le prochain déclenchement
-    _nextSyncTs = null;
+    S.nextSyncTs = null;
     cap.textContent = 'Prochaine sync';
     next.textContent = 'après celle-ci';
     next.style.color = '';
   } else if (m) {
-    _nextSyncTs = new Date(m[1] + 'T' + m[2]).getTime();
+    S.nextSyncTs = new Date(m[1] + 'T' + m[2]).getTime();
     cap.textContent = 'Prochaine sync';
     next.style.color = '';
   } else {
-    _nextSyncTs = null;
+    S.nextSyncTs = null;
     cap.textContent = 'Prochaine sync';
     next.textContent = raw && raw !== '—' ? raw : '—';
     next.style.color = '';
   }
 
-  if (runs.length) _lastStartTs = new Date(runs[0].start).getTime() || null;
+  if (runs.length) S.lastStartTs = new Date(runs[0].start).getTime() || null;
 
-  _livePct = (_isSyncing && d.live && d.live.transfer && d.live.transfer.pct != null)
+  S.livePct = (S.isSyncing && d.live && d.live.transfer && d.live.transfer.pct != null)
     ? d.live.transfer.pct : null;
 
-  document.getElementById('pulse').classList.toggle('syncing', _isSyncing);
+  document.getElementById('pulse').classList.toggle('syncing', S.isSyncing);
   tickPulse();
 }
 
 /* Tick 1 s : compte à rebours + ligne de vie */
-function tickPulse() {
+export function tickPulse() {
   var next = document.getElementById('pulse-next');
   var line = document.getElementById('pulse-line');
 
-  if (_isSyncing) {
+  if (S.isSyncing) {
     line.style.transform = '';
-    if (_livePct != null && _livePct > 0) {
+    if (S.livePct != null && S.livePct > 0) {
       line.classList.remove('indet');
-      line.style.width = _livePct + '%';
+      line.style.width = S.livePct + '%';
     } else {
       line.classList.add('indet');
     }
@@ -90,18 +93,18 @@ function tickPulse() {
     line.classList.remove('indet');
   }
 
-  if (_nextSyncTs) {
-    var remS = (_nextSyncTs - Date.now()) / 1000;
+  if (S.nextSyncTs) {
+    var remS = (S.nextSyncTs - Date.now()) / 1000;
     next.textContent = 'dans ' + fmtRemaining(remS);
-    if (!_isSyncing) {
+    if (!S.isSyncing) {
       var cycleS = 600;
-      if (_lastStartTs && _nextSyncTs > _lastStartTs) {
-        cycleS = (_nextSyncTs - _lastStartTs) / 1000;
+      if (S.lastStartTs && S.nextSyncTs > S.lastStartTs) {
+        cycleS = (S.nextSyncTs - S.lastStartTs) / 1000;
       }
       var pct = Math.min(100, Math.max(0, (1 - remS / cycleS) * 100));
       line.style.width = pct + '%';
     }
-  } else if (!_isSyncing) {
+  } else if (!S.isSyncing) {
     line.style.width = '0';
   }
 }

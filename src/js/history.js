@@ -1,10 +1,14 @@
+import { S } from './state.js';
+import { esc, fmtDT, fmtSize, colorizeLog } from './utils.js';
+import { renderSparkline } from './sparkline.js';
+
 /* ═══════════════════════════════════════════════════
    HISTORIQUE
    ═══════════════════════════════════════════════════ */
-function updateRuns(runs) {
+export function updateRuns(runs) {
   var sig = JSON.stringify(runs || []);
-  if (sig === _runsSig) return;
-  _runsSig = sig;
+  if (sig === S.runsSig) return;
+  S.runsSig = sig;
 
   window._errorLogsCache = {};
   var tb = document.getElementById('rtb');
@@ -89,7 +93,7 @@ function updateRuns(runs) {
   renderSparkline(runs);
 }
 
-function toggleRunDetails(i) {
+export function toggleRunDetails(i) {
   var det = document.getElementById('run-det-' + i);
   if (!det) return;
   var open = det.style.display === 'none';
@@ -98,7 +102,7 @@ function toggleRunDetails(i) {
   if (row) row.classList.toggle('open', open);
 }
 
-function copyErrorLogs(idx, btn) {
+export function copyErrorLogs(idx, btn) {
   var text = window._errorLogsCache && window._errorLogsCache[idx];
   if (!text) return;
   navigator.clipboard.writeText(text).then(function () {

@@ -1,7 +1,9 @@
+import { fmtSize } from './utils.js';
+
 /* ═══════════════════════════════════════════════════
    ALERTES & QUOTA
    ═══════════════════════════════════════════════════ */
-function updateQuota(q) {
+export function updateQuota(q) {
   var txt = document.getElementById('quota-text');
   var sub = document.getElementById('quota-sub');
   var bar = document.getElementById('quota-bar');
@@ -24,7 +26,7 @@ function updateQuota(q) {
   bar.classList.toggle('danger', pct > 90);
 }
 
-function updateAlerts(data) {
+export function updateAlerts(data) {
   updateQuota(data.quota);
 
   var ban = document.getElementById('alert-banner');
@@ -55,7 +57,7 @@ function updateAlerts(data) {
 /* ═══════════════════════════════════════════════════
    KPIs
    ═══════════════════════════════════════════════════ */
-function updateKPIs(data) {
+export function updateKPIs(data) {
   var disk = data.disk;
   var runs = data.runs || [], kpis = data.kpis;
 

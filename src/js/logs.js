@@ -1,25 +1,28 @@
+import { S } from './state.js';
+import { colorizeLog } from './utils.js';
+
 /* ═══════════════════════════════════════════════════
    JOURNAL
    ═══════════════════════════════════════════════════ */
-function logPassesFilter(l) {
-  if (_logFilter === 'all') return true;
-  if (_logFilter === 'files') return l.l === 'ok';
+export function logPassesFilter(l) {
+  if (S.logFilter === 'all') return true;
+  if (S.logFilter === 'files') return l.l === 'ok';
   return l.l === 'error' || l.l === 'warn';
 }
 
-function renderLogs() {
+export function renderLogs() {
   var w = document.getElementById('lwrap');
   var sc = document.getElementById('lscroll');
   var atBot = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 50;
   var html = '';
   var shown = 0;
-  for (var i = 0; i < _lastLogs.length; i++) {
-    if (!logPassesFilter(_lastLogs[i])) continue;
-    html += '<div class="ll ' + _lastLogs[i].l + '">' + colorizeLog(_lastLogs[i].t) + '</div>';
+  for (var i = 0; i < S.lastLogs.length; i++) {
+    if (!logPassesFilter(S.lastLogs[i])) continue;
+    html += '<div class="ll ' + S.lastLogs[i].l + '">' + colorizeLog(S.lastLogs[i].t) + '</div>';
     shown++;
   }
   if (!shown) {
-    html = '<div class="empty">' + (_logFilter === 'all'
+    html = '<div class="empty">' + (S.logFilter === 'all'
       ? 'Le journal est vide pour le moment.'
       : 'Aucune ligne de ce type dans le journal récent.') + '</div>';
   }
@@ -27,24 +30,24 @@ function renderLogs() {
   if (atBot) sc.scrollTop = sc.scrollHeight;
 }
 
-function updateLogs(logs) {
-  _lastLogs = logs || [];
-  var sig = _lastLogs.length + '|'
-    + (_lastLogs.length ? _lastLogs[0].t + '|' + _lastLogs[_lastLogs.length - 1].t : '');
-  if (sig !== _llc) {
-    _llc = sig;
+export function updateLogs(logs) {
+  S.lastLogs = logs || [];
+  var sig = S.lastLogs.length + '|'
+    + (S.lastLogs.length ? S.lastLogs[0].t + '|' + S.lastLogs[S.lastLogs.length - 1].t : '');
+  if (sig !== S.llc) {
+    S.llc = sig;
     renderLogs();
   }
 }
 
-function setLogFilter(f, btn) {
-  _logFilter = f;
+export function setLogFilter(f, btn) {
+  S.logFilter = f;
   document.querySelectorAll('.chiprow .chip').forEach(function (c) { c.classList.remove('on'); });
   btn.classList.add('on');
   renderLogs();
 }
 
-function logsBot() {
+export function logsBot() {
   var s = document.getElementById('lscroll');
   s.scrollTop = s.scrollHeight;
 }

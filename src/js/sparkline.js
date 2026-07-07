@@ -1,9 +1,11 @@
+import { parseElapsed, fmtDT } from './utils.js';
+
 /* ═══════════════════════════════════════════════════
    SPARKLINE — durées des syncs
    ═══════════════════════════════════════════════════ */
 window._sparkTips = [];
 
-function renderSparkline(runs) {
+export function renderSparkline(runs) {
   var wrap = document.getElementById('sparkline-wrap');
   var data = runs.slice(0, 24).reverse();
   if (data.length < 2) { wrap.innerHTML = ''; return; }
@@ -42,7 +44,7 @@ function renderSparkline(runs) {
   wrap.insertAdjacentHTML('beforeend', '<div id="chart-tt" class="chart-tooltip"></div>');
 }
 
-function showTooltip(e, txt) {
+export function showTooltip(e, txt) {
   var tt = document.getElementById('chart-tt');
   if (!tt) return;
   tt.textContent = txt;
@@ -55,7 +57,7 @@ function showTooltip(e, txt) {
   tt.style.top = y + 'px';
 }
 
-function hideTooltip() {
+export function hideTooltip() {
   var tt = document.getElementById('chart-tt');
   if (tt) tt.style.display = 'none';
 }

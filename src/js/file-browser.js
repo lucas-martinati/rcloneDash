@@ -1,9 +1,13 @@
+import { _svg, FM_ICONS, fmCategory } from './icons.js';
+import { esc, fmtSize, fmtDT } from './utils.js';
+import { toast } from './toasts.js';
+
 /* ═══════════════════════════════════════════════════
    NAVIGATEUR DE FICHIERS
    Fil d'ariane · recherche instantanée · tri par colonne ·
    icônes typées · navigation clavier · résumé de dossier
    ═══════════════════════════════════════════════════ */
-let _fm = {
+export let _fm = {
   dir: '',        // dossier courant (relatif à la racine synchronisée)
   items: [],      // items bruts renvoyés par l'API
   view: [],       // items filtrés + triés actuellement affichés
@@ -21,26 +25,26 @@ let _fm = {
 /* ── Icônes SVG (feather-style, viewBox 24) ── */
 
 /* ── Ouverture / navigation ── */
-function openTreeModal() {
+export function openTreeModal() {
   document.getElementById('tree-modal').classList.add('show');
   loadTree('');
   setTimeout(function () { var s = document.getElementById('fm-search'); if (s) s.focus(); }, 80);
 }
-function closeTreeModal() {
+export function closeTreeModal() {
   document.getElementById('tree-modal').classList.remove('show');
 }
-function treeUp() {
+export function treeUp() {
   if (!_fm.dir) return;
   var parts = _fm.dir.split('/');
   parts.pop();
   loadTree(parts.join('/'));
 }
-function openCurrentDir() {
+export function openCurrentDir() {
   fetch('/api/open?path=' + encodeURIComponent(_fm.dir)).then(function (r) { return r.json(); })
     .then(function (d) { if (!d.ok) toast('Impossible d\'ouvrir ce dossier', 'warn'); });
 }
 
-async function loadTree(dir) {
+export async function loadTree(dir) {
   var list = document.getElementById('fm-list');
   list.innerHTML = fmSkeleton();
   var s = document.getElementById('fm-search');
@@ -67,7 +71,7 @@ async function loadTree(dir) {
 }
 
 /* ── Fil d'ariane cliquable ── */
-function fmRenderCrumbs() {
+export function fmRenderCrumbs() {
   var c = document.getElementById('fm-crumbs');
   var html = '<button class="fm-crumb root" onclick="loadTree(\'\')" title="Racine synchronisée">'
     + _svg('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>', 14)
@@ -89,12 +93,12 @@ function fmRenderCrumbs() {
 }
 
 /* ── Tri / filtre ── */
-function fmSort(key) {
+export function fmSort(key) {
   if (_fm.sortKey === key) _fm.sortAsc = !_fm.sortAsc;
   else { _fm.sortKey = key; _fm.sortAsc = key === 'name'; }   // nom ↑ ; taille/date ↓ par défaut
   fmRender();
 }
-function fmFilter(v) {
+export function fmFilter(v) {
   _fm.filter = v.trim().toLowerCase();
   document.getElementById('fm-search-clear').hidden = !v;
   _fm.sel = -1;
@@ -114,12 +118,12 @@ function fmFilter(v) {
     fmRender();
   }
 }
-function fmClearSearch() {
+export function fmClearSearch() {
   var s = document.getElementById('fm-search');
   s.value = ''; s.focus();
   fmFilter('');
 }
-function fmToggleRecursive() {
+export function fmToggleRecursive() {
   _fm.recursive = !_fm.recursive;
   var btn = document.getElementById('fm-scope');
   btn.classList.toggle('active', _fm.recursive);
@@ -129,7 +133,7 @@ function fmToggleRecursive() {
   // relance la requête courante dans le nouveau périmètre
   fmFilter(document.getElementById('fm-search').value);
 }
-async function fmRunSearch() {
+export async function fmRunSearch() {
   var q = _fm.filter;
   try {
     var r = await fetch('/api/search?dir=' + encodeURIComponent(_fm.dir) + '&q=' + encodeURIComponent(q));
@@ -148,7 +152,7 @@ async function fmRunSearch() {
 }
 
 /* ── Rendu de la liste ── */
-function fmRender() {
+export function fmRender() {
   var list = document.getElementById('fm-list');
   var recursiveActive = _fm.recursive && _fm.filter.length >= 2;
 
@@ -203,7 +207,7 @@ function fmRender() {
   fmFooter();
 }
 
-function fmRow(item, i) {
+export function fmRow(item, i) {
   var cat = fmCategory(item);
   var isDir = item.is_dir;
   var pathArg = item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -240,7 +244,7 @@ function fmRow(item, i) {
     + '</div>';
 }
 
-function fmHighlight(name) {
+export function fmHighlight(name) {
   if (!_fm.filter) return esc(name);
   var idx = name.toLowerCase().indexOf(_fm.filter);
   if (idx < 0) return esc(name);
@@ -248,7 +252,7 @@ function fmHighlight(name) {
     + '</mark>' + esc(name.slice(idx + _fm.filter.length));
 }
 
-function fmFooter() {
+export function fmFooter() {
   var f = document.getElementById('fm-footer');
   // Mode recherche récursive : résumé des résultats
   if (_fm.recursive && _fm.filter.length >= 2) {
@@ -271,13 +275,13 @@ function fmFooter() {
   f.innerHTML = '<span>' + esc(left2) + '</span>' + (right2 ? '<span class="fm-foot-r">' + esc(right2) + '</span>' : '');
 }
 
-function fmSkeleton() {
+export function fmSkeleton() {
   var row = '<div class="fm-skel"><span class="sk-ic"></span><span class="sk-l"></span><span class="sk-s"></span></div>';
   return row.repeat(8);
 }
 
 /* ── Navigation clavier (active seulement quand le modal est ouvert) ── */
-function fmKeydown(e) {
+export function fmKeydown(e) {
   if (!document.getElementById('tree-modal').classList.contains('show')) return;
   // ne pas piloter la liste quand une modale est au premier plan
   if (document.getElementById('delete-modal').classList.contains('show')) return;
@@ -308,7 +312,7 @@ function fmKeydown(e) {
     e.preventDefault(); treeUp();
   }
 }
-function fmUpdateSel() {
+export function fmUpdateSel() {
   document.querySelectorAll('#fm-list .fm-row').forEach(function (r) {
     var on = +r.dataset.i === _fm.sel;
     r.classList.toggle('sel', on);
@@ -317,7 +321,7 @@ function fmUpdateSel() {
 }
 window.addEventListener('keydown', fmKeydown);
 
-function openFile(path, isDeleted, ev) {
+export function openFile(path, isDeleted, ev) {
   // Ctrl/⌘ maintenu : ouvrir le dossier parent plutôt que le fichier lui-même.
   // (les fichiers supprimés n'existent plus, on ouvre toujours leur dossier)
   var dirOnly = isDeleted || (ev && (ev.ctrlKey || ev.metaKey));

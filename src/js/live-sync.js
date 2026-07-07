@@ -1,7 +1,9 @@
+import { esc, renderFileRow } from './utils.js';
+
 /* ═══════════════════════════════════════════════════
    SYNC EN COURS
    ═══════════════════════════════════════════════════ */
-function updateLive(live) {
+export function updateLive(live) {
   var section = document.getElementById('live-section');
   if (!live || (!live.is_syncing && live.phase_index <= 0)) {
     section.classList.remove('active');
@@ -96,7 +98,7 @@ function updateLive(live) {
   renderChanges('ch-p2', live.changes.path2);
 }
 
-function renderChanges(id, ch) {
+export function renderChanges(id, ch) {
   var el = document.getElementById(id);
   var items = [];
   var kinds = [['new', 'new'], ['modified', 'modified'], ['deleted', 'deleted']];

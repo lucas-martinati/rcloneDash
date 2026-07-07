@@ -1,7 +1,10 @@
+import { S } from './state.js';
+import { refresh } from './refresh.js';
+
 /* ═══════════════════════════════════════════════════
    BADGE D'ÉTAT
    ═══════════════════════════════════════════════════ */
-function badge(state) {
+export function badge(state) {
   var b = document.getElementById('sbadge');
   var l = document.getElementById('slbl');
   var d = document.getElementById('sdot');
@@ -25,10 +28,10 @@ function badge(state) {
 /* ═══════════════════════════════════════════════════
    AUTO-REFRESH ADAPTATIF
    ═══════════════════════════════════════════════════ */
-function setSmartRefresh(state) {
-  if (state === _curState) return;
-  _curState = state;
-  if (_interval) clearInterval(_interval);
+export function setSmartRefresh(state) {
+  if (state === S.curState) return;
+  S.curState = state;
+  if (S.interval) clearInterval(S.interval);
   var ms = state === 'running' ? 3000 : state === 'failed' ? 5000 : 10000;
-  _interval = setInterval(refresh, ms);
+  S.interval = setInterval(refresh, ms);
 }
