@@ -37,6 +37,9 @@
 - *.gsheet
 - *.gslides
 - *.gdraw
+- *.gjam
+- *.gform
+- *.gsite
 
 # Dossiers de build / VCS
 - .git/**
@@ -49,11 +52,6 @@
 - *.docx
 - *.ppt
 - *.pptx
-
-# Formats Google manquants
-- *.gjam
-- *.gform
-- *.gsite
 
 # Dossiers spécifiques que tu veux garder sur le Cloud mais pas sur ton PC
 - Cours/2GT7/**
