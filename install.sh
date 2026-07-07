@@ -37,6 +37,24 @@ trap 'err "Installation interrompue (une commande a échoué)."; exit 1' ERR
 banner
 
 # --------------------------------------------------------------------------- #
+#  Vérification des prérequis
+# --------------------------------------------------------------------------- #
+if ! command -v node >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
+    printf '\n%s%s[Prérequis]%s %sInstallation de Node.js%s\n' "$BOLD" "$BLUE" "$RESET" "$BOLD" "$RESET"
+    warn "Node.js n'est pas installé (requis pour la compilation du JS)."
+    detail "Votre mot de passe (sudo) peut être demandé pour son installation."
+    if command -v apt-get >/dev/null 2>&1; then
+        curl -fsSL https://deb.nodesource.com/setup_current.x | sudo -E bash - >/dev/null 2>&1
+        sudo apt-get install -y nodejs >/dev/null 2>&1
+        ok "Node.js a été installé avec succès."
+    else
+        err "Impossible d'installer Node.js automatiquement sur ce système."
+        err "Veuillez installer Node.js manuellement puis relancer ce script."
+        exit 1
+    fi
+fi
+
+# --------------------------------------------------------------------------- #
 #  Étape 1 — Fichiers de l'application + garde de synchronisation
 # --------------------------------------------------------------------------- #
 TARGET_DIR="$HOME/.local/share/RcloneDash"
@@ -44,10 +62,11 @@ TARGET_DIR="$HOME/.local/share/RcloneDash"
 step 1 "Copie des fichiers de l'application"
 mkdir -p "$TARGET_DIR"
 detail "Destination : $TARGET_DIR"
-rm -rf "$TARGET_DIR/js"
-cp -r src/js "$TARGET_DIR/js"
+rm -rf "$TARGET_DIR/js" "$TARGET_DIR/app.js"
+npx -y esbuild src/js/main.js --bundle --outfile="$TARGET_DIR/app.js" --minify
 cat src/css/*.css > "$TARGET_DIR/style.css"
-cp src/rclone-monitor.py src/index.html "$TARGET_DIR/"
+cp src/rclone-monitor.py "$TARGET_DIR/"
+sed 's|<script type="module" src="js/main.js"></script>|<script src="app.js"></script>|' src/index.html > "$TARGET_DIR/index.html"
 cp -r src/backend "$TARGET_DIR/"
 ok "Interface et backend copiés"
 
