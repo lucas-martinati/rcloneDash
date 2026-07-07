@@ -6,6 +6,7 @@ from collections import deque
 from datetime import datetime
 from . import config
 from .filters import local_size
+from .parsing import parse_synced_file
 
 class LogStreamer(threading.Thread):
     """Thread daemon qui streame journalctl -f et parse les données de sync live."""
@@ -147,16 +148,9 @@ class LogStreamer(threading.Thread):
             }
 
         # Fichiers synchronisés durant le run courant
-        m = re.search(r"INFO\s+:\s+(.*?):\s+(Copied \(new\)|Copied \(replaced existing\)|Updated modification time in destination|Deleted|Updated file)", line)
-        if m:
-            fpath = m.group(1).strip()
-            action = m.group(2).strip()
-            act = "new"
-            if "Deleted" in action:
-                act = "deleted"
-            elif "Copied (replaced existing)" in action or "Updated modification" in action or "Updated file" in action:
-                act = "modified"
-                
+        parsed = parse_synced_file(line)
+        if parsed:
+            fpath, act = parsed
             if not any(f["path"] == fpath for f in self.synced_files):
                 self.synced_files.append({
                     "path": fpath,

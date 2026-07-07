@@ -25,7 +25,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json({"ok": ok, "error": err})
         elif p == "/api/bwlimit":
             try:
-                env_path = os.path.expanduser("~/.config/rclone/bwlimit.env")
+                env_path = config.BWLIMIT_PATH
                 limit = ""
                 if os.path.exists(env_path):
                     with open(env_path, "r") as f:
@@ -40,7 +40,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             limit = qs.get("limit", [""])[0]
             try:
-                env_path = os.path.expanduser("~/.config/rclone/bwlimit.env")
+                env_path = config.BWLIMIT_PATH
                 os.makedirs(os.path.dirname(env_path), exist_ok=True)
                 with open(env_path, "w") as f:
                     if limit:
@@ -60,7 +60,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         try: shutil.copy2(f, f + "-dry")
                         except Exception: pass
                         
-                cmd = ["rclone", "bisync", "GoogleDrive:", os.path.expanduser("~/GoogleDrive"), "--dry-run", "-v", "--tpslimit", "8", "--filter-from", os.path.expanduser("~/.config/rclone/gdrive-filters.txt")]
+                cmd = ["rclone", "bisync", config.REMOTE, config.GD_DIR, "--dry-run", "-v", "--tpslimit", "8", "--filter-from", config.FILTERS_PATH]
                 out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=600).decode('utf-8', errors='ignore')
                 out = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', out)
                 self._json({"ok": True, "log": out})
@@ -165,7 +165,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"error": str(e)})
         elif p == "/api/filters":
             try:
-                with open(os.path.expanduser("~/.config/rclone/gdrive-filters.txt"), "r") as f:
+                with open(config.FILTERS_PATH, "r") as f:
                     self._json({"content": f.read()})
             except Exception as e:
                 self._json({"error": str(e)})
@@ -259,11 +259,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             rel = os.path.relpath(tp, base).replace(os.sep, "/")
             try:
                 if os.path.isdir(tp) and not os.path.islink(tp):
-                    cmd = ["rclone", "check", tp, "GoogleDrive:" + rel, "--combined", "-"]
+                    cmd = ["rclone", "check", tp, config.REMOTE + rel, "--combined", "-"]
                 else:
                     parent = os.path.dirname(tp)
                     rel_parent = os.path.dirname(rel)
-                    remote = "GoogleDrive:" + rel_parent if rel_parent else "GoogleDrive:"
+                    remote = config.REMOTE + rel_parent if rel_parent else config.REMOTE
                     cmd = ["rclone", "check", parent, remote,
                            "--combined", "-", "--include", "/" + os.path.basename(tp)]
                 proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
@@ -418,7 +418,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 post_data = self.rfile.read(content_length).decode('utf-8')
                 data = json.loads(post_data)
                 content = data.get("content", "")
-                with open(os.path.expanduser("~/.config/rclone/gdrive-filters.txt"), "w") as f:
+                with open(config.FILTERS_PATH, "w") as f:
                     f.write(content)
                 self._json({"ok": True})
             except Exception as e:
@@ -460,7 +460,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     self._json({"ok": False, "error": "Chemin invalide"})
                     return
                 is_dir = bool(data.get("is_dir"))
-                remote = "GoogleDrive:" + rel
+                remote = config.REMOTE + rel
                 cmd = ["rclone", "purge", remote] if is_dir else ["rclone", "deletefile", remote]
                 proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
                 if proc.returncode == 0:
@@ -529,8 +529,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         except Exception as e:
                             errors.append(f"local {rel} : {e}")
                     if mode in ("drive", "both"):
-                        cmd = (["rclone", "purge", "GoogleDrive:" + rel] if is_dir
-                               else ["rclone", "deletefile", "GoogleDrive:" + rel])
+                        cmd = (["rclone", "purge", config.REMOTE + rel] if is_dir
+                               else ["rclone", "deletefile", config.REMOTE + rel])
                         try:
                             pr = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
                             if pr.returncode != 0:

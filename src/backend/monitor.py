@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 from . import config
 from .filters import local_size
+from .parsing import parse_synced_file
 from .log_streamer import LogStreamer
 
 class Monitor:
@@ -82,7 +83,7 @@ class Monitor:
         while True:
             try:
                 out = subprocess.check_output(
-                    ["rclone", "about", "GoogleDrive:", "--json"], 
+                    ["rclone", "about", config.REMOTE, "--json"],
                     timeout=30,
                     stderr=subprocess.STDOUT
                 ).decode('utf-8')
@@ -212,28 +213,17 @@ class Monitor:
                     cur["skipped"] = True
 
                 # Extraction des fichiers synchronisés (Copied / Updated / Deleted)
-                m = re.search(r"INFO\s+:\s+(.*?):\s+(Copied \(new\)|Copied \(replaced existing\)|Updated modification time in destination|Deleted|Updated file)", l)
-                if m:
-                    fpath = m.group(1).strip()
-                    action = m.group(2).strip()
-                    
-                    rf = None
-                    if "Copied (new)" in action:
-                        cur["copied"] += 1
-                        cur["files"] += 1
-                        rf = {"action": "new", "path": fpath, "time": ts, "size": local_size(fpath)}
-                    elif "Copied (replaced existing)" in action or "Updated modification" in action or "Updated file" in action:
-                        cur["modified"] += 1
-                        cur["files"] += 1
-                        rf = {"action": "modified", "path": fpath, "time": ts, "size": local_size(fpath)}
-                    elif "Deleted" in action:
-                        cur["deleted"] += 1
-                        cur["files"] += 1
-                        rf = {"action": "deleted", "path": fpath, "time": ts, "size": None}
-                    
-                    if rf:
-                        recent_files.append(rf)
-                        cur["synced_files"].append(rf)
+                parsed = parse_synced_file(l)
+                if parsed:
+                    fpath, category = parsed
+                    cur[{"new": "copied", "modified": "modified", "deleted": "deleted"}[category]] += 1
+                    cur["files"] += 1
+                    rf = {
+                        "action": category, "path": fpath, "time": ts,
+                        "size": None if category == "deleted" else local_size(fpath),
+                    }
+                    recent_files.append(rf)
+                    cur["synced_files"].append(rf)
 
                 # Elapsed time
                 em = re.search(r"elapsed time:\s*(\S+)", ll)
