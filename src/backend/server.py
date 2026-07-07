@@ -17,7 +17,7 @@ def main():
     threading.Thread(target=Handler._m.update_quota, daemon=True).start()
     print(f"\033[1;36mRcloneDash\033[0m — Démarrage du serveur sur le port {config.PORT}")
     try:
-        with ThreadingServer(("", config.PORT), Handler) as httpd:
+        with ThreadingServer(("127.0.0.1", config.PORT), Handler) as httpd:
             httpd.serve_forever()
     except KeyboardInterrupt:
         pass

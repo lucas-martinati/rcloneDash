@@ -74,9 +74,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif p == "/api/tree":
             qs = parse_qs(urlparse(self.path).query)
             target = qs.get("dir", [""])[0]
-            base = os.path.abspath(os.path.expanduser("~/GoogleDrive"))
-            target_path = os.path.abspath(os.path.join(base, target))
-            if not target_path.startswith(base):
+            base = os.path.abspath(config.GD_DIR)
+            target_path = self._within_base(target)
+            if target_path is None:
                 self._json({"error": "Invalid path"})
                 return
             try:
@@ -122,8 +122,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             target = qs.get("dir", [""])[0]
             query = qs.get("q", [""])[0].strip().lower()
             base = os.path.abspath(config.GD_DIR)
-            root = os.path.abspath(os.path.join(base, target))
-            if not root.startswith(base):
+            root = self._within_base(target)
+            if root is None:
                 self._json({"error": "Invalid path"})
                 return
             if len(query) < 2:
@@ -195,13 +195,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             target = qs.get("path", [""])[0]
             dir_only = qs.get("dir_only", [""])[0] == "1"
-            base = os.path.abspath(os.path.expanduser("~/GoogleDrive"))
-            target_path = os.path.abspath(os.path.join(base, target))
-            
-            if dir_only:
-                target_path = os.path.dirname(target_path)
-                
-            if target_path.startswith(base) and os.path.exists(target_path):
+            base = os.path.abspath(config.GD_DIR)
+            target_path = self._within_base(target)
+
+            # dir_only : ouvrir le dossier parent — qui reste dans la base sauf si
+            # la cible était la base elle-même, auquel cas on refuse (parent hors base).
+            if target_path is not None and dir_only:
+                target_path = None if target_path == base else os.path.dirname(target_path)
+
+            if target_path is not None and os.path.exists(target_path):
                 # use xdg-open for linux
                 subprocess.Popen(["xdg-open", target_path])
                 self._json({"ok": True})
@@ -316,8 +318,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             target = qs.get("path", [""])[0]
             base = os.path.abspath(config.GD_DIR)
-            tp = os.path.abspath(os.path.join(base, target))
-            if not tp.startswith(base):
+            tp = self._within_base(target)
+            if tp is None:
                 self._json({"ok": False, "error": "Chemin invalide"})
                 return
             rel = os.path.relpath(tp, base)
@@ -543,6 +545,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+
+    def _within_base(self, target):
+        """Résout un chemin sous la base synchronisée, base elle-même incluse.
+
+        Renvoie le chemin absolu si tp est la base ou strictement à l'intérieur
+        (bloque la traversée et les dossiers voisins type « GoogleDrive-autre »),
+        sinon None. N'exige pas l'existence — utilisé pour lister/lire/ouvrir.
+        """
+        base = os.path.abspath(config.GD_DIR)
+        tp = os.path.abspath(os.path.join(base, target or ""))
+        if tp != base and not tp.startswith(base + os.sep):
+            return None
+        return tp
 
     def _safe_local(self, target):
         """Résout un chemin relatif sous la base synchronisée.
