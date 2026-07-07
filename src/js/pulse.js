@@ -5,15 +5,15 @@ import { esc, fmtT, fmtRemaining } from './utils.js';
    POULS — cycle de synchronisation
    ═══════════════════════════════════════════════════ */
 export function updatePulse(d) {
-  var runs = d.runs || [];
-  var last = null;
-  for (var i = 0; i < runs.length; i++) {
+  let runs = d.runs || [];
+  let last = null;
+  for (let i = 0; i < runs.length; i++) {
     if (runs[i].status !== 'running') { last = runs[i]; break; }
   }
 
   // Dernière sync
-  var dot = document.getElementById('pulse-dot');
-  var lastEl = document.getElementById('pulse-last');
+  let dot = document.getElementById('pulse-dot');
+  let lastEl = document.getElementById('pulse-last');
   S.isSyncing = d.service.state === 'running' || (d.live && d.live.is_syncing);
   if (S.isSyncing) {
     dot.className = 'pulse-dot run';
@@ -23,7 +23,7 @@ export function updatePulse(d) {
     dot.className = 'pulse-dot';
   }
   if (last) {
-    var mark = last.status === 'success'
+    let mark = last.status === 'success'
       ? '<span class="st-ok">✓</span>' : '<span class="st-err">✗</span>';
     lastEl.innerHTML = esc(fmtT(last.start)) + ' ' + mark
       + (last.elapsed ? ' <span style="color:var(--muted)">· ' + esc(last.elapsed) + '</span>' : '');
@@ -32,7 +32,7 @@ export function updatePulse(d) {
   }
 
   // Phase en cours (pendant une sync)
-  var mid = document.getElementById('pulse-mid');
+  let mid = document.getElementById('pulse-mid');
   if (S.isSyncing && d.live && d.live.phase) {
     mid.style.display = '';
     mid.textContent = d.live.phase;
@@ -41,10 +41,10 @@ export function updatePulse(d) {
   }
 
   // Prochaine sync : on parse la date du trigger systemd
-  var cap = document.getElementById('pulse-next-cap');
-  var next = document.getElementById('pulse-next');
-  var raw = (d.timer && d.timer.next_run) || '';
-  var m = raw.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
+  let cap = document.getElementById('pulse-next-cap');
+  let next = document.getElementById('pulse-next');
+  let raw = (d.timer && d.timer.next_run) || '';
+  let m = raw.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
   if (d.timer && !d.timer.active) {
     S.nextSyncTs = null;
     cap.textContent = 'Planification';
@@ -78,8 +78,8 @@ export function updatePulse(d) {
 
 /* Tick 1 s : compte à rebours + ligne de vie */
 export function tickPulse() {
-  var next = document.getElementById('pulse-next');
-  var line = document.getElementById('pulse-line');
+  let next = document.getElementById('pulse-next');
+  let line = document.getElementById('pulse-line');
 
   if (S.isSyncing) {
     line.style.transform = '';
@@ -94,14 +94,14 @@ export function tickPulse() {
   }
 
   if (S.nextSyncTs) {
-    var remS = (S.nextSyncTs - Date.now()) / 1000;
+    let remS = (S.nextSyncTs - Date.now()) / 1000;
     next.textContent = 'dans ' + fmtRemaining(remS);
     if (!S.isSyncing) {
-      var cycleS = 600;
+      let cycleS = 600;
       if (S.lastStartTs && S.nextSyncTs > S.lastStartTs) {
         cycleS = (S.nextSyncTs - S.lastStartTs) / 1000;
       }
-      var pct = Math.min(100, Math.max(0, (1 - remS / cycleS) * 100));
+      let pct = Math.min(100, Math.max(0, (1 - remS / cycleS) * 100));
       line.style.width = pct + '%';
     }
   } else if (!S.isSyncing) {

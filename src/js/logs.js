@@ -11,12 +11,12 @@ export function logPassesFilter(l) {
 }
 
 export function renderLogs() {
-  var w = document.getElementById('lwrap');
-  var sc = document.getElementById('lscroll');
-  var atBot = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 50;
-  var html = '';
-  var shown = 0;
-  for (var i = 0; i < S.lastLogs.length; i++) {
+  let w = document.getElementById('lwrap');
+  let sc = document.getElementById('lscroll');
+  let atBot = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 50;
+  let html = '';
+  let shown = 0;
+  for (let i = 0; i < S.lastLogs.length; i++) {
     if (!logPassesFilter(S.lastLogs[i])) continue;
     html += '<div class="ll ' + S.lastLogs[i].l + '">' + colorizeLog(S.lastLogs[i].t) + '</div>';
     shown++;
@@ -32,7 +32,7 @@ export function renderLogs() {
 
 export function updateLogs(logs) {
   S.lastLogs = logs || [];
-  var sig = S.lastLogs.length + '|'
+  let sig = S.lastLogs.length + '|'
     + (S.lastLogs.length ? S.lastLogs[0].t + '|' + S.lastLogs[S.lastLogs.length - 1].t : '');
   if (sig !== S.llc) {
     S.llc = sig;
@@ -48,6 +48,6 @@ export function setLogFilter(f, btn) {
 }
 
 export function logsBot() {
-  var s = document.getElementById('lscroll');
+  let s = document.getElementById('lscroll');
   s.scrollTop = s.scrollHeight;
 }

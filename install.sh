@@ -64,7 +64,7 @@ mkdir -p "$TARGET_DIR"
 detail "Destination : $TARGET_DIR"
 rm -rf "$TARGET_DIR/js" "$TARGET_DIR/app.js"
 npx -y esbuild src/js/main.js --bundle --outfile="$TARGET_DIR/app.js" --minify
-cat src/css/*.css > "$TARGET_DIR/style.css"
+cat src/css/*.css | npx -y esbuild --loader=css --minify > "$TARGET_DIR/style.css"
 cp src/rclone-monitor.py "$TARGET_DIR/"
 sed 's|<script type="module" src="js/main.js"></script>|<script src="app.js"></script>|' src/index.html > "$TARGET_DIR/index.html"
 cp -r src/backend "$TARGET_DIR/"

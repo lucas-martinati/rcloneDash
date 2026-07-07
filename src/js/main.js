@@ -5,6 +5,7 @@ import { S } from './state.js';
 import { applyThemeIcon, toggleTheme } from './theme.js';
 import { initDragAndDrop } from './drag-resize.js';
 import { refresh, doSync, cancelSync } from './refresh.js';
+import { initLiveStream } from './live-stream.js';
 import { tickPulse } from './pulse.js';
 import { setLogFilter, logsBot } from './logs.js';
 import { filterRecent } from './recent.js';
@@ -72,6 +73,17 @@ document.addEventListener('keydown', function (e) {
 });
 
 /* ═══════════════════════════════════════════════════
+   OUVERTURE DE FICHIER — écouteur délégué
+   Les lignes produites par renderFileRow portent des
+   data-attributs ; un seul listener évite le onclick
+   inline et son échappement de chaînes fragile.
+   ═══════════════════════════════════════════════════ */
+document.addEventListener('click', function (e) {
+  let el = e.target.closest('.file-link[data-openfile]');
+  if (el) openFile(el.dataset.fpath, el.dataset.deleted === '1', e);
+});
+
+/* ═══════════════════════════════════════════════════
    CTRL MAINTENU → « ouvrir le dossier »
    Bascule une classe sur <body> pour que le survol des
    liens de fichiers indique qu'on ouvrira le dossier parent.
@@ -90,5 +102,6 @@ window.addEventListener('blur', function () { document.body.classList.remove('fo
 applyThemeIcon();
 initDragAndDrop();
 refresh();
+initLiveStream();
 S.interval = setInterval(refresh, 10000);
 setInterval(tickPulse, 1000);

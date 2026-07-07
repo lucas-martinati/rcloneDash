@@ -14,13 +14,13 @@ export function openBwModal() {
 export function closeBwModal() { document.getElementById('bw-modal').classList.remove('show'); }
 
 export async function saveBw() {
-  var btn = document.getElementById('save-bw-btn');
-  var limit = document.getElementById('bw-select').value;
+  let btn = document.getElementById('save-bw-btn');
+  let limit = document.getElementById('bw-select').value;
   btn.disabled = true;
   btn.textContent = 'Application…';
   try {
-    var r = await fetch('/api/bwlimit_save?limit=' + encodeURIComponent(limit));
-    var d = await r.json();
+    let r = await fetch('/api/bwlimit_save?limit=' + encodeURIComponent(limit));
+    let d = await r.json();
     if (d.ok) {
       toast(limit
         ? 'Limite de débit appliquée — active dès la prochaine sync'
@@ -44,15 +44,15 @@ export function openDryRunModal() { document.getElementById('dryrun-modal').clas
 export function closeDryRunModal() { document.getElementById('dryrun-modal').classList.remove('show'); }
 
 export async function startDryRun() {
-  var btn = document.getElementById('start-dryrun-btn');
-  var out = document.getElementById('dryrun-output');
+  let btn = document.getElementById('start-dryrun-btn');
+  let out = document.getElementById('dryrun-output');
   btn.disabled = true;
   btn.textContent = 'Analyse en cours…';
   out.textContent = 'Analyse des différences entre le dossier local et Google Drive…\nCela peut prendre une à deux minutes.';
 
   try {
-    var r = await fetch('/api/dryrun');
-    var d = await r.json();
+    let r = await fetch('/api/dryrun');
+    let d = await r.json();
     if (d.ok) {
       out.innerHTML = colorizeLog(d.log || 'Aucun changement à appliquer : tout est déjà synchronisé.');
     } else {

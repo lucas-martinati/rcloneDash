@@ -6,13 +6,13 @@ import { renderSparkline } from './sparkline.js';
    HISTORIQUE
    ═══════════════════════════════════════════════════ */
 export function updateRuns(runs) {
-  var sig = JSON.stringify(runs || []);
+  let sig = JSON.stringify(runs || []);
   if (sig === S.runsSig) return;
   S.runsSig = sig;
 
   window._errorLogsCache = {};
-  var tb = document.getElementById('rtb');
-  var em = document.getElementById('rem');
+  let tb = document.getElementById('rtb');
+  let em = document.getElementById('rem');
   if (!runs || !runs.length) {
     tb.innerHTML = '';
     em.style.display = '';
@@ -22,15 +22,15 @@ export function updateRuns(runs) {
   em.style.display = 'none';
 
   // Conserver les détails ouverts entre deux rafraîchissements
-  var openSet = {};
+  let openSet = {};
   tb.querySelectorAll('tr.open').forEach(function (tr) { openSet[tr.dataset.start] = true; });
 
-  var html = '';
-  for (var i = 0; i < runs.length; i++) {
-    var r = runs[i];
-    var statusCls = r.status === 'success' ? 'ok' : r.status === 'failed' ? 'err' : 'run';
-    var statusTxt = r.status === 'success' ? '✓ Réussie' : r.status === 'failed' ? '✗ Erreur' : '⟳ En cours';
-    var isOpen = openSet[r.start];
+  let html = '';
+  for (let i = 0; i < runs.length; i++) {
+    let r = runs[i];
+    let statusCls = r.status === 'success' ? 'ok' : r.status === 'failed' ? 'err' : 'run';
+    let statusTxt = r.status === 'success' ? '✓ Réussie' : r.status === 'failed' ? '✗ Erreur' : '⟳ En cours';
+    let isOpen = openSet[r.start];
 
     html += '<tr class="clickable' + (isOpen ? ' open' : '') + '" data-start="' + esc(r.start) + '"'
       + ' onclick="toggleRunDetails(' + i + ')" title="Afficher le détail de cette sync">'
@@ -43,7 +43,7 @@ export function updateRuns(runs) {
       + '<td class="num" style="color:' + (r.errors > 0 ? 'var(--err)' : 'var(--faint)') + '">' + r.errors + '</td>'
       + '</tr>';
 
-    var detHtml = '<div class="run-details-box">';
+    let detHtml = '<div class="run-details-box">';
     detHtml += '<div class="run-details-header">'
       + '<span><b>Début :</b> ' + fmtDT(r.start) + '</span>'
       + '<span><b>Fin :</b> ' + fmtDT(r.end) + '</span>'
@@ -62,13 +62,13 @@ export function updateRuns(runs) {
     if (r.synced_files && r.synced_files.length > 0) {
       detHtml += '<div style="font-weight:600;margin-top:10px">Fichiers affectés (' + r.synced_files.length + ') :</div>';
       detHtml += '<div class="run-details-files">';
-      var labels = { 'new': 'Copié', modified: 'Modifié', deleted: 'Supprimé' };
-      for (var j = 0; j < Math.min(r.synced_files.length, 50); j++) {
-        var f = r.synced_files[j];
-        var cls = f.action || 'new';
-        var pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        var actionCall = "openFile('" + pathArg + "', " + (cls === 'deleted' ? 'true' : 'false') + ', event)';
-        var fSize = fmtSize(f.size);
+      let labels = { 'new': 'Copié', modified: 'Modifié', deleted: 'Supprimé' };
+      for (let j = 0; j < Math.min(r.synced_files.length, 50); j++) {
+        let f = r.synced_files[j];
+        let cls = f.action || 'new';
+        let pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        let actionCall = "openFile('" + pathArg + "', " + (cls === 'deleted' ? 'true' : 'false') + ', event)';
+        let fSize = fmtSize(f.size);
         detHtml += '<div class="run-details-file recent-item file-link" onclick="event.stopPropagation(); ' + actionCall + '">'
           + '<span class="recent-dot ' + cls + '"></span>'
           + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>'
@@ -94,16 +94,16 @@ export function updateRuns(runs) {
 }
 
 export function toggleRunDetails(i) {
-  var det = document.getElementById('run-det-' + i);
+  let det = document.getElementById('run-det-' + i);
   if (!det) return;
-  var open = det.style.display === 'none';
+  let open = det.style.display === 'none';
   det.style.display = open ? 'table-row' : 'none';
-  var row = det.previousElementSibling;
+  let row = det.previousElementSibling;
   if (row) row.classList.toggle('open', open);
 }
 
 export function copyErrorLogs(idx, btn) {
-  var text = window._errorLogsCache && window._errorLogsCache[idx];
+  let text = window._errorLogsCache && window._errorLogsCache[idx];
   if (!text) return;
   navigator.clipboard.writeText(text).then(function () {
     btn.textContent = 'Copié ✓';

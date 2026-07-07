@@ -4,9 +4,9 @@ import { fmtSize } from './utils.js';
    ALERTES & QUOTA
    ═══════════════════════════════════════════════════ */
 export function updateQuota(q) {
-  var txt = document.getElementById('quota-text');
-  var sub = document.getElementById('quota-sub');
-  var bar = document.getElementById('quota-bar');
+  let txt = document.getElementById('quota-text');
+  let sub = document.getElementById('quota-sub');
+  let bar = document.getElementById('quota-bar');
   if (!q) return;
   if (q.error) {
     txt.textContent = 'Erreur';
@@ -15,9 +15,9 @@ export function updateQuota(q) {
     sub.title = q.error;
     return;
   }
-  var used = q.used || 0;
-  var total = q.total || 1;
-  var pct = Math.min(100, Math.round((used / total) * 100));
+  let used = q.used || 0;
+  let total = q.total || 1;
+  let pct = Math.min(100, Math.round((used / total) * 100));
   txt.textContent = fmtSize(used);
   txt.style.color = '';
   sub.textContent = 'sur ' + fmtSize(total) + ' — ' + pct + ' %';
@@ -29,11 +29,11 @@ export function updateQuota(q) {
 export function updateAlerts(data) {
   updateQuota(data.quota);
 
-  var ban = document.getElementById('alert-banner');
-  var msg = document.getElementById('alert-msg');
-  var kpis = data.kpis;
-  var disk = data.disk;
-  var live = data.live;
+  let ban = document.getElementById('alert-banner');
+  let msg = document.getElementById('alert-msg');
+  let kpis = data.kpis;
+  let disk = data.disk;
+  let live = data.live;
 
   if (kpis.consecutive_failures >= 2) {
     ban.className = 'alert-banner show-err';
@@ -50,7 +50,7 @@ export function updateAlerts(data) {
     ban.className = 'alert-banner';
   }
 
-  var sb = document.getElementById('slow-badge');
+  let sb = document.getElementById('slow-badge');
   sb.style.display = (live && live.is_syncing && live.duration_s > 300) ? '' : 'none';
 }
 
@@ -58,25 +58,25 @@ export function updateAlerts(data) {
    KPIs
    ═══════════════════════════════════════════════════ */
 export function updateKPIs(data) {
-  var disk = data.disk;
-  var runs = data.runs || [], kpis = data.kpis;
+  let disk = data.disk;
+  let runs = data.runs || [], kpis = data.kpis;
 
   // Disque local
-  var dkpi = document.getElementById('disk-kpi');
-  var dkEl = document.getElementById('kdk');
+  let dkpi = document.getElementById('disk-kpi');
+  let dkEl = document.getElementById('kdk');
   dkEl.textContent = disk.used + ' Go';
   document.getElementById('kdks').textContent = disk.free + ' Go libres sur ' + disk.total + ' Go';
   document.getElementById('dfill').style.width = disk.pct + '%';
-  var diskDanger = disk.pct > 90;
+  let diskDanger = disk.pct > 90;
   document.getElementById('dfill').classList.toggle('danger', diskDanger);
   dkpi.classList.toggle('danger', diskDanger);
   dkEl.style.color = diskDanger ? 'var(--err)' : '';
 
   // Syncs aujourd'hui
-  var today = new Date().toISOString().slice(0, 10);
-  var td = runs.filter(function (r) { return r.start && r.start.startsWith(today); });
-  var tok = td.filter(function (r) { return r.status === 'success'; }).length;
-  var terr = td.filter(function (r) { return r.status === 'failed'; }).length;
+  let today = new Date().toISOString().slice(0, 10);
+  let td = runs.filter(function (r) { return r.start && r.start.startsWith(today); });
+  let tok = td.filter(function (r) { return r.status === 'success'; }).length;
+  let terr = td.filter(function (r) { return r.status === 'failed'; }).length;
   document.getElementById('kr').textContent = td.length;
   document.getElementById('krs').textContent = tok + ' réussie(s)' + (terr ? ' · ' + terr + ' en erreur' : '');
 
@@ -85,13 +85,13 @@ export function updateKPIs(data) {
     ? kpis.total_files.toLocaleString('fr-FR') : '—';
   document.getElementById('ksp').textContent = kpis.avg_speed || '—';
 
-  var kcEl = document.getElementById('kc');
+  let kcEl = document.getElementById('kc');
   kcEl.textContent = kpis.conflicts_today;
   kcEl.style.color = kpis.conflicts_today > 0 ? 'var(--warn)' : '';
   document.getElementById('conflict-kpi').classList.toggle('danger', kpis.conflicts_today > 0);
 
   // Fiabilité 7 jours
-  var rateVal = kpis.success_rate_7d;
+  let rateVal = kpis.success_rate_7d;
   document.getElementById('ksr').textContent = rateVal + ' %';
   document.getElementById('ksr').style.color = rateVal < 90 ? 'var(--err)' : rateVal < 99 ? 'var(--warn)' : '';
   document.getElementById('srfill').style.width = rateVal + '%';

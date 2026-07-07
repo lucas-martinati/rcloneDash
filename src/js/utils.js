@@ -16,11 +16,11 @@ export function fmtT(ts) {
 
 export function fmtDT(ts) {
   if (!ts) return '—';
-  var d = new Date(ts);
+  let d = new Date(ts);
   if (isNaN(d)) return ts.slice(0, 16);
-  var now = new Date();
-  var yest = new Date(now); yest.setDate(now.getDate() - 1);
-  var hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  let now = new Date();
+  let yest = new Date(now); yest.setDate(now.getDate() - 1);
+  let hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   if (d.toDateString() === now.toDateString()) return "Auj. " + hm;
   if (d.toDateString() === yest.toDateString()) return 'Hier ' + hm;
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
@@ -40,7 +40,7 @@ export function fmtSize(bytes) {
 /* "2m9.5s" / "1h2m3s" / "45.6s" → secondes */
 export function parseElapsed(e) {
   if (!e) return 0;
-  var s = 0, m;
+  let s = 0, m;
   if ((m = e.match(/(\d+)h/))) s += parseInt(m[1]) * 3600;
   if ((m = e.match(/(\d+)m(?!s)/))) s += parseInt(m[1]) * 60;
   if ((m = e.match(/([\d.]+)s/))) s += parseFloat(m[1]);
@@ -56,7 +56,7 @@ export function fmtRemaining(s) {
 
 /* Extracted utils */
 export function colorizeLog(text) {
-  var e = esc(text);
+  let e = esc(text);
   e = e.replace(/^(\d{4}[-\/]\d{2}[-\/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/gm, '<span style="opacity:0.5">$1</span>');
   e = e.replace(/ ERROR /g, ' <strong style="color:var(--err)">ERROR </strong>');
   e = e.replace(/ NOTICE(:| )/g, ' <strong style="color:var(--warn)">NOTICE</strong>$1');
@@ -71,27 +71,29 @@ export function colorizeLog(text) {
 /* Génération HTML unifiée pour les lignes de fichiers récents et en cours */
 export function renderFileRow(f, extraStyle, opts) {
   opts = opts || {};
-  var cls = f.action || 'new';
-  var pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var actionCall = "openFile('" + pathArg + "', " + (cls === 'deleted' ? 'true' : 'false') + ", event)";
-  var sizeTxt = opts.customSize || fmtSize(f.size);
-  var labels = { 'new': 'Copié', 'modified': 'Modifié', 'deleted': 'Supprimé', 'excluded': 'Exclu' };
+  let cls = f.action || 'new';
+  let sizeTxt = opts.customSize || fmtSize(f.size);
+  let labels = { 'new': 'Copié', 'modified': 'Modifié', 'deleted': 'Supprimé', 'excluded': 'Exclu' };
   
-  var timeTxt = '';
+  let timeTxt = '';
   if (f.time && !opts.hideTime) {
     timeTxt = String(f.time).indexOf(':') !== -1 ? esc(f.time) : fmtT(f.time);
   }
   
-  var styleAttr = extraStyle ? ' style="' + extraStyle + '"' : '';
+  let styleAttr = extraStyle ? ' style="' + extraStyle + '"' : '';
   
-  var html = '<div class="recent-item file-link" onclick="' + actionCall + '" title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"' + styleAttr + '>';
+  // Délégation d'événements : plus de onclick=openFile('...') à échapper à la
+  // main. Le chemin voyage dans un data-attribut (esc gère les guillemets) et un
+  // unique écouteur délégué (main.js) déclenche l'ouverture.
+  let openAttrs = ' data-openfile="1" data-fpath="' + esc(f.path) + '" data-deleted="' + (cls === 'deleted' ? '1' : '0') + '"';
+  let html = '<div class="recent-item file-link"' + openAttrs + ' title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"' + styleAttr + '>';
   
   if (!opts.hideAction) {
     html += '<span class="recent-dot ' + cls + '"></span>'
          + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>';
   }
   
-  var namePrefix = f.is_dir ? '📁 ' : '';
+  let namePrefix = f.is_dir ? '📁 ' : '';
   html += '<span class="recent-path" title="' + esc(f.path) + '">' + namePrefix + esc(f.path) + '</span>';
   if (sizeTxt) html += '<span class="recent-size">' + sizeTxt + '</span>';
   if (timeTxt) html += '<span class="recent-time">' + timeTxt + '</span>';

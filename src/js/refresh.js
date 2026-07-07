@@ -2,7 +2,6 @@ import { spin, fmtT } from './utils.js';
 import { badge, setSmartRefresh } from './status.js';
 import { updatePulse } from './pulse.js';
 import { updateAlerts, updateKPIs } from './dashboard.js';
-import { updateLive } from './live-sync.js';
 import { updateRuns } from './history.js';
 import { updateLogs } from './logs.js';
 import { updateRecentFiles } from './recent.js';
@@ -14,16 +13,17 @@ import { toast } from './toasts.js';
 export async function refresh() {
   spin(true);
   try {
-    var r = await fetch('/api/status');
+    let r = await fetch('/api/status');
     if (!r.ok) throw new Error(r.status);
-    var d = await r.json();
+    let d = await r.json();
 
     badge(d.service.state);
     setSmartRefresh(d.service.state);
     updatePulse(d);
     updateAlerts(d);
     updateKPIs(d);
-    updateLive(d.live);
+    // Le bloc live est piloté en temps réel par SSE (live-stream.js) ;
+    // le poll n'y touche plus pour éviter tout scintillement.
     updateRuns(d.runs);
     updateLogs(d.logs);
     updateRecentFiles(d.recent_files);
@@ -39,13 +39,13 @@ export async function refresh() {
    ACTIONS SYNC
    ═══════════════════════════════════════════════════ */
 export async function doSync() {
-  var b = document.getElementById('bsync');
-  var lbl = document.getElementById('bsync-lbl');
+  let b = document.getElementById('bsync');
+  let lbl = document.getElementById('bsync-lbl');
   b.disabled = true;
   lbl.textContent = 'Démarrage…';
   try {
-    var r = await fetch('/api/trigger');
-    var d = await r.json();
+    let r = await fetch('/api/trigger');
+    let d = await r.json();
     if (d.ok) {
       toast('Synchronisation lancée', 'ok');
     } else {
@@ -62,8 +62,8 @@ export async function doSync() {
 }
 
 export async function cancelSync() {
-  var b = document.getElementById('bcancel');
-  var lbl = document.getElementById('bcancel-lbl');
+  let b = document.getElementById('bcancel');
+  let lbl = document.getElementById('bcancel-lbl');
   b.disabled = true;
   lbl.textContent = 'Arrêt…';
   try {

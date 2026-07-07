@@ -4,7 +4,7 @@ import { esc, renderFileRow } from './utils.js';
    SYNC EN COURS
    ═══════════════════════════════════════════════════ */
 export function updateLive(live) {
-  var section = document.getElementById('live-section');
+  let section = document.getElementById('live-section');
   if (!live || (!live.is_syncing && live.phase_index <= 0)) {
     section.classList.remove('active');
     return;
@@ -12,11 +12,11 @@ export function updateLive(live) {
   section.classList.add('active');
 
   // Étapes
-  var phaseNames = ['Listings', 'Diffs locaux', 'Diffs distants', 'Application', 'Mise à jour', 'Terminé'];
-  var stepper = document.getElementById('phase-stepper');
-  var html = '';
-  for (var i = 0; i < phaseNames.length; i++) {
-    var cls = '', icon = '○';
+  let phaseNames = ['Listings', 'Diffs locaux', 'Diffs distants', 'Application', 'Mise à jour', 'Terminé'];
+  let stepper = document.getElementById('phase-stepper');
+  let html = '';
+  for (let i = 0; i < phaseNames.length; i++) {
+    let cls = '', icon = '○';
     if (i < live.phase_index) { cls = 'done'; icon = '✓'; }
     else if (i === live.phase_index) { cls = 'current'; icon = '●'; }
     if (i > 0) html += '<span class="phase-arrow">→</span>';
@@ -25,17 +25,17 @@ export function updateLive(live) {
   stepper.innerHTML = html;
 
   // Durée écoulée
-  var elapsed = document.getElementById('live-elapsed');
+  let elapsed = document.getElementById('live-elapsed');
   if (live.duration_s > 0) {
-    var mn = Math.floor(live.duration_s / 60);
-    var s = live.duration_s % 60;
+    let mn = Math.floor(live.duration_s / 60);
+    let s = live.duration_s % 60;
     elapsed.textContent = (mn > 0 ? mn + ' min ' : '') + s + ' s';
   } else {
     elapsed.textContent = (live.transfer && live.transfer.elapsed) || '';
   }
 
   // Stats de transfert
-  var t = live.transfer || {};
+  let t = live.transfer || {};
   document.getElementById('tf-done').textContent = t.done || '—';
   document.getElementById('tf-total').textContent = t.total || '—';
   document.getElementById('tf-pct').textContent = t.pct != null ? t.pct + ' %' : '—';
@@ -48,15 +48,15 @@ export function updateLive(live) {
   document.getElementById('tf-bar').style.width = (t.pct || 0) + '%';
 
   // Fichiers actifs
-  var aw = document.getElementById('active-wrap');
+  let aw = document.getElementById('active-wrap');
   if (live.active_files && live.active_files.length > 0) {
     aw.style.display = '';
-    var html = '<div class="kl">' + (live.active_files.length > 1
+    let html = '<div class="kl">' + (live.active_files.length > 1
       ? 'Fichiers en cours de transfert (' + live.active_files.length + ')'
       : 'Fichier en cours de transfert') + '</div>';
-    for (var i = 0; i < live.active_files.length; i++) {
-      var f = live.active_files[i];
-      var details = [];
+    for (let i = 0; i < live.active_files.length; i++) {
+      let f = live.active_files[i];
+      let details = [];
       if (f.status === 'checking') details.push('vérification…');
       if (f.size) details.push(f.size);
       if (f.speed) details.push(f.speed);
@@ -80,13 +80,13 @@ export function updateLive(live) {
   }
 
   // Fichiers synchronisés durant la session
-  var lsw = document.getElementById('live-synced-wrap');
-  var lsl = document.getElementById('live-synced-list');
+  let lsw = document.getElementById('live-synced-wrap');
+  let lsl = document.getElementById('live-synced-list');
   if (live.synced_files && live.synced_files.length > 0) {
     lsw.style.display = '';
-    var labels = { 'new': 'Copié', modified: 'Modifié', deleted: 'Supprimé' };
-    var html = '';
-    for (var i = live.synced_files.length - 1; i >= 0; i--) {
+    let labels = { 'new': 'Copié', modified: 'Modifié', deleted: 'Supprimé' };
+    let html = '';
+    for (let i = live.synced_files.length - 1; i >= 0; i--) {
       html += renderFileRow(live.synced_files[i], 'padding:4px 0;');
     }
     lsl.innerHTML = html;
@@ -99,12 +99,12 @@ export function updateLive(live) {
 }
 
 export function renderChanges(id, ch) {
-  var el = document.getElementById(id);
-  var items = [];
-  var kinds = [['new', 'new'], ['modified', 'modified'], ['deleted', 'deleted']];
-  for (var k = 0; k < kinds.length; k++) {
-    var arr = ch[kinds[k][0]] || [];
-    for (var i = 0; i < arr.length; i++) {
+  let el = document.getElementById(id);
+  let items = [];
+  let kinds = [['new', 'new'], ['modified', 'modified'], ['deleted', 'deleted']];
+  for (let k = 0; k < kinds.length; k++) {
+    let arr = ch[kinds[k][0]] || [];
+    for (let i = 0; i < arr.length; i++) {
       items.push('<div class="change-item"><span class="change-dot ' + kinds[k][1] + '"></span>' + esc(arr[i]) + '</div>');
     }
   }

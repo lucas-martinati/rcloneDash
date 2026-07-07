@@ -33,6 +33,10 @@ class Monitor:
         self._logs_time = 0
         self._fcount = 0
         self._fcount_time = 0
+        self._timer = None
+        self._timer_time = 0
+        self._service = None
+        self._service_time = 0
 
     def cmd(self, c, timeout=10):
         """Exécute une commande et retourne (stdout, stderr, returncode)."""
@@ -43,7 +47,10 @@ class Monitor:
             return "", str(e), 1
 
     def timer(self):
-        """État du timer systemd."""
+        """État du timer systemd, caché 5s (appelé à chaque /api/status)."""
+        now = time.time()
+        if now - self._timer_time < 5 and self._timer is not None:
+            return self._timer
         o, _, _ = self.cmd(
             ["systemctl", "status", self.tmr, "--no-pager", "-l"]
         )
@@ -55,10 +62,15 @@ class Monitor:
                 s["next_run"] = l.strip().replace("Trigger: ", "")
             if "Triggered:" in l:
                 s["last_run"] = l.strip().replace("Triggered: ", "")
+        self._timer = s
+        self._timer_time = now
         return s
 
     def service(self):
-        """État du service systemd."""
+        """État du service systemd, caché 5s (appelé à chaque /api/status)."""
+        now = time.time()
+        if now - self._service_time < 5 and self._service is not None:
+            return self._service
         o, _, _ = self.cmd(
             ["systemctl", "status", self.svc, "--no-pager", "-l"]
         )
@@ -77,6 +89,8 @@ class Monitor:
                     s["state"] = "success"
             if "Duration:" in l:
                 s["duration"] = l.strip().split("Duration:")[-1].strip()
+        self._service = s
+        self._service_time = now
         return s
 
     def update_quota(self):

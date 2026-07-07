@@ -4,6 +4,7 @@ import os
 import subprocess
 import shutil
 import re
+import time
 from urllib.parse import urlparse, parse_qs
 from . import config
 from .filters import load_exclude_rules, path_is_ignored
@@ -48,6 +49,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # ═══════════════════════════════════════════════════════════════════════
     def _api_status(self):
         self._json(self._m.full())
+
+    def _api_live_stream(self):
+        """Flux SSE du bloc « live » : pousse l'état de sync ~1×/s.
+
+        Le LogStreamer parse déjà journalctl -f en continu ; on se contente de
+        diffuser get_live() sans relancer de sous-processus. La progression
+        arrive au navigateur en ~1 s au lieu d'attendre le poll de 10 s.
+        """
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+        except Exception:
+            return
+        try:
+            while True:
+                live = self._m.streamer.get_live()
+                # Même filtrage que full() : n'exposer le live que s'il y a bien
+                # une sync (service running, ou streamer qui la détecte).
+                show = (self._m.service()["state"] == "running"
+                        or (live is not None and live.get("is_syncing")))
+                payload = json.dumps({"live": live if show else None})
+                self.wfile.write(f"data: {payload}\n\n".encode())
+                self.wfile.flush()
+                # Cadence rapide pendant une sync, plus lente au repos.
+                time.sleep(1 if show else 3)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # Le client (onglet fermé / rafraîchi) a coupé : fin normale.
+            pass
+        except Exception:
+            pass
 
     def _api_trigger(self):
         ok, err = self._m.trigger()
@@ -630,6 +665,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # ── Tables de routage (référencent les méthodes définies ci-dessus) ────
     _GET_ROUTES = {
         "/api/status": _api_status,
+        "/api/live/stream": _api_live_stream,
         "/api/trigger": _api_trigger,
         "/api/cancel": _api_cancel,
         "/api/bwlimit": _api_bwlimit,

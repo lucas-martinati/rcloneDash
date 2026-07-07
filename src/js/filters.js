@@ -16,16 +16,16 @@ export function closeFiltersModal() { document.getElementById('filters-modal').c
 export let _originalFiltersText = '';
 
 export function checkFiltersModified() {
-  var tf = document.getElementById('filters-text');
-  var btn = document.getElementById('save-filters-btn');
+  let tf = document.getElementById('filters-text');
+  let btn = document.getElementById('save-filters-btn');
   btn.disabled = tf.value === _originalFiltersText;
 }
 export async function loadFilters() {
-  var tf = document.getElementById('filters-text');
+  let tf = document.getElementById('filters-text');
   tf.value = 'Chargement…';
   try {
-    var r = await fetch('/api/filters');
-    var d = await r.json();
+    let r = await fetch('/api/filters');
+    let d = await r.json();
     tf.value = d.content || (d.error ? 'Erreur : ' + d.error : '');
     _originalFiltersText = tf.value;
     checkFiltersModified();
@@ -36,8 +36,8 @@ export async function loadFilters() {
 }
 
 export function addFilter() {
-  var input = document.getElementById('new-filter-input');
-  var rule = input.value.trim();
+  let input = document.getElementById('new-filter-input');
+  let rule = input.value.trim();
   if (!rule) return;
   if (!rule.startsWith('- ') && !rule.startsWith('+ ') && !rule.startsWith('#')) {
     rule = '- ' + rule;
@@ -49,8 +49,8 @@ export function addFilter() {
 }
 
 export function commitFilter(rule) {
-  var input = document.getElementById('new-filter-input');
-  var tf = document.getElementById('filters-text');
+  let input = document.getElementById('new-filter-input');
+  let tf = document.getElementById('filters-text');
   tf.value += (tf.value.endsWith('\n') || !tf.value ? '' : '\n') + rule + '\n';
   input.value = '';
   tf.scrollTop = tf.scrollHeight;
@@ -62,7 +62,7 @@ export function openImpactModal(rule) {
   _pendingFilter = rule;
   document.getElementById('impact-modal').classList.add('show');
   document.getElementById('impact-rule').textContent = rule;
-  var noneRadio = document.querySelector('input[name="imp-action"][value="none"]');
+  let noneRadio = document.querySelector('input[name="imp-action"][value="none"]');
   if (noneRadio) noneRadio.checked = true;
   impOnChoice();
   document.getElementById('impact-summary').innerHTML = '<div class="del-loading">Analyse de l\'impact…</div>';
@@ -74,18 +74,18 @@ export function openImpactModal(rule) {
       document.getElementById('impact-confirm').disabled = false;
       return;
     }
-    var summary;
+    let summary;
     if (d.count === 0) {
       summary = '<div class="del-banner ok">' + ICO_CHECK + '<div>Aucun élément présent ne correspond pour l\'instant. La règle s\'appliquera aux futurs fichiers.</div></div>';
     } else {
-      var noun = d.count > 1 ? 'éléments' : 'élément';
+      let noun = d.count > 1 ? 'éléments' : 'élément';
       summary = '<div class="del-count">Cette règle exclut <span class="del-big2">' + d.count + '</span> ' + noun
         + ' · <b>' + esc(fmtSize(d.size) || '0 o') + '</b>' + (d.truncated ? ' (aperçu partiel)' : '') + '</div>';
     }
     document.getElementById('impact-summary').innerHTML = summary;
-    var fl = '';
+    let fl = '';
     d.items.forEach(function (it) {
-      var meta = it.is_dir ? ((it.count || 0) + (it.count > 1 ? ' fichiers' : ' fichier')) : (fmtSize(it.size) || '');
+      let meta = it.is_dir ? ((it.count || 0) + (it.count > 1 ? ' fichiers' : ' fichier')) : (fmtSize(it.size) || '');
       it.action = 'excluded';
       fl += renderFileRow(it, '', { hideTime: true, customSize: meta, hideAction: true });
     });
@@ -102,13 +102,13 @@ export function closeImpactModal() {
   _pendingFilter = null;
 }
 export function impChoice() {
-  var el = document.querySelector('input[name="imp-action"]:checked');
+  let el = document.querySelector('input[name="imp-action"]:checked');
   return el ? el.value : 'none';
 }
 export function impOnChoice() {
-  var v = impChoice();
-  var btn = document.getElementById('impact-confirm');
-  var labels = {
+  let v = impChoice();
+  let btn = document.getElementById('impact-confirm');
+  let labels = {
     none: 'Ajouter cette exclusion',
     local: 'Exclure et supprimer en local',
     drive: 'Exclure et supprimer du Drive',
@@ -118,10 +118,10 @@ export function impOnChoice() {
   btn.className = 'btn ' + (v === 'none' ? 'btn-g' : 'btn-danger');
 }
 export async function confirmAddFilter() {
-  var rule = _pendingFilter;
+  let rule = _pendingFilter;
   if (!rule) { closeImpactModal(); return; }
-  var choice = impChoice();
-  var btn = document.getElementById('impact-confirm');
+  let choice = impChoice();
+  let btn = document.getElementById('impact-confirm');
   btn.disabled = true;
   btn.textContent = 'En cours…';
   try {
@@ -129,16 +129,16 @@ export async function confirmAddFilter() {
     await commitFilter(rule);
     // 2) Suppression de tout ce que la règle couvre, si demandé
     if (choice !== 'none') {
-      var r = await fetch('/api/rule_delete', {
+      let r = await fetch('/api/rule_delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rule: rule, mode: choice })
       });
-      var d = await r.json();
+      let d = await r.json();
       if (d.ok) {
-        var parts = [d.count + ' élément' + (d.count > 1 ? 's' : '') + ' traité' + (d.count > 1 ? 's' : '')];
+        let parts = [d.count + ' élément' + (d.count > 1 ? 's' : '') + ' traité' + (d.count > 1 ? 's' : '')];
         if (choice !== 'drive') parts.push((fmtSize(d.freed) || '0 o') + ' libérés');
         if (d.truncated) parts.push('liste tronquée');
-        var hasErr = d.errors && d.errors.length;
+        let hasErr = d.errors && d.errors.length;
         if (hasErr) parts.push(d.errors.length + ' erreur(s)');
         toast('Exclusion appliquée · ' + parts.join(' · '), hasErr ? 'warn' : 'ok');
       } else {
@@ -155,17 +155,17 @@ export async function confirmAddFilter() {
 }
 
 export async function saveFilters() {
-  var tf = document.getElementById('filters-text');
-  var btn = document.getElementById('save-filters-btn');
+  let tf = document.getElementById('filters-text');
+  let btn = document.getElementById('save-filters-btn');
   btn.disabled = true;
   btn.textContent = 'Enregistrement…';
   try {
-    var r = await fetch('/api/filters_save', {
+    let r = await fetch('/api/filters_save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: tf.value })
     });
-    var d = await r.json();
+    let d = await r.json();
     if (d.ok) {
       toast('Exclusions enregistrées', 'ok');
       _originalFiltersText = tf.value;

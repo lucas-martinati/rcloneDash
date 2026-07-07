@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════
    MODULES DÉPLAÇABLES (drag & drop + redimensionnement)
    ═══════════════════════════════════════════════════ */
-var dragSrcEl = null;
+let dragSrcEl = null;
 
 function handleDragStart(e) {
   dragSrcEl = this;
@@ -22,11 +22,11 @@ function handleDragLeave(e) { this.classList.remove('over'); }
 function handleDrop(e) {
   if (e.stopPropagation) { e.stopPropagation(); }
   if (dragSrcEl !== this) {
-    var srcOrder = window.getComputedStyle(dragSrcEl).order;
-    var destOrder = window.getComputedStyle(this).order;
+    let srcOrder = window.getComputedStyle(dragSrcEl).order;
+    let destOrder = window.getComputedStyle(this).order;
 
     if (srcOrder === destOrder) {
-      var panels = document.querySelectorAll('.drag-panel');
+      let panels = document.querySelectorAll('.drag-panel');
       panels.forEach(function (p, i) { p.style.order = p.style.order || i; });
       srcOrder = dragSrcEl.style.order;
       destOrder = this.style.order;
@@ -35,7 +35,7 @@ function handleDrop(e) {
     dragSrcEl.style.order = destOrder;
     this.style.order = srcOrder;
 
-    var orderData = {};
+    let orderData = {};
     document.querySelectorAll('.drag-panel').forEach(function (p) {
       p.style.height = '';
       orderData[p.id] = p.style.order;
@@ -52,13 +52,13 @@ function handleDragEnd(e) {
 }
 
 export function initDragAndDrop() {
-  var panels = document.querySelectorAll('.drag-panel');
-  var savedOrder = JSON.parse(localStorage.getItem('dash_panel_order') || '{}');
+  let panels = document.querySelectorAll('.drag-panel');
+  let savedOrder = JSON.parse(localStorage.getItem('dash_panel_order') || '{}');
 
   panels.forEach(function (panel, idx) {
     panel.style.order = savedOrder[panel.id] || idx;
 
-    var header = panel.querySelector('.ph');
+    let header = panel.querySelector('.ph');
     if (header) {
       header.addEventListener('mouseenter', function () { panel.setAttribute('draggable', 'true'); });
       header.addEventListener('mouseleave', function () { panel.removeAttribute('draggable'); });
@@ -77,7 +77,7 @@ export function initDragAndDrop() {
 }
 
 function updateFullWidthPanel() {
-  var panels = Array.from(document.querySelectorAll('.drag-panel'));
+  let panels = Array.from(document.querySelectorAll('.drag-panel'));
   panels.sort(function (a, b) { return parseInt(a.style.order || 0) - parseInt(b.style.order || 0); });
   panels.forEach(function (p, idx) {
     p.classList.toggle('full-width', idx === 2);
@@ -85,48 +85,48 @@ function updateFullWidthPanel() {
 }
 
 export function initResizer() {
-  var container = document.getElementById('modules-container');
-  var isResizingH = false;
-  var isResizingV = false;
-  var startX, startY, startCol1, startCol2, startRow1, startRow2;
+  let container = document.getElementById('modules-container');
+  let isResizingH = false;
+  let isResizingV = false;
+  let startX, startY, startCol1, startCol2, startRow1, startRow2;
 
-  var savedCol = localStorage.getItem('dash_col_ratio');
+  let savedCol = localStorage.getItem('dash_col_ratio');
   if (savedCol) {
-    var parts = savedCol.split(':');
+    let parts = savedCol.split(':');
     container.style.setProperty('--col1', parts[0] + 'fr');
     container.style.setProperty('--col2', parts[1] + 'fr');
   }
-  var savedRow = localStorage.getItem('dash_row_sizes');
+  let savedRow = localStorage.getItem('dash_row_sizes');
   if (savedRow) {
-    var rParts = savedRow.split(':');
+    let rParts = savedRow.split(':');
     container.style.setProperty('--row1', rParts[0] + 'px');
     container.style.setProperty('--row2', rParts[1] + 'px');
   }
 
-  var hoverRaf = 0;
-  var lastMx = 0, lastMy = 0;
+  let hoverRaf = 0;
+  let lastMx = 0, lastMy = 0;
 
   function updateHoverCursor(clientX, clientY) {
-    var panels = Array.from(document.querySelectorAll('.drag-panel'));
+    let panels = Array.from(document.querySelectorAll('.drag-panel'));
     panels.sort(function (a, b) { return parseInt(a.style.order || 0) - parseInt(b.style.order || 0); });
     if (panels.length < 3) return;
-    var p1 = panels[0].getBoundingClientRect();
-    var p2 = panels[1].getBoundingClientRect();
-    var p3 = panels[2].getBoundingClientRect();
+    let p1 = panels[0].getBoundingClientRect();
+    let p2 = panels[1].getBoundingClientRect();
+    let p3 = panels[2].getBoundingClientRect();
 
-    var isH = (clientX > p1.right - 5 && clientX < p2.left + 5 && clientY > p1.top && clientY < p1.bottom);
-    var isV = (clientY > p1.bottom - 5 && clientY < p3.top + 5 && clientX > p3.left && clientX < p3.right);
+    let isH = (clientX > p1.right - 5 && clientX < p2.left + 5 && clientY > p1.top && clientY < p1.bottom);
+    let isV = (clientY > p1.bottom - 5 && clientY < p3.top + 5 && clientX > p3.left && clientX < p3.right);
 
-    var cursor = isH && isV ? 'move' : isH ? 'col-resize' : isV ? 'row-resize' : '';
+    let cursor = isH && isV ? 'move' : isH ? 'col-resize' : isV ? 'row-resize' : '';
     if (container.style.cursor !== cursor) container.style.cursor = cursor;
   }
 
   container.addEventListener('mousemove', function (e) {
     if (isResizingH) {
-      var rect = container.getBoundingClientRect();
-      var dx = e.clientX - startX;
-      var c1 = startCol1 + (dx / rect.width) * (startCol1 + startCol2);
-      var c2 = startCol2 - (dx / rect.width) * (startCol1 + startCol2);
+      let rect = container.getBoundingClientRect();
+      let dx = e.clientX - startX;
+      let c1 = startCol1 + (dx / rect.width) * (startCol1 + startCol2);
+      let c2 = startCol2 - (dx / rect.width) * (startCol1 + startCol2);
       if (c1 > 0.1 && c2 > 0.1) {
         container.style.setProperty('--col1', c1 + 'fr');
         container.style.setProperty('--col2', c2 + 'fr');
@@ -135,9 +135,9 @@ export function initResizer() {
       return;
     }
     if (isResizingV) {
-      var dy = e.clientY - startY;
-      var r1 = startRow1 + dy;
-      var r2 = startRow2 - dy;
+      let dy = e.clientY - startY;
+      let r1 = startRow1 + dy;
+      let r2 = startRow2 - dy;
       if (r1 > 100 && r2 > 100) {
         container.style.setProperty('--row1', r1 + 'px');
         container.style.setProperty('--row2', r2 + 'px');

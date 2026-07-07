@@ -2,8 +2,8 @@
    TOASTS
    ═══════════════════════════════════════════════════ */
 export function toast(msg, type) {
-  var c = document.getElementById('toasts');
-  var t = document.createElement('div');
+  let c = document.getElementById('toasts');
+  let t = document.createElement('div');
   t.className = 'toast ' + (type || '');
   t.textContent = msg;
   c.appendChild(t);

@@ -32,10 +32,10 @@ export const FM_EXT = {
 };
 export function fmCategory(item) {
   if (item.is_dir) return 'folder';
-  var dot = item.name.lastIndexOf('.');
+  let dot = item.name.lastIndexOf('.');
   if (dot < 1) return 'file';
-  var ext = item.name.slice(dot + 1).toLowerCase();
-  for (var cat in FM_EXT) if (FM_EXT[cat].indexOf(ext) !== -1) return cat;
+  let ext = item.name.slice(dot + 1).toLowerCase();
+  for (let cat in FM_EXT) if (FM_EXT[cat].indexOf(ext) !== -1) return cat;
   return 'file';
 }
 export const ICO_CHECK = _svg('<path d="M20 6L9 17l-5-5"/>', 16);
