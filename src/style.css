@@ -969,6 +969,20 @@ body {
 .recent-item:hover { background: var(--surface-off); }
 .recent-item:hover .recent-path { color: var(--primary); }
 
+/* ── Ctrl/⌘ maintenu : les liens de fichiers ouvrent le dossier parent ── */
+body.folder-mode .file-link { cursor: alias; }
+body.folder-mode .file-link:hover { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+body.folder-mode .file-link:hover .recent-path,
+body.folder-mode .file-link:hover .tree-name { color: var(--warn); }
+/* Pastille « 📁 » en fin de ligne au survol, pour rendre l'action explicite */
+body.folder-mode .file-link:hover::after {
+  content: "📁";
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 .recent-dot {
   width: 7px;
   height: 7px;

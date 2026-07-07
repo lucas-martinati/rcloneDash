@@ -433,9 +433,9 @@ function updateLive(live) {
       var f = live.synced_files[i];
       var cls = f.action || 'new';
       var pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var actionCall = "openFile('" + pathArg + "'" + (cls === 'deleted' ? ', true' : '') + ')';
+      var actionCall = "openFile('" + pathArg + "', " + (cls === 'deleted' ? 'true' : 'false') + ', event)';
       var sizeTxt = fmtSize(f.size);
-      html += '<div class="recent-item" style="padding:4px 0;" onclick="' + actionCall + '">'
+      html += '<div class="recent-item file-link" style="padding:4px 0;" onclick="' + actionCall + '">'
         + '<span class="recent-dot ' + cls + '"></span>'
         + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>'
         + '<span class="recent-path" title="' + esc(f.path) + '">' + esc(f.path) + '</span>'
@@ -592,9 +592,9 @@ function updateRuns(runs) {
         var f = r.synced_files[j];
         var cls = f.action || 'new';
         var pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        var actionCall = "openFile('" + pathArg + "'" + (cls === 'deleted' ? ', true' : '') + ')';
+        var actionCall = "openFile('" + pathArg + "', " + (cls === 'deleted' ? 'true' : 'false') + ', event)';
         var fSize = fmtSize(f.size);
-        detHtml += '<div class="run-details-file recent-item" onclick="event.stopPropagation(); ' + actionCall + '">'
+        detHtml += '<div class="run-details-file recent-item file-link" onclick="event.stopPropagation(); ' + actionCall + '">'
           + '<span class="recent-dot ' + cls + '"></span>'
           + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>'
           + '<span class="recent-path">' + esc(f.path) + '</span>'
@@ -713,9 +713,9 @@ function updateRecentFiles(files) {
     var f = reversed[i];
     var cls = f.action || 'new';
     var pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var actionCall = "openFile('" + pathArg + "'" + (cls === 'deleted' ? ', true' : '') + ')';
+    var actionCall = "openFile('" + pathArg + "', " + (cls === 'deleted' ? 'true' : 'false') + ', event)';
     var sizeTxt = fmtSize(f.size);
-    html += '<div class="recent-item" onclick="' + actionCall + '" title="Ouvrir dans le gestionnaire de fichiers">'
+    html += '<div class="recent-item file-link" onclick="' + actionCall + '" title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier">'
       + '<span class="recent-dot ' + cls + '"></span>'
       + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>'
       + '<span class="recent-path" title="' + esc(f.path) + '">' + esc(f.path) + '</span>'
@@ -1034,9 +1034,10 @@ async function loadTree(dir) {
         : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>';
       var sizeTxt = item.is_dir ? '' : fmtSize(item.size);
       var pathArg = item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var action = item.is_dir ? "loadTree('" + pathArg + "')" : "openFile('" + pathArg + "')";
+      var action = item.is_dir ? "loadTree('" + pathArg + "')" : "openFile('" + pathArg + "', false, event)";
       html += '<div class="tree-item">'
-        + '<div class="tree-item-main" onclick="' + action + '">'
+        + '<div class="tree-item-main' + (item.is_dir ? '' : ' file-link') + '" onclick="' + action + '"'
+        + (item.is_dir ? '' : ' title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"') + '>'
         + '<div class="tree-icon">' + icon + '</div>'
         + '<div class="tree-name" title="' + esc(item.name) + '">' + esc(item.name) + '</div>'
         + '<div class="tree-size">' + sizeTxt + '</div>'
@@ -1051,10 +1052,13 @@ async function loadTree(dir) {
   }
 }
 
-function openFile(path, isDeleted) {
-  var url = '/api/open?path=' + encodeURIComponent(path) + (isDeleted ? '&dir_only=1' : '');
+function openFile(path, isDeleted, ev) {
+  // Ctrl/⌘ maintenu : ouvrir le dossier parent plutôt que le fichier lui-même.
+  // (les fichiers supprimés n'existent plus, on ouvre toujours leur dossier)
+  var dirOnly = isDeleted || (ev && (ev.ctrlKey || ev.metaKey));
+  var url = '/api/open?path=' + encodeURIComponent(path) + (dirOnly ? '&dir_only=1' : '');
   fetch(url).then(function (r) { return r.json(); }).then(function (d) {
-    if (!d.ok) toast('Impossible d\'ouvrir ce fichier', 'warn');
+    if (!d.ok) toast(dirOnly ? 'Impossible d\'ouvrir ce dossier' : 'Impossible d\'ouvrir ce fichier', 'warn');
   });
 }
 
@@ -1238,6 +1242,19 @@ document.addEventListener('keydown', function (e) {
     });
   }
 });
+
+/* ═══════════════════════════════════════════════════
+   CTRL MAINTENU → « ouvrir le dossier »
+   Bascule une classe sur <body> pour que le survol des
+   liens de fichiers indique qu'on ouvrira le dossier parent.
+   ═══════════════════════════════════════════════════ */
+function updateCtrlState(e) {
+  document.body.classList.toggle('folder-mode', e.ctrlKey || e.metaKey);
+}
+window.addEventListener('keydown', updateCtrlState);
+window.addEventListener('keyup', updateCtrlState);
+// Sécurité : on retire la classe si la fenêtre perd le focus (le keyup peut être manqué)
+window.addEventListener('blur', function () { document.body.classList.remove('folder-mode'); });
 
 /* ═══════════════════════════════════════════════════
    BOOT
