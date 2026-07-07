@@ -47,11 +47,8 @@
 # Formats Office (édités localement mais souvent en double avec Google Docs)
 - *.doc
 - *.docx
-- *.xls
-- *.xlsx
 - *.ppt
 - *.pptx
-- *.pdf
 
 # Formats Google manquants
 - *.gjam
