@@ -990,67 +990,358 @@ async function cancelSync() {
 
 /* ═══════════════════════════════════════════════════
    NAVIGATEUR DE FICHIERS
+   Fil d'ariane · recherche instantanée · tri par colonne ·
+   icônes typées · navigation clavier · résumé de dossier
    ═══════════════════════════════════════════════════ */
-let _currentTreeDir = '';
+let _fm = {
+  dir: '',        // dossier courant (relatif à la racine synchronisée)
+  items: [],      // items bruts renvoyés par l'API
+  view: [],       // items filtrés + triés actuellement affichés
+  sortKey: 'name',
+  sortAsc: true,
+  filter: '',
+  sel: -1,        // index sélectionné au clavier dans `view`
+  recursive: false,   // recherche étendue aux sous-dossiers
+  searchResults: [],  // résultats renvoyés par /api/search
+  searching: false,
+  searchTimer: null,
+  truncated: false
+};
 
+/* ── Icônes SVG (feather-style, viewBox 24) ── */
+function _svg(inner, sz) {
+  sz = sz || 14;
+  return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" '
+    + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+}
+const FM_ICONS = {
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  video: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+  audio: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  archive: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
+  doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  sheet: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="12" y1="11" x2="12" y2="19"/>',
+  slides: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+  pdf: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h1.5a1 1 0 0 1 0 3H9zM9 13v6"/>',
+  code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  file: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>'
+};
+const FM_EXT = {
+  image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'heic', 'heif', 'tiff', 'ico', 'avif'],
+  video: ['mp4', 'mkv', 'avi', 'mov', 'webm', 'wmv', 'flv', 'm4v', 'mpg', 'mpeg', '3gp'],
+  audio: ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus', 'aiff'],
+  archive: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tgz', 'zst'],
+  pdf: ['pdf'],
+  doc: ['doc', 'docx', 'odt', 'rtf', 'txt', 'md', 'pages', 'tex', 'epub'],
+  sheet: ['xls', 'xlsx', 'ods', 'csv', 'tsv', 'numbers'],
+  slides: ['ppt', 'pptx', 'odp', 'key'],
+  code: ['js', 'ts', 'jsx', 'tsx', 'py', 'rb', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'java', 'php', 'html', 'htm', 'css', 'scss', 'sass', 'json', 'xml', 'yml', 'yaml', 'sh', 'bash', 'zsh', 'sql', 'swift', 'kt', 'lua', 'vue', 'ini', 'toml']
+};
+function fmCategory(item) {
+  if (item.is_dir) return 'folder';
+  var dot = item.name.lastIndexOf('.');
+  if (dot < 1) return 'file';
+  var ext = item.name.slice(dot + 1).toLowerCase();
+  for (var cat in FM_EXT) if (FM_EXT[cat].indexOf(ext) !== -1) return cat;
+  return 'file';
+}
+
+/* ── Ouverture / navigation ── */
 function openTreeModal() {
   document.getElementById('tree-modal').classList.add('show');
   loadTree('');
+  setTimeout(function () { var s = document.getElementById('fm-search'); if (s) s.focus(); }, 80);
 }
-
 function closeTreeModal() {
   document.getElementById('tree-modal').classList.remove('show');
 }
-
 function treeUp() {
-  if (!_currentTreeDir) return;
-  var parts = _currentTreeDir.split('/');
+  if (!_fm.dir) return;
+  var parts = _fm.dir.split('/');
   parts.pop();
   loadTree(parts.join('/'));
 }
+function openCurrentDir() {
+  fetch('/api/open?path=' + encodeURIComponent(_fm.dir)).then(function (r) { return r.json(); })
+    .then(function (d) { if (!d.ok) toast('Impossible d\'ouvrir ce dossier', 'warn'); });
+}
 
 async function loadTree(dir) {
-  var list = document.getElementById('tree-list');
-  var pathEl = document.getElementById('tree-path');
-  var upBtn = document.getElementById('tree-up-btn');
-  list.innerHTML = '<div class="empty">Chargement…</div>';
+  var list = document.getElementById('fm-list');
+  list.innerHTML = fmSkeleton();
+  var s = document.getElementById('fm-search');
+  s.value = '';
+  document.getElementById('fm-search-clear').hidden = true;
+  _fm.filter = '';
+  _fm.sel = -1;
+  _fm.searchResults = [];
+  _fm.searching = false;
+  clearTimeout(_fm.searchTimer);
   try {
     var r = await fetch('/api/tree?dir=' + encodeURIComponent(dir));
     var d = await r.json();
     if (d.error) throw new Error(d.error);
-    _currentTreeDir = d.current_dir;
-    pathEl.textContent = '/' + (_currentTreeDir || '');
-    upBtn.disabled = !_currentTreeDir;
-
-    if (!d.items || d.items.length === 0) {
-      list.innerHTML = '<div class="empty">Ce dossier est vide.</div>';
-      return;
-    }
-    var html = '';
-    for (var i = 0; i < d.items.length; i++) {
-      var item = d.items[i];
-      var icon = item.is_dir
-        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>'
-        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>';
-      var sizeTxt = item.is_dir ? '' : fmtSize(item.size);
-      var pathArg = item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var action = item.is_dir ? "loadTree('" + pathArg + "')" : "openFile('" + pathArg + "', false, event)";
-      html += '<div class="tree-item">'
-        + '<div class="tree-item-main' + (item.is_dir ? '' : ' file-link') + '" onclick="' + action + '"'
-        + (item.is_dir ? '' : ' title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"') + '>'
-        + '<div class="tree-icon">' + icon + '</div>'
-        + '<div class="tree-name" title="' + esc(item.name) + '">' + esc(item.name) + '</div>'
-        + '<div class="tree-size">' + sizeTxt + '</div>'
-        + '</div>'
-        + '<button class="tree-btn ignore" onclick="event.stopPropagation(); ignorePath(this, \'' + pathArg + '\', ' + item.is_dir + ')"'
-        + ' title="Exclure de la synchronisation">Exclure</button>'
-        + '</div>';
-    }
-    list.innerHTML = html;
+    _fm.dir = d.current_dir || '';
+    _fm.items = d.items || [];
+    document.getElementById('tree-up-btn').disabled = !_fm.dir;
+    fmRenderCrumbs();
+    fmRender();
   } catch (e) {
-    list.innerHTML = '<div class="empty" style="color:var(--err)">' + esc(e.message) + '</div>';
+    list.innerHTML = '<div class="fm-empty err">' + _svg(FM_ICONS.file, 22) + '<span>' + esc(e.message) + '</span></div>';
+    document.getElementById('fm-footer').textContent = '';
   }
 }
+
+/* ── Fil d'ariane cliquable ── */
+function fmRenderCrumbs() {
+  var c = document.getElementById('fm-crumbs');
+  var html = '<button class="fm-crumb root" onclick="loadTree(\'\')" title="Racine synchronisée">'
+    + _svg('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>', 14)
+    + '</button>';
+  if (_fm.dir) {
+    var parts = _fm.dir.split('/');
+    var acc = '';
+    for (var i = 0; i < parts.length; i++) {
+      acc = acc ? acc + '/' + parts[i] : parts[i];
+      var last = i === parts.length - 1;
+      var pathArg = acc.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      html += '<span class="fm-crumb-sep">›</span>'
+        + '<button class="fm-crumb' + (last ? ' current' : '') + '" onclick="loadTree(\'' + pathArg + '\')">'
+        + esc(parts[i]) + '</button>';
+    }
+  }
+  c.innerHTML = html;
+  c.scrollLeft = c.scrollWidth;
+}
+
+/* ── Tri / filtre ── */
+function fmSort(key) {
+  if (_fm.sortKey === key) _fm.sortAsc = !_fm.sortAsc;
+  else { _fm.sortKey = key; _fm.sortAsc = key === 'name'; }   // nom ↑ ; taille/date ↓ par défaut
+  fmRender();
+}
+function fmFilter(v) {
+  _fm.filter = v.trim().toLowerCase();
+  document.getElementById('fm-search-clear').hidden = !v;
+  _fm.sel = -1;
+  if (_fm.recursive) {
+    // recherche récursive : appel serveur débounce
+    clearTimeout(_fm.searchTimer);
+    if (_fm.filter.length < 2) {
+      _fm.searchResults = [];
+      _fm.searching = false;
+      fmRender();
+      return;
+    }
+    _fm.searching = true;
+    fmRender();
+    _fm.searchTimer = setTimeout(fmRunSearch, 250);
+  } else {
+    fmRender();
+  }
+}
+function fmClearSearch() {
+  var s = document.getElementById('fm-search');
+  s.value = ''; s.focus();
+  fmFilter('');
+}
+function fmToggleRecursive() {
+  _fm.recursive = !_fm.recursive;
+  var btn = document.getElementById('fm-scope');
+  btn.classList.toggle('active', _fm.recursive);
+  btn.setAttribute('aria-pressed', _fm.recursive ? 'true' : 'false');
+  _fm.searchResults = [];
+  _fm.sel = -1;
+  // relance la requête courante dans le nouveau périmètre
+  fmFilter(document.getElementById('fm-search').value);
+}
+async function fmRunSearch() {
+  var q = _fm.filter;
+  try {
+    var r = await fetch('/api/search?dir=' + encodeURIComponent(_fm.dir) + '&q=' + encodeURIComponent(q));
+    var d = await r.json();
+    // ignore les réponses obsolètes (l'utilisateur a continué à taper)
+    if (_fm.filter !== q || !_fm.recursive) return;
+    _fm.searching = false;
+    _fm.searchResults = d.items || [];
+    _fm.truncated = !!d.truncated;
+    fmRender();
+  } catch (e) {
+    _fm.searching = false;
+    _fm.searchResults = [];
+    fmRender();
+  }
+}
+
+/* ── Rendu de la liste ── */
+function fmRender() {
+  var list = document.getElementById('fm-list');
+  var recursiveActive = _fm.recursive && _fm.filter.length >= 2;
+
+  // état « recherche en cours » (mode récursif)
+  if (recursiveActive && _fm.searching) {
+    list.innerHTML = '<div class="fm-empty"><span class="fm-spin"></span><span>Recherche dans les sous-dossiers…</span></div>';
+    _fm.view = [];
+    fmFooter();
+    return;
+  }
+
+  var view;
+  if (recursiveActive) {
+    view = _fm.searchResults;
+  } else {
+    view = _fm.items;
+    if (_fm.filter) view = view.filter(function (it) { return it.name.toLowerCase().indexOf(_fm.filter) !== -1; });
+  }
+
+  var key = _fm.sortKey, dir = _fm.sortAsc ? 1 : -1;
+  view = view.slice().sort(function (a, b) {
+    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;   // dossiers toujours en tête
+    var av, bv;
+    if (key === 'size') { av = a.is_dir ? -1 : (a.size || 0); bv = b.is_dir ? -1 : (b.size || 0); }
+    else if (key === 'mtime') { av = a.mtime || 0; bv = b.mtime || 0; }
+    else { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+    if (av < bv) return -dir;
+    if (av > bv) return dir;
+    return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+  });
+  _fm.view = view;
+
+  document.querySelectorAll('.fm-col-btn').forEach(function (b) {
+    var on = b.dataset.key === _fm.sortKey;
+    b.classList.toggle('active', on);
+    b.classList.toggle('asc', on && _fm.sortAsc);
+    b.classList.toggle('desc', on && !_fm.sortAsc);
+  });
+
+  if (!view.length) {
+    list.innerHTML = _fm.filter
+      ? '<div class="fm-empty">' + _svg('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 22)
+        + '<span>Aucun résultat pour « ' + esc(_fm.filter) + ' »</span></div>'
+      : '<div class="fm-empty">' + _svg(FM_ICONS.folder, 22) + '<span>Ce dossier est vide</span></div>';
+    fmFooter();
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < view.length; i++) html += fmRow(view[i], i);
+  list.innerHTML = html;
+  fmFooter();
+}
+
+function fmRow(item, i) {
+  var cat = fmCategory(item);
+  var isDir = item.is_dir;
+  var pathArg = item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var action = isDir ? "loadTree('" + pathArg + "')" : "openFile('" + pathArg + "', false, event)";
+  var meta = isDir
+    ? (item.count == null ? '—' : item.count + (item.count > 1 ? ' éléments' : ' élément'))
+    : (fmtSize(item.size) || '—');
+  var modTxt = item.mtime ? fmtDT(item.mtime) : '—';
+  var title = isDir ? 'Ouvrir le dossier' : 'Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier';
+  var ignored = !!item.ignored;
+  var revealBtn = isDir
+    ? '<button class="fm-act" onclick="event.stopPropagation(); openFile(\'' + pathArg + '\')" title="Ouvrir dans l\'explorateur système">'
+      + _svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>', 13) + '</button>'
+    : '<button class="fm-act" onclick="event.stopPropagation(); openFile(\'' + pathArg + '\', true)" title="Ouvrir le dossier contenant">'
+      + _svg(FM_ICONS.folder, 13) + '</button>';
+  // Basculer exclusion : croix (exclure) si suivi, œil (ré-inclure) si déjà exclu
+  var toggleBtn = ignored
+    ? '<button class="fm-act reinc" onclick="event.stopPropagation(); reincludePath(\'' + pathArg + '\', ' + isDir + ')" title="Ré-inclure dans la synchronisation">'
+      + _svg('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 13) + '</button>'
+    : '<button class="fm-act" onclick="event.stopPropagation(); ignorePath(\'' + pathArg + '\', ' + isDir + ')" title="Exclure de la synchronisation">'
+      + _svg('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>', 13) + '</button>';
+  var delBtn = '<button class="fm-act danger" onclick="event.stopPropagation(); openDeleteModal(\'' + pathArg + '\')" title="Supprimer localement…">'
+    + _svg('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', 13) + '</button>';
+  return '<div class="fm-row' + (i === _fm.sel ? ' sel' : '') + (isDir ? ' is-dir' : ' file-link') + (ignored ? ' ignored' : '')
+      + '" data-i="' + i + '" onclick="' + action + '" title="' + title + '">'
+    + '<span class="fm-ic cat-' + cat + '">' + _svg(FM_ICONS[cat], 16) + '</span>'
+    + '<span class="fm-name"><span class="fm-nm-txt">' + fmHighlight(item.name) + '</span>'
+    + (ignored ? '<span class="fm-ig-badge" title="Exclu de la synchronisation">exclu</span>' : '') + '</span>'
+    + '<span class="fm-meta col-mod" title="' + esc(modTxt) + '">' + esc(modTxt) + '</span>'
+    + '<span class="fm-meta col-size">' + esc(meta) + '</span>'
+    + '<span class="fm-row-actions">'
+    + revealBtn + toggleBtn + delBtn
+    + '</span>'
+    + '</div>';
+}
+
+function fmHighlight(name) {
+  if (!_fm.filter) return esc(name);
+  var idx = name.toLowerCase().indexOf(_fm.filter);
+  if (idx < 0) return esc(name);
+  return esc(name.slice(0, idx)) + '<mark>' + esc(name.slice(idx, idx + _fm.filter.length))
+    + '</mark>' + esc(name.slice(idx + _fm.filter.length));
+}
+
+function fmFooter() {
+  var f = document.getElementById('fm-footer');
+  // Mode recherche récursive : résumé des résultats
+  if (_fm.recursive && _fm.filter.length >= 2) {
+    var n = _fm.view.length;
+    var left = 'Recherche dans les sous-dossiers';
+    var right = (n ? n : 'Aucun') + ' résultat' + (n > 1 ? 's' : '') + (_fm.truncated ? ' (limité)' : '');
+    f.innerHTML = '<span>' + esc(left) + '</span><span class="fm-foot-r">' + esc(right) + '</span>';
+    return;
+  }
+  var dirs = 0, files = 0, total = 0;
+  _fm.items.forEach(function (it) {
+    if (it.is_dir) dirs++; else { files++; total += it.size || 0; }
+  });
+  var parts = [];
+  if (dirs) parts.push(dirs + (dirs > 1 ? ' dossiers' : ' dossier'));
+  if (files) parts.push(files + (files > 1 ? ' fichiers' : ' fichier'));
+  var left2 = parts.join('  ·  ') || 'Dossier vide';
+  if (total) left2 += '  ·  ' + fmtSize(total);
+  var right2 = _fm.filter ? (_fm.view.length + ' résultat' + (_fm.view.length > 1 ? 's' : '')) : '';
+  f.innerHTML = '<span>' + esc(left2) + '</span>' + (right2 ? '<span class="fm-foot-r">' + esc(right2) + '</span>' : '');
+}
+
+function fmSkeleton() {
+  var row = '<div class="fm-skel"><span class="sk-ic"></span><span class="sk-l"></span><span class="sk-s"></span></div>';
+  return row.repeat(8);
+}
+
+/* ── Navigation clavier (active seulement quand le modal est ouvert) ── */
+function fmKeydown(e) {
+  if (!document.getElementById('tree-modal').classList.contains('show')) return;
+  // ne pas piloter la liste quand une modale est au premier plan
+  if (document.getElementById('delete-modal').classList.contains('show')) return;
+  if (document.getElementById('confirm-modal').classList.contains('show')) return;
+  var searchEl = document.getElementById('fm-search');
+  if (e.key === '/' && document.activeElement !== searchEl) {
+    e.preventDefault(); searchEl.focus(); return;
+  }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!_fm.view.length) return;
+    if (_fm.sel < 0) _fm.sel = e.key === 'ArrowDown' ? 0 : _fm.view.length - 1;
+    else _fm.sel = Math.max(0, Math.min(_fm.view.length - 1, _fm.sel + (e.key === 'ArrowDown' ? 1 : -1)));
+    fmUpdateSel();
+    return;
+  }
+  if (e.key === 'Enter') {
+    var idx = _fm.sel >= 0 ? _fm.sel : (_fm.view.length ? 0 : -1);
+    if (idx >= 0) {
+      var it = _fm.view[idx];
+      if (it.is_dir) loadTree(it.path);
+      else openFile(it.path, false, e);   // Ctrl+Entrée → dossier contenant
+    }
+    return;
+  }
+  if (e.key === 'Backspace' && (document.activeElement !== searchEl || searchEl.value === '')) {
+    e.preventDefault(); treeUp();
+  }
+}
+function fmUpdateSel() {
+  document.querySelectorAll('#fm-list .fm-row').forEach(function (r) {
+    var on = +r.dataset.i === _fm.sel;
+    r.classList.toggle('sel', on);
+    if (on) r.scrollIntoView({ block: 'nearest' });
+  });
+}
+window.addEventListener('keydown', fmKeydown);
 
 function openFile(path, isDeleted, ev) {
   // Ctrl/⌘ maintenu : ouvrir le dossier parent plutôt que le fichier lui-même.
@@ -1062,34 +1353,179 @@ function openFile(path, isDeleted, ev) {
   });
 }
 
-/* Exclusion en deux clics : le premier arme le bouton, le second confirme */
-async function ignorePath(btn, path, isDir) {
+/* ═══════════════════════════════════════════════════
+   CONFIRMATION GÉNÉRIQUE (petite modale réutilisable)
+   ═══════════════════════════════════════════════════ */
+let _confirmCb = null;
+function askConfirm(title, msgHtml, okLabel, cb, opts) {
+  opts = opts || {};
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').innerHTML = msgHtml;
+  var ok = document.getElementById('confirm-ok');
+  ok.textContent = okLabel || 'Confirmer';
+  ok.className = 'btn ' + (opts.danger ? 'btn-danger' : 'btn-g');
+  _confirmCb = cb;
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function closeConfirm() {
+  document.getElementById('confirm-modal').classList.remove('show');
+  _confirmCb = null;
+}
+function confirmProceed() {
+  var cb = _confirmCb;
+  closeConfirm();
+  if (cb) cb();
+}
+
+/* Exclusion : confirmation explicite puis ajout de la règle au fichier de filtres. */
+function ignorePath(path, isDir) {
   var rule = isDir ? '- ' + path + '/**' : '- ' + path;
-  if (!btn.dataset.armed) {
-    btn.dataset.armed = '1';
-    btn.textContent = 'Confirmer ?';
-    btn.classList.add('armed');
-    setTimeout(function () {
-      btn.dataset.armed = '';
-      btn.textContent = 'Exclure';
-      btn.classList.remove('armed');
-    }, 3000);
-    return;
-  }
-  btn.dataset.armed = '';
-  btn.textContent = 'Exclure';
-  btn.classList.remove('armed');
+  askConfirm(
+    'Exclure de la synchronisation',
+    'Exclure <b>' + esc(path) + '</b> de la synchronisation ?<br><br>'
+      + 'La règle <span class="mono">' + esc(rule) + '</span> sera ajoutée au fichier de filtres. '
+      + 'C\'est réversible (bouton « ré-inclure »).',
+    'Exclure',
+    function () { doExclude(rule); }
+  );
+}
+async function doExclude(rule) {
   try {
     var r = await fetch('/api/filters_add?rule=' + encodeURIComponent(rule));
     var d = await r.json();
     if (d.ok) {
       toast('Exclu de la synchronisation : ' + rule, 'ok');
+      // recharge le dossier pour refléter le statut « exclu » (badge + actions)
+      if (document.getElementById('tree-modal').classList.contains('show')) loadTree(_fm.dir);
     } else {
-      toast('Impossible d\'ajouter la règle : ' + d.error, 'err');
+      toast('Impossible d\'ajouter la règle : ' + (d.error || ''), 'err');
     }
   } catch (e) {
     toast('Serveur injoignable', 'err');
   }
+}
+
+/* Ré-inclure : retire la règle d'exclusion exacte ajoutée par le dashboard */
+async function reincludePath(path, isDir) {
+  var rule = isDir ? '- ' + path + '/**' : '- ' + path;
+  try {
+    var r = await fetch('/api/filters_remove?rule=' + encodeURIComponent(rule));
+    var d = await r.json();
+    if (d.ok && d.removed) {
+      toast('Ré-inclus dans la synchronisation', 'ok');
+      loadTree(_fm.dir);
+    } else if (d.ok) {
+      toast('Ignoré par un motif global (voir « Exclusions ») — aucune règle exacte à retirer', 'warn');
+    } else {
+      toast('Erreur : ' + (d.error || ''), 'err');
+    }
+  } catch (e) {
+    toast('Serveur injoignable', 'err');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   SUPPRESSION LOCALE  (aperçu + diff Drive + confirmation)
+   ═══════════════════════════════════════════════════ */
+const ICO_CHECK = _svg('<path d="M20 6L9 17l-5-5"/>', 16);
+const ICO_WARN = _svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 16);
+const ICO_CLOUD = _svg('<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="9 15 11 17 15 12"/>', 15);
+let _del = { path: '' };
+
+function openDeleteModal(path) {
+  _del = { path: path };
+  document.getElementById('delete-modal').classList.add('show');
+  document.getElementById('del-path').textContent = '/' + path;
+  document.getElementById('del-summary').innerHTML = '<div class="del-loading">Analyse du contenu…</div>';
+  document.getElementById('del-drive').innerHTML = '';
+  document.getElementById('del-files').innerHTML = '';
+  document.getElementById('del-confirm').disabled = true;
+  fetch('/api/delete_preview?path=' + encodeURIComponent(path)).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.ok) {
+      document.getElementById('del-summary').innerHTML = '<div class="del-banner danger">' + ICO_WARN + '<div>Erreur : ' + esc(d.error || '') + '</div></div>';
+      return;
+    }
+    _del.ignored = d.ignored;
+    var banner = d.ignored
+      ? '<div class="del-banner ok">' + ICO_CHECK + '<div><b>Exclu de la synchronisation.</b> La suppression locale ne sera pas propagée au Drive : tu libères seulement de l\'espace sur ce PC.</div></div>'
+      : '<div class="del-banner danger">' + ICO_WARN + '<div><b>Cet élément n\'est pas exclu de la synchronisation.</b> Le supprimer localement l\'effacera aussi du Drive au prochain bisync. Exclus-le d\'abord pour conserver la copie cloud.</div></div>';
+    var noun = d.count > 1 ? 'fichiers' : 'fichier';
+    banner += '<div class="del-count"><span class="del-big">' + d.count + '</span> ' + noun
+      + ' · <b>' + esc(fmtSize(d.size) || '0 o') + '</b> à supprimer localement' + (d.truncated ? ' (aperçu partiel)' : '') + '</div>';
+    document.getElementById('del-summary').innerHTML = banner;
+
+    var fl = '';
+    d.files.forEach(function (f) {
+      fl += '<div class="del-file"><span class="df-name">' + esc(f.path) + '</span><span class="df-size">' + (fmtSize(f.size) || '') + '</span></div>';
+    });
+    if (d.truncated) fl += '<div class="del-more">… et d\'autres fichiers non listés</div>';
+    document.getElementById('del-files').innerHTML = fl;
+
+    document.getElementById('del-drive').innerHTML =
+      '<button class="btn btn-g del-drive-btn" onclick="runDriveCheck()">' + ICO_CLOUD + ' Comparer avec le Drive (rclone check)</button>';
+    document.getElementById('del-confirm').disabled = false;
+  }).catch(function () {
+    document.getElementById('del-summary').innerHTML = '<div class="del-banner danger">Serveur injoignable</div>';
+  });
+}
+
+function runDriveCheck() {
+  var el = document.getElementById('del-drive');
+  el.innerHTML = '<div class="del-drive-load"><span class="fm-spin"></span> Comparaison avec le Drive en cours…</div>';
+  fetch('/api/drive_check?path=' + encodeURIComponent(_del.path)).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.ok) {
+      el.innerHTML = '<div class="del-banner warn">' + ICO_WARN + '<div>Comparaison impossible : ' + esc(d.error || '') + '</div></div>';
+      return;
+    }
+    if (!d.exists) {
+      el.innerHTML = '<div class="del-banner danger">' + ICO_WARN + '<div><b>Absent du Drive.</b> Aucune copie cloud détectée : supprimer localement perdrait définitivement ces données.</div></div>';
+      return;
+    }
+    var c = d.counts;
+    if (d.fully_backed) {
+      el.innerHTML = '<div class="del-banner ok">' + ICO_CHECK + '<div><b>Intégralement présent sur le Drive.</b> ' + c.identical + ' fichier(s) identiques'
+        + (c.drive_only ? ' · ' + c.drive_only + ' en plus côté Drive' : '') + '. Suppression locale sans perte.</div></div>';
+      return;
+    }
+    var lines = '';
+    if (c.local_only) lines += '<div class="dc-line danger">' + c.local_only + ' fichier(s) uniquement en local — seraient perdus</div>';
+    if (c.differ) lines += '<div class="dc-line warn">' + c.differ + ' fichier(s) différents de la version Drive</div>';
+    if (c.error) lines += '<div class="dc-line warn">' + c.error + ' erreur(s) de lecture</div>';
+    if (c.identical) lines += '<div class="dc-line ok">' + c.identical + ' fichier(s) identiques</div>';
+    var det = '';
+    (d.result.local_only || []).slice(0, 50).forEach(function (n) { det += '<div class="dc-item danger">+ ' + esc(n) + '</div>'; });
+    (d.result.differ || []).slice(0, 50).forEach(function (n) { det += '<div class="dc-item warn">≠ ' + esc(n) + '</div>'; });
+    el.innerHTML = '<div class="del-banner warn">' + ICO_WARN + '<div><b>Différences détectées.</b> Certains fichiers locaux ne sont pas (ou pas à jour) sur le Drive.</div></div>'
+      + '<div class="dc-summary">' + lines + '</div>' + (det ? '<div class="dc-detail">' + det + '</div>' : '');
+  }).catch(function () {
+    el.innerHTML = '<div class="del-banner warn">Serveur injoignable</div>';
+  });
+}
+
+function confirmDelete() {
+  var cb = document.getElementById('del-confirm');
+  cb.disabled = true;
+  cb.textContent = 'Suppression…';
+  fetch('/api/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: _del.path }) })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      cb.textContent = 'Supprimer localement';
+      if (d.ok) {
+        toast('Supprimé localement — ' + (fmtSize(d.freed) || '0 o') + ' libérés', 'ok');
+        closeDeleteModal();
+        if (document.getElementById('tree-modal').classList.contains('show')) loadTree(_fm.dir);
+      } else {
+        cb.disabled = false;
+        toast('Échec de la suppression : ' + (d.error || ''), 'err');
+      }
+    }).catch(function () {
+      cb.disabled = false;
+      cb.textContent = 'Supprimer localement';
+      toast('Serveur injoignable', 'err');
+    });
+}
+
+function closeDeleteModal() {
+  document.getElementById('delete-modal').classList.remove('show');
 }
 
 /* ═══════════════════════════════════════════════════

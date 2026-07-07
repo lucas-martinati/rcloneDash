@@ -39,6 +39,83 @@ def local_size(fpath):
     except OSError:
         return None
 
+
+FILTERS_PATH = os.path.expanduser("~/.config/rclone/gdrive-filters.txt")
+
+
+def load_exclude_rules():
+    """Renvoie la liste des motifs d'exclusion (lignes « - motif ») du fichier de filtres."""
+    rules = []
+    try:
+        with open(FILTERS_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("- "):
+                    rules.append(line[2:].strip())
+    except OSError:
+        pass
+    return rules
+
+
+def _glob_to_regex(pat):
+    """Convertit un motif glob rclone (*, **, ?) en fragment d'expression régulière."""
+    out = []
+    i = 0
+    while i < len(pat):
+        c = pat[i]
+        if c == "*":
+            if pat[i:i + 2] == "**":
+                out.append(".*")
+                i += 2
+                continue
+            out.append("[^/]*")
+        elif c == "?":
+            out.append("[^/]")
+        else:
+            out.append(re.escape(c))
+        i += 1
+    return "".join(out)
+
+
+def path_is_ignored(rel, rules):
+    """Approxime le matching des filtres rclone pour un chemin relatif donné.
+
+    Couvre les cas produits par le dashboard (« - chemin », « - chemin/** ») et
+    les motifs courants du fichier (« *.doc », « **/.DS_Store », « dossier/** »).
+    """
+    rel = rel.replace(os.sep, "/").strip("/")
+    if not rel:
+        return False
+    segments = rel.split("/")
+    for pat in rules:
+        anchored = pat.startswith("/")
+        p = pat[1:] if anchored else pat
+        # Exclusion d'un dossier et de son contenu : « base/** »
+        if p.endswith("/**"):
+            base = p[:-3]
+            base_rx = _glob_to_regex(base)
+            # rel est le dossier lui-même ou est situé dessous
+            if re.fullmatch(base_rx, rel):
+                return True
+            for k in range(1, len(segments)):
+                if re.fullmatch(base_rx, "/".join(segments[:k])):
+                    return True
+            continue
+        rx = _glob_to_regex(p)
+        if anchored or "/" in p:
+            # motif ancré : compare au chemin complet (ou à un préfixe = dossier parent exclu)
+            if re.fullmatch(rx, rel):
+                return True
+            for k in range(1, len(segments)):
+                if re.fullmatch(rx, "/".join(segments[:k])):
+                    return True
+        else:
+            # motif sans « / » : rclone le teste sur chaque segment (n'importe quel niveau)
+            for s in segments:
+                if re.fullmatch(rx, s):
+                    return True
+    return False
+
 # Phases d'une sync bisync, dans l'ordre
 PHASES = [
     "Building listings",
@@ -743,19 +820,84 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not os.path.exists(target_path):
                     self._json({"items": [], "current_dir": target})
                     return
+                rules = load_exclude_rules()
                 items = []
                 for item in os.listdir(target_path):
                     full_item = os.path.join(target_path, item)
                     is_dir = os.path.isdir(full_item)
-                    size = os.path.getsize(full_item) if not is_dir else 0
-                    items.append({
+                    rel = os.path.relpath(full_item, base)
+                    entry = {
                         "name": item,
                         "is_dir": is_dir,
-                        "size": size,
-                        "path": os.path.relpath(full_item, base)
-                    })
+                        "size": 0,
+                        "mtime": 0,
+                        "count": None,          # nb d'éléments pour un dossier
+                        "path": rel,
+                        "ignored": path_is_ignored(rel, rules),
+                    }
+                    try:
+                        st = os.stat(full_item)
+                        entry["mtime"] = int(st.st_mtime * 1000)
+                        if not is_dir:
+                            entry["size"] = st.st_size
+                        else:
+                            try:
+                                entry["count"] = len(os.listdir(full_item))
+                            except OSError:
+                                entry["count"] = None
+                    except OSError:
+                        # lien cassé / permission refusée : on garde l'entrée sans métadonnées
+                        pass
+                    items.append(entry)
                 items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
                 self._json({"items": items, "current_dir": target})
+            except Exception as e:
+                self._json({"error": str(e)})
+        elif p == "/api/search":
+            # Recherche récursive bornée dans le sous-arbre du dossier courant.
+            qs = parse_qs(urlparse(self.path).query)
+            target = qs.get("dir", [""])[0]
+            query = qs.get("q", [""])[0].strip().lower()
+            base = os.path.abspath(GD_DIR)
+            root = os.path.abspath(os.path.join(base, target))
+            if not root.startswith(base):
+                self._json({"error": "Invalid path"})
+                return
+            if len(query) < 2:
+                self._json({"items": [], "query": query})
+                return
+            MAX_RESULTS, MAX_SCAN = 400, 60000
+            rules = load_exclude_rules()
+            results, scanned, truncated = [], 0, False
+            try:
+                for dirpath, dirnames, filenames in os.walk(root):
+                    for name, is_dir in ([(d, True) for d in dirnames]
+                                         + [(f, False) for f in filenames]):
+                        scanned += 1
+                        if query in name.lower():
+                            full = os.path.join(dirpath, name)
+                            rel = os.path.relpath(full, base)
+                            entry = {
+                                "name": os.path.relpath(full, root).replace(os.sep, "/"),
+                                "is_dir": is_dir, "size": 0, "mtime": 0, "count": None,
+                                "path": rel, "ignored": path_is_ignored(rel, rules),
+                            }
+                            try:
+                                st = os.stat(full)
+                                entry["mtime"] = int(st.st_mtime * 1000)
+                                if not is_dir:
+                                    entry["size"] = st.st_size
+                            except OSError:
+                                pass
+                            results.append(entry)
+                            if len(results) >= MAX_RESULTS:
+                                truncated = True
+                                break
+                    if truncated or scanned > MAX_SCAN:
+                        truncated = truncated or scanned > MAX_SCAN
+                        break
+                results.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+                self._json({"items": results, "query": query, "truncated": truncated})
             except Exception as e:
                 self._json({"error": str(e)})
         elif p == "/api/filters":
@@ -769,8 +911,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             rule = qs.get("rule", [""])[0]
             if rule:
                 try:
-                    with open(os.path.expanduser("~/.config/rclone/gdrive-filters.txt"), "a") as f:
-                        f.write(f"\n{rule}\n")
+                    # N'ajoute un saut de ligne que si le fichier n'en finit pas
+                    # déjà par un, pour éviter toute ligne vide parasite.
+                    prefix = ""
+                    try:
+                        with open(FILTERS_PATH, "r") as f:
+                            existing = f.read()
+                        if existing and not existing.endswith("\n"):
+                            prefix = "\n"
+                    except OSError:
+                        existing = ""
+                    with open(FILTERS_PATH, "a") as f:
+                        f.write(f"{prefix}{rule}\n")
                     self._json({"ok": True})
                 except Exception as e:
                     self._json({"error": str(e)})
@@ -792,6 +944,110 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": True})
             else:
                 self._json({"ok": False})
+        elif p == "/api/delete_preview":
+            # Prévisualise ce qu'une suppression locale effacerait : liste + taille + statut exclu.
+            qs = parse_qs(urlparse(self.path).query)
+            tp = self._safe_local(qs.get("path", [""])[0])
+            if not tp:
+                self._json({"ok": False, "error": "Chemin invalide"})
+                return
+            base = os.path.abspath(GD_DIR)
+            rel = os.path.relpath(tp, base)
+            files, total, count, truncated = [], 0, 0, False
+            if os.path.isdir(tp) and not os.path.islink(tp):
+                for root, _dirs, fnames in os.walk(tp):
+                    for fn in fnames:
+                        fpath = os.path.join(root, fn)
+                        try:
+                            sz = os.path.getsize(fpath)
+                        except OSError:
+                            sz = 0
+                        total += sz
+                        count += 1
+                        if len(files) < 300:
+                            files.append({"path": os.path.relpath(fpath, tp), "size": sz})
+                        else:
+                            truncated = True
+                is_dir = True
+            else:
+                try:
+                    total = os.path.getsize(tp)
+                except OSError:
+                    total = 0
+                count = 1
+                files.append({"path": os.path.basename(tp), "size": total})
+                is_dir = False
+            files.sort(key=lambda x: -x["size"])
+            self._json({
+                "ok": True, "is_dir": is_dir, "count": count, "size": total,
+                "files": files, "truncated": truncated, "path": rel,
+                "ignored": path_is_ignored(rel, load_exclude_rules()),
+            })
+        elif p == "/api/drive_check":
+            # Diff complet local ↔ Drive via « rclone check --combined ».
+            qs = parse_qs(urlparse(self.path).query)
+            tp = self._safe_local(qs.get("path", [""])[0])
+            if not tp:
+                self._json({"ok": False, "error": "Chemin invalide"})
+                return
+            base = os.path.abspath(GD_DIR)
+            rel = os.path.relpath(tp, base).replace(os.sep, "/")
+            try:
+                if os.path.isdir(tp) and not os.path.islink(tp):
+                    cmd = ["rclone", "check", tp, "GoogleDrive:" + rel, "--combined", "-"]
+                else:
+                    parent = os.path.dirname(tp)
+                    rel_parent = os.path.dirname(rel)
+                    remote = "GoogleDrive:" + rel_parent if rel_parent else "GoogleDrive:"
+                    cmd = ["rclone", "check", parent, remote,
+                           "--combined", "-", "--include", "/" + os.path.basename(tp)]
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                res = {"identical": [], "differ": [], "local_only": [], "drive_only": [], "error": []}
+                flag_map = {"=": "identical", "*": "differ", "+": "local_only",
+                            "-": "drive_only", "!": "error"}
+                for line in proc.stdout.splitlines():
+                    if len(line) >= 3 and line[1] == " " and line[0] in flag_map:
+                        res[flag_map[line[0]]].append(line[2:])
+                # « présent sur le Drive » = au moins un fichier vu côté Drive
+                # (identique, différent, ou présent uniquement côté Drive).
+                if not any(res[k] for k in ("identical", "differ", "drive_only")):
+                    self._json({"ok": True, "exists": False})
+                    return
+                # « intégralement sauvegardé » : rien qui ne soit uniquement local, différent ou en erreur
+                fully_backed = not (res["local_only"] or res["differ"] or res["error"])
+                self._json({
+                    "ok": True, "exists": True, "fully_backed": fully_backed,
+                    "counts": {k: len(v) for k, v in res.items()},
+                    "result": {k: v[:200] for k, v in res.items()},
+                })
+            except subprocess.TimeoutExpired:
+                self._json({"ok": False, "error": "rclone check : délai dépassé (dossier trop volumineux ?)"})
+            except FileNotFoundError:
+                self._json({"ok": False, "error": "rclone introuvable"})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)})
+        elif p == "/api/filters_remove":
+            # Retire une règle exacte du fichier de filtres (ré-inclusion).
+            qs = parse_qs(urlparse(self.path).query)
+            rule = qs.get("rule", [""])[0].strip()
+            if not rule:
+                self._json({"ok": False, "error": "No rule provided"})
+            else:
+                try:
+                    with open(FILTERS_PATH, "r") as f:
+                        lines = f.readlines()
+                    kept, removed = [], 0
+                    for ln in lines:
+                        if ln.strip() == rule:
+                            removed += 1
+                        else:
+                            kept.append(ln)
+                    if removed:
+                        with open(FILTERS_PATH, "w") as f:
+                            f.writelines(kept)
+                    self._json({"ok": True, "removed": removed})
+                except Exception as e:
+                    self._json({"ok": False, "error": str(e)})
         elif p in ["/", "/index.html"]:
             self._file(
                 os.path.join(_d, "index.html"), "text/html;charset=utf-8"
@@ -821,9 +1077,48 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": True})
             except Exception as e:
                 self._json({"error": str(e)})
+        elif p == "/api/delete":
+            # Suppression locale (irréversible) — garde-fous : dans la base, jamais la base elle-même.
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                data = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+                tp = self._safe_local(data.get("path", ""))
+                if not tp:
+                    self._json({"ok": False, "error": "Chemin invalide"})
+                    return
+                freed = 0
+                if os.path.isdir(tp) and not os.path.islink(tp):
+                    for root, _dirs, fnames in os.walk(tp):
+                        for fn in fnames:
+                            try:
+                                freed += os.path.getsize(os.path.join(root, fn))
+                            except OSError:
+                                pass
+                    shutil.rmtree(tp)
+                else:
+                    try:
+                        freed = os.path.getsize(tp)
+                    except OSError:
+                        freed = 0
+                    os.remove(tp)
+                self._json({"ok": True, "freed": freed})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)})
         else:
             self.send_response(404)
             self.end_headers()
+
+    def _safe_local(self, target):
+        """Résout un chemin relatif sous la base synchronisée.
+
+        Renvoie le chemin absolu s'il est valide (dans la base, différent de la
+        base, et existant), sinon None. Bloque toute traversée hors du dossier.
+        """
+        base = os.path.abspath(GD_DIR)
+        tp = os.path.abspath(os.path.join(base, target or ""))
+        if tp == base or not tp.startswith(base + os.sep) or not os.path.exists(tp):
+            return None
+        return tp
 
     def _json(self, d):
         b = json.dumps(d).encode()
