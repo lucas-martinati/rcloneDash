@@ -10,8 +10,8 @@
 .recent-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 10px;
+  padding: 7px 14px;
   font-size: 12px;
   border-bottom: 1px solid var(--divider);
   cursor: pointer;
@@ -55,8 +55,9 @@ body.folder-mode .fm-row.file-link:hover .fm-ic { color: var(--warn); }
   padding: 2px 6px;
   border-radius: 4px;
   flex-shrink: 0;
-  min-width: 56px;
+  width: 72px;
   text-align: center;
+  letter-spacing: .01em;
 }
 
 .recent-label.new { background: var(--ok-bg); color: var(--ok); }
@@ -75,18 +76,23 @@ body.folder-mode .fm-row.file-link:hover .fm-ic { color: var(--warn); }
 }
 
 .recent-size {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--muted);
   flex-shrink: 0;
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  min-width: 62px;
+  text-align: right;
 }
 
 .recent-time {
-  color: var(--muted);
+  color: var(--faint);
   font-size: 11px;
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  text-align: right;
 }
 
 .search-input {

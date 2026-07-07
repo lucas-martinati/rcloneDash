@@ -57,7 +57,16 @@ export function fmtRemaining(s) {
 /* Extracted utils */
 export function colorizeLog(text) {
   let e = esc(text);
-  e = e.replace(/^(\d{4}[-\/]\d{2}[-\/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/gm, '<span style="opacity:0.5">$1</span>');
+  // Préfixe journalctl « <ISO> <hôte> <unité[pid]>: » → ne garder que l'heure
+  // lisible et estomper hôte + unité, pour que le message ressorte.
+  e = e.replace(
+    /^\d{4}[-\/]\d{2}[-\/]\d{2}[T ](\d{2}:\d{2}:\d{2})[^\s]*\s+(\S+)\s+(\S+?):/,
+    '<span class="log-meta">$1</span> <span class="log-meta">$2 $3:</span>'
+  );
+  // Repli : si le préfixe complet n'est pas reconnu, estomper au moins l'horodatage.
+  if (e.indexOf('log-meta') === -1) {
+    e = e.replace(/^(\d{4}[-\/]\d{2}[-\/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/, '<span class="log-meta">$1</span>');
+  }
   e = e.replace(/ ERROR /g, ' <strong style="color:var(--err)">ERROR </strong>');
   e = e.replace(/ NOTICE(:| )/g, ' <strong style="color:var(--warn)">NOTICE</strong>$1');
   e = e.replace(/ INFO(:| )/g, ' <strong style="color:var(--run)">INFO  </strong>$1');
@@ -77,7 +86,11 @@ export function renderFileRow(f, extraStyle, opts) {
   
   let timeTxt = '';
   if (f.time && !opts.hideTime) {
-    timeTxt = String(f.time).indexOf(':') !== -1 ? esc(f.time) : fmtT(f.time);
+    let t = String(f.time);
+    // Horodatage ISO complet → format court cohérent avec l'historique
+    // (« Auj. 18:19 ») ; heure déjà courte → telle quelle.
+    timeTxt = /\d{4}-\d{2}-\d{2}/.test(t) ? fmtDT(t)
+            : (t.indexOf(':') !== -1 ? esc(t) : fmtT(t));
   }
   
   let styleAttr = extraStyle ? ' style="' + extraStyle + '"' : '';

@@ -8,16 +8,28 @@
 }
 
 .kpi {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-m);
-  padding: 12px 14px;
+  padding: 13px 15px;
   min-width: 0;
-  transition: border-color .3s;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+
+.kpi:hover {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  transform: translateY(-1px);
+  box-shadow: var(--sh);
 }
 
 .kpi.danger {
   border-color: color-mix(in srgb, var(--err) 60%, transparent);
+}
+
+.kpi.danger:hover {
+  border-color: color-mix(in srgb, var(--err) 75%, transparent);
+  box-shadow: none;
 }
 
 .kl {
@@ -34,7 +46,7 @@
 
 .kv {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -.02em;
@@ -55,10 +67,10 @@
 }
 
 .dbar {
-  height: 4px;
+  height: 5px;
   background: var(--surface-off);
   border-radius: 99px;
-  margin-top: 8px;
+  margin-top: 10px;
   overflow: hidden;
 }
 

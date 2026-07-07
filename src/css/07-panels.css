@@ -211,10 +211,14 @@
 .ll {
   padding: 1px 0;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .ll.error { color: var(--err); }
 .ll.warn { color: var(--warn); }
 .ll.ok { color: var(--ok); }
 .ll.info { color: var(--muted); }
+
+/* Préfixe journalctl (heure · hôte · unité) estompé : le message reste net */
+.ll .log-meta { color: var(--faint); }
