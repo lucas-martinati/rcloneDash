@@ -1,0 +1,61 @@
+/* ═══════════════════════════════════════════════════
+   DESIGN TOKENS — graphite chaud · lagon · instrument
+   ═══════════════════════════════════════════════════ */
+:root {
+  --font-ui: 'Satoshi', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'DejaVu Sans Mono', Consolas, monospace;
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-l: 14px;
+}
+
+:root,
+[data-theme="light"] {
+  --bg: #f4f2ec;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-off: #ece9e1;
+  --border: rgba(46, 42, 32, .12);
+  --divider: rgba(46, 42, 32, .08);
+  --text: #26231c;
+  --muted: #6d6a62;
+  --faint: #a3a098;
+  --primary: #0b7078;
+  --primary-h: #095b62;
+  --primary-soft: rgba(11, 112, 120, .1);
+  --ok: #4a7d22;
+  --ok-bg: #e2ecd6;
+  --err: #a62c7e;
+  --err-bg: #f0dcea;
+  --warn: #94481b;
+  --warn-bg: #f0e0d2;
+  --run: #1265a0;
+  --run-bg: #dbe7f2;
+  --sh: 0 2px 10px rgba(46, 42, 32, .08);
+  --sh-l: 0 12px 40px rgba(46, 42, 32, .18);
+}
+
+[data-theme="dark"] {
+  --bg: #151413;
+  --surface: #1d1c1a;
+  --surface-2: #232120;
+  --surface-off: #262421;
+  --border: rgba(255, 253, 245, .09);
+  --divider: rgba(255, 253, 245, .06);
+  --text: #e9e7e2;
+  --muted: #98958f;
+  --faint: #57544e;
+  --primary: #5cb3bf;
+  --primary-h: #79c4cf;
+  --primary-soft: rgba(92, 179, 191, .12);
+  --ok: #8fbe63;
+  --ok-bg: #26331c;
+  --err: #dd7fb4;
+  --err-bg: #391a2e;
+  --warn: #cf8b52;
+  --warn-bg: #362413;
+  --run: #77a9d8;
+  --run-bg: #1a2634;
+  --sh: 0 2px 12px rgba(0, 0, 0, .35);
+  --sh-l: 0 16px 50px rgba(0, 0, 0, .55);
+}

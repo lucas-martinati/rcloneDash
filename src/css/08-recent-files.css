@@ -1,0 +1,106 @@
+/* ═══════════════════════════════════════════════════
+   FICHIERS RÉCENTS
+   ═══════════════════════════════════════════════════ */
+.recent-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--divider);
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.recent-item:last-child { border-bottom: none; }
+.recent-item:hover { background: var(--surface-off); }
+.recent-item:hover .recent-path { color: var(--primary); }
+
+/* ── Ctrl/⌘ maintenu : les liens de fichiers ouvrent le dossier parent ── */
+body.folder-mode .file-link { cursor: alias; }
+body.folder-mode .file-link:hover { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+body.folder-mode .file-link:hover .recent-path,
+body.folder-mode .file-link:hover .fm-name { color: var(--warn); }
+/* Pastille « 📁 » en fin de ligne au survol, pour rendre l'action explicite */
+body.folder-mode .recent-item.file-link:hover::after {
+  content: "📁";
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+/* Dans le navigateur, la pastille remplace visuellement l'icône « ouvrir le dossier » au survol */
+body.folder-mode .fm-row.file-link:hover .fm-ic { color: var(--warn); }
+
+.recent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.recent-dot.new { background: var(--ok); }
+.recent-dot.modified { background: var(--warn); }
+.recent-dot.deleted { background: var(--err); }
+
+.recent-label {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  min-width: 56px;
+  text-align: center;
+}
+
+.recent-label.new { background: var(--ok-bg); color: var(--ok); }
+.recent-label.modified { background: var(--warn-bg); color: var(--warn); }
+.recent-label.deleted { background: var(--err-bg); color: var(--err); }
+
+.recent-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-size: 11px;
+  transition: color .15s;
+}
+
+.recent-size {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.recent-time {
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-input {
+  padding: 4px 9px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--border);
+  background: var(--surface-off);
+  color: var(--text);
+  font-size: 11px;
+  font-family: var(--font-ui);
+  outline: none;
+  width: 130px;
+  transition: border-color .15s;
+}
+
+.search-input:focus { border-color: var(--primary); }
+.search-input::placeholder { color: var(--faint); }

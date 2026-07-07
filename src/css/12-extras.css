@@ -1,0 +1,156 @@
+/* Détails d'un run */
+.error-log-box {
+  background: var(--err-bg);
+  color: var(--err);
+  padding: 10px;
+  border-radius: var(--r-s);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  border: 1px solid color-mix(in srgb, var(--err) 30%, transparent);
+}
+
+.run-details-box {
+  background: var(--surface-off);
+  padding: 12px;
+  border-radius: var(--r-s);
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  white-space: normal;
+}
+
+.run-details-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+}
+
+.run-details-files {
+  max-height: 170px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.run-details-file {
+  border-bottom: 1px dashed var(--border);
+  padding: 4px !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   TOASTS
+   ═══════════════════════════════════════════════════ */
+.toasts {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 300;
+  max-width: min(380px, calc(100vw - 36px));
+}
+
+.toast {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--r-s);
+  box-shadow: var(--sh-l);
+  font-size: 12.5px;
+  line-height: 1.45;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .25s, transform .25s;
+}
+
+.toast.in {
+  opacity: 1;
+  transform: none;
+}
+
+.toast.ok { border-left-color: var(--ok); }
+.toast.err { border-left-color: var(--err); }
+.toast.warn { border-left-color: var(--warn); }
+
+/* ═══════════════════════════════════════════════════
+   DIVERS
+   ═══════════════════════════════════════════════════ */
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  background: var(--faint);
+  border-radius: 99px;
+}
+
+/* ═══════════════════════════════════════════════════
+   MODULES DÉPLAÇABLES (drag & drop + redimensionnement)
+   ═══════════════════════════════════════════════════ */
+.modules-container {
+  display: grid;
+  grid-template-columns: var(--col1, 1fr) var(--col2, 1fr);
+  grid-template-rows: var(--row1, 300px) minmax(var(--row2, 260px), 1fr);
+  gap: 14px;
+  align-items: stretch;
+  flex: 1;
+}
+
+.drag-panel {
+  transition: transform .2s, opacity .2s;
+  order: 0;
+  grid-column: span 1;
+}
+
+.drag-panel.full-width {
+  grid-column: 1 / -1;
+  resize: vertical;
+  overflow: hidden;
+}
+
+.drag-panel.dragging {
+  opacity: .5;
+  transform: scale(.98);
+  z-index: 100;
+}
+
+.drag-panel.over {
+  border: 2px dashed var(--primary) !important;
+}
+
+.drag-panel .ph { cursor: grab; }
+.drag-panel .ph:active { cursor: grabbing; }
+
+@media (max-width: 860px) {
+  .modules-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-rows: minmax(260px, auto);
+  }
+
+  .drag-panel.full-width {
+    grid-column: auto;
+    resize: none;
+  }
+}

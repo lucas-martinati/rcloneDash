@@ -1,0 +1,102 @@
+/* ═══════════════════════════════════════════════════
+   POULS — le rythme du cycle de synchronisation
+   ═══════════════════════════════════════════════════ */
+.pulse {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 16px;
+  height: 40px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  overflow: hidden;
+  transition: background .4s;
+}
+
+.pulse.syncing {
+  background: var(--run-bg);
+}
+
+.pulse-seg {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.pulse-cap {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.pulse.syncing .pulse-cap { color: color-mix(in srgb, var(--run) 75%, var(--text)); }
+
+.pulse-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pulse-val .st-ok { color: var(--ok); }
+.pulse-val .st-err { color: var(--err); }
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.pulse-dot.ok { background: var(--ok); }
+.pulse-dot.err { background: var(--err); }
+.pulse-dot.run {
+  background: var(--run);
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+.pulse-mid {
+  color: var(--run);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* La ligne de vie : se remplit au fil du cycle, bascule en progression pendant la sync */
+.pulse-line {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  background: var(--primary);
+  transition: width 1s linear, background .4s;
+}
+
+.pulse.syncing .pulse-line { background: var(--run); }
+
+.pulse-line.indet {
+  width: 30% !important;
+  animation: slide 1.6s ease-in-out infinite;
+}
+
+@keyframes slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(433%); }
+}
+
+@media (max-width: 720px) {
+  .pulse { gap: 12px; }
+  .pulse-cap { display: none; }
+}

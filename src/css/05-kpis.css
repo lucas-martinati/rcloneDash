@@ -1,0 +1,72 @@
+/* ═══════════════════════════════════════════════════
+   KPIs
+   ═══════════════════════════════════════════════════ */
+.krow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 10px;
+}
+
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-m);
+  padding: 12px 14px;
+  min-width: 0;
+  transition: border-color .3s;
+}
+
+.kpi.danger {
+  border-color: color-mix(in srgb, var(--err) 60%, transparent);
+}
+
+.kl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color .3s;
+}
+
+.ks {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dbar {
+  height: 4px;
+  background: var(--surface-off);
+  border-radius: 99px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.dfill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--primary);
+  transition: width .6s ease, background .3s;
+}
+
+.dfill.danger { background: var(--err); }

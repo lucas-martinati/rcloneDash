@@ -1,0 +1,186 @@
+/* ═══════════════════════════════════════════════════
+   TOPBAR
+   ═══════════════════════════════════════════════════ */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 50px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 50;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: -.01em;
+  color: var(--text);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.logo svg {
+  color: var(--primary);
+}
+
+.sp {
+  flex: 1;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: background .2s, color .2s;
+}
+
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.err { background: var(--err-bg); color: var(--err); }
+.badge.run { background: var(--run-bg); color: var(--run); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); }
+.badge.idle { background: var(--surface-off); color: var(--muted); }
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.dot.pulse-anim {
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .25; }
+}
+
+.ts-lbl {
+  font-size: 11px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.spin {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: rot .6s linear infinite;
+  visibility: hidden;
+  flex-shrink: 0;
+}
+
+.spin.on { visibility: visible; }
+
+@keyframes rot {
+  to { transform: rotate(360deg); }
+}
+
+/* Boutons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--r-s);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  border: none;
+  cursor: pointer;
+  background: var(--primary);
+  color: var(--bg);
+  white-space: nowrap;
+  transition: background .15s, opacity .15s, transform .1s;
+}
+
+.btn:hover { background: var(--primary-h); }
+.btn:active { transform: translateY(1px); }
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-g {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.btn-g:hover {
+  background: var(--surface-off);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--err);
+  border: 1px solid color-mix(in srgb, var(--err) 40%, transparent);
+}
+
+.btn-danger:hover {
+  background: var(--err-bg);
+  color: var(--err);
+}
+
+.tsbtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 6px;
+  border-radius: var(--r-s);
+  display: flex;
+  align-items: center;
+}
+
+.tsbtn:hover {
+  background: var(--surface-off);
+  color: var(--text);
+}
+
+.bar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+/* Labels des boutons cachés sur écrans étroits (icônes + title suffisent) */
+@media (max-width: 940px) {
+  .btn .btn-lbl { display: none; }
+  .btn { padding: 6px 9px; }
+}
+
+@media (max-width: 620px) {
+  .ts-lbl { display: none; }
+
+  .bar {
+    gap: 6px;
+    padding: 0 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .bar::-webkit-scrollbar { display: none; }
+}

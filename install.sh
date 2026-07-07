@@ -44,7 +44,10 @@ TARGET_DIR="$HOME/.local/share/RcloneDash"
 step 1 "Copie des fichiers de l'application"
 mkdir -p "$TARGET_DIR"
 detail "Destination : $TARGET_DIR"
-cp src/rclone-monitor.py src/app.js src/style.css src/index.html "$TARGET_DIR/"
+cat src/js/*.js > "$TARGET_DIR/app.js"
+cat src/css/*.css > "$TARGET_DIR/style.css"
+cp src/rclone-monitor.py src/index.html "$TARGET_DIR/"
+cp -r src/backend "$TARGET_DIR/"
 ok "Interface et backend copiés"
 
 # Garde légère : ne lance le bisync que si c'est utile (changement local
@@ -57,11 +60,13 @@ ok "Garde de synchronisation installée"
 #  Étape 2 — Service systemd du Dashboard (utilisateur)
 # --------------------------------------------------------------------------- #
 step 2 "Service systemd du Dashboard"
+systemctl --user stop rclonedash.service >/dev/null 2>&1 || true
+sleep 1
 mkdir -p "$HOME/.config/systemd/user"
 cp services/rclonedash.service "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
 systemctl --user enable rclonedash.service >/dev/null 2>&1
-systemctl --user restart rclonedash.service
+systemctl --user start rclonedash.service
 ok "RcloneDash démarré en arrière-plan"
 
 # --------------------------------------------------------------------------- #

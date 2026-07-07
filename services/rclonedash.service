@@ -7,6 +7,8 @@ Type=simple
 WorkingDirectory=%h/.local/share/RcloneDash
 ExecStart=/usr/bin/python3 %h/.local/share/RcloneDash/rclone-monitor.py
 Restart=on-failure
+RestartSec=2
+TimeoutStopSec=2
 
 [Install]
 WantedBy=default.target
