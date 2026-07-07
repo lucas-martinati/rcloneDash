@@ -1076,6 +1076,9 @@ body.folder-mode .fm-row.file-link:hover .fm-ic { color: var(--warn); }
   pointer-events: auto;
 }
 
+/* Modales « secondaires » : s'ouvrent par-dessus une autre modale → au premier plan */
+#impact-modal, #reinc-modal, #exclude-modal, #delete-modal { z-index: 110; }
+
 .modal {
   background: var(--surface);
   width: 600px;
@@ -1714,6 +1717,34 @@ textarea.code-input {
   gap: 9px;
   flex-shrink: 0;
 }
+
+/* ── Choix d'exclusion (radios) ── */
+.del-big2 { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.exc-rule { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.exc-rule .mono { color: var(--text); }
+.exc-choices { display: flex; flex-direction: column; gap: 7px; flex-shrink: 0; }
+.exc-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-s);
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.exc-choice:hover { background: var(--surface-off); }
+.exc-choice input { margin-top: 2px; accent-color: var(--primary); flex-shrink: 0; }
+.exc-choice > div { display: flex; flex-direction: column; gap: 2px; }
+.exc-choice b { font-size: 12.5px; color: var(--text); font-weight: 600; }
+.exc-choice span { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.exc-choice em { font-style: normal; font-weight: 600; color: var(--text); }
+.exc-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
+.exc-choice.danger:has(input:checked) {
+  border-color: color-mix(in srgb, var(--err) 50%, transparent);
+  background: var(--err-bg);
+}
+.exc-choice.danger:has(input:checked) em { color: var(--err); }
 
 /* Responsive : masquer la colonne « Modifié » sur les petites largeurs.
    La cellule masquée (display:none) sort du flux grille, d'où 4 colonnes. */

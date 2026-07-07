@@ -441,21 +441,123 @@
     </div>
   </div>
 
-  <!-- Confirmation générique -->
-  <div id="confirm-modal" class="modal-overlay" onclick="if(event.target===this) closeConfirm()">
-    <div class="modal modal-sm" role="dialog" aria-label="Confirmation">
+  <!-- Exclure de la synchronisation (impact + choix de suppression) -->
+  <div id="exclude-modal" class="modal-overlay" onclick="if(event.target===this) closeExcludeModal()">
+    <div class="modal modal-del" role="dialog" aria-label="Exclure de la synchronisation">
       <div class="modal-header">
-        <div class="modal-title" id="confirm-title">Confirmer</div>
-        <button class="modal-close" onclick="closeConfirm()" aria-label="Fermer">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+          </svg>
+          Exclure de la synchronisation
+        </div>
+        <button class="modal-close" onclick="closeExcludeModal()" aria-label="Fermer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
       </div>
       <div class="modal-body col">
-        <div class="modal-hint" id="confirm-msg"></div>
+        <div class="del-path mono" id="exc-path"></div>
+        <div id="exc-summary"></div>
+        <div class="exc-choices" id="exc-choices">
+          <label class="exc-choice">
+            <input type="radio" name="exc-action" value="none" checked onchange="excOnChoice()">
+            <div><b>Exclure seulement</b><span>Ignore l'élément à la synchronisation. Les fichiers restent en local <em>et</em> sur le Drive.</span></div>
+          </label>
+          <label class="exc-choice">
+            <input type="radio" name="exc-action" value="local" onchange="excOnChoice()">
+            <div><b>Exclure + supprimer en local</b><span>Libère l'espace sur ce PC, la copie reste sur le Drive.</span></div>
+          </label>
+          <label class="exc-choice">
+            <input type="radio" name="exc-action" value="drive" onchange="excOnChoice()">
+            <div><b>Exclure + supprimer du Drive</b><span>Retire la copie cloud, le fichier reste en local.</span></div>
+          </label>
+          <label class="exc-choice danger">
+            <input type="radio" name="exc-action" value="both" onchange="excOnChoice()">
+            <div><b>Exclure + supprimer des deux</b><span>⚠ Perte définitive : local <em>et</em> Drive.</span></div>
+          </label>
+        </div>
+        <div class="del-files" id="exc-files"></div>
         <div class="del-actions">
-          <button class="btn" onclick="closeConfirm()">Annuler</button>
-          <button class="btn btn-g" id="confirm-ok" onclick="confirmProceed()">Confirmer</button>
+          <button class="btn" onclick="closeExcludeModal()">Annuler</button>
+          <button class="btn btn-g" id="exc-confirm" onclick="confirmExclude()" disabled>Exclure</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ré-inclusion bloquée (motif global) -->
+  <div id="reinc-modal" class="modal-overlay" onclick="if(event.target===this) closeReincModal()">
+    <div class="modal modal-del" role="dialog" aria-label="Ré-inclusion impossible">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          Ré-inclusion impossible ici
+        </div>
+        <button class="modal-close" onclick="closeReincModal()" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div class="modal-body col">
+        <div id="reinc-summary"></div>
+        <div class="del-files" id="reinc-rules"></div>
+        <div class="modal-hint">Retirer l'un de ces motifs le désactiverait <b>partout</b> où il s'applique — ce
+          serait trop risqué depuis ici. Pour l'ajuster en connaissance de cause, ouvre le panneau des exclusions.</div>
+        <div class="del-actions">
+          <button class="btn" onclick="closeReincModal()">Fermer</button>
+          <button class="btn btn-g" onclick="closeReincModal(); openFiltersModal()">Ouvrir les Exclusions</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Impact d'une règle avant ajout -->
+  <div id="impact-modal" class="modal-overlay" onclick="if(event.target===this) closeImpactModal()">
+    <div class="modal modal-del" role="dialog" aria-label="Impact de l'exclusion">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+          Impact de l'exclusion
+        </div>
+        <button class="modal-close" onclick="closeImpactModal()" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div class="modal-body col">
+        <div class="del-path mono" id="impact-rule"></div>
+        <div id="impact-summary"></div>
+        <div class="exc-choices" id="impact-choices">
+          <label class="exc-choice">
+            <input type="radio" name="imp-action" value="none" checked onchange="impOnChoice()">
+            <div><b>Exclure seulement</b><span>Ajoute la règle. Les fichiers restent en local <em>et</em> sur le Drive.</span></div>
+          </label>
+          <label class="exc-choice">
+            <input type="radio" name="imp-action" value="local" onchange="impOnChoice()">
+            <div><b>Exclure + supprimer en local</b><span>Supprime toutes les copies locales concernées, garde le Drive.</span></div>
+          </label>
+          <label class="exc-choice">
+            <input type="radio" name="imp-action" value="drive" onchange="impOnChoice()">
+            <div><b>Exclure + supprimer du Drive</b><span>Retire du Drive tout ce qui est concerné, garde le local.</span></div>
+          </label>
+          <label class="exc-choice danger">
+            <input type="radio" name="imp-action" value="both" onchange="impOnChoice()">
+            <div><b>Exclure + supprimer des deux</b><span>⚠ Perte définitive de tous les éléments listés : local <em>et</em> Drive.</span></div>
+          </label>
+        </div>
+        <div class="del-files" id="impact-files"></div>
+        <div class="del-actions">
+          <button class="btn" onclick="closeImpactModal()">Annuler</button>
+          <button class="btn btn-g" id="impact-confirm" onclick="confirmAddFilter()" disabled>Ajouter cette exclusion</button>
         </div>
       </div>
     </div>

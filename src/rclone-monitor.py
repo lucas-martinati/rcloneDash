@@ -58,62 +58,69 @@ def load_exclude_rules():
 
 
 def _glob_to_regex(pat):
-    """Convertit un motif glob rclone (*, **, ?) en fragment d'expression régulière."""
+    """Convertit un motif glob rclone (*, **, ?) en fragment d'expression régulière.
+
+    « **/ » est traité comme un préfixe de chemin optionnel (rclone : `**` peut
+    matcher zéro segment), pour que « **/Thumbs.db » attrape aussi la racine.
+    """
     out = []
     i = 0
-    while i < len(pat):
-        c = pat[i]
-        if c == "*":
-            if pat[i:i + 2] == "**":
-                out.append(".*")
-                i += 2
-                continue
+    n = len(pat)
+    while i < n:
+        if pat[i:i + 3] == "**/":
+            out.append("(?:.*/)?")
+            i += 3
+        elif pat[i:i + 2] == "**":
+            out.append(".*")
+            i += 2
+        elif pat[i] == "*":
             out.append("[^/]*")
-        elif c == "?":
+            i += 1
+        elif pat[i] == "?":
             out.append("[^/]")
+            i += 1
         else:
-            out.append(re.escape(c))
-        i += 1
+            out.append(re.escape(pat[i]))
+            i += 1
     return "".join(out)
+
+
+def _match_any_level(rx, path, anchored):
+    """Teste un motif contre le chemin, ancré à la racine ou à n'importe quel « / ».
+
+    rclone : un motif sans « / » initial se compare à la fin du chemin, à
+    n'importe quel niveau ; un motif commençant par « / » est ancré à la racine.
+    """
+    segs = path.split("/")
+    starts = [0] if anchored else range(len(segs))
+    for i in starts:
+        if re.fullmatch(rx, "/".join(segs[i:])):
+            return True
+    return False
 
 
 def path_is_ignored(rel, rules):
     """Approxime le matching des filtres rclone pour un chemin relatif donné.
 
-    Couvre les cas produits par le dashboard (« - chemin », « - chemin/** ») et
-    les motifs courants du fichier (« *.doc », « **/.DS_Store », « dossier/** »).
+    Couvre les motifs du fichier : « dossier/** » (à n'importe quel niveau),
+    « *.doc », « **/.DS_Store », noms nus, et les règles ancrées « /a/b/** ».
     """
     rel = rel.replace(os.sep, "/").strip("/")
     if not rel:
         return False
-    segments = rel.split("/")
     for pat in rules:
         anchored = pat.startswith("/")
-        p = pat[1:] if anchored else pat
-        # Exclusion d'un dossier et de son contenu : « base/** »
-        if p.endswith("/**"):
-            base = p[:-3]
-            base_rx = _glob_to_regex(base)
-            # rel est le dossier lui-même ou est situé dessous
-            if re.fullmatch(base_rx, rel):
-                return True
-            for k in range(1, len(segments)):
-                if re.fullmatch(base_rx, "/".join(segments[:k])):
-                    return True
+        body = pat[1:] if anchored else pat
+        if not body:
             continue
-        rx = _glob_to_regex(p)
-        if anchored or "/" in p:
-            # motif ancré : compare au chemin complet (ou à un préfixe = dossier parent exclu)
-            if re.fullmatch(rx, rel):
+        rx_full = _glob_to_regex(body)
+        if _match_any_level(rx_full, rel, anchored):
+            return True
+        # « base/** » : le dossier « base » lui-même est aussi considéré exclu
+        if body.endswith("/**"):
+            rx_base = _glob_to_regex(body[:-3])
+            if _match_any_level(rx_base, rel, anchored):
                 return True
-            for k in range(1, len(segments)):
-                if re.fullmatch(rx, "/".join(segments[:k])):
-                    return True
-        else:
-            # motif sans « / » : rclone le teste sur chaque segment (n'importe quel niveau)
-            for s in segments:
-                if re.fullmatch(rx, s):
-                    return True
     return False
 
 # Phases d'une sync bisync, dans l'ordre
@@ -1048,6 +1055,79 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     self._json({"ok": True, "removed": removed})
                 except Exception as e:
                     self._json({"ok": False, "error": str(e)})
+        elif p == "/api/match_rules":
+            # Quels motifs d'exclusion s'appliquent à ce chemin ?
+            qs = parse_qs(urlparse(self.path).query)
+            target = qs.get("path", [""])[0]
+            base = os.path.abspath(GD_DIR)
+            tp = os.path.abspath(os.path.join(base, target))
+            if not tp.startswith(base):
+                self._json({"ok": False, "error": "Chemin invalide"})
+                return
+            rel = os.path.relpath(tp, base)
+            matched = [pat for pat in load_exclude_rules() if path_is_ignored(rel, [pat])]
+            self._json({"ok": True, "rules": matched})
+        elif p == "/api/rule_impact":
+            # Tout ce qu'une règle d'exclusion affecterait dans l'arbre synchronisé.
+            qs = parse_qs(urlparse(self.path).query)
+            raw = qs.get("rule", [""])[0].strip()
+            pat = raw[2:].strip() if raw[:2] in ("- ", "+ ") else raw
+            if not pat or raw.startswith("#") or raw.startswith("+ "):
+                self._json({"ok": True, "items": [], "count": 0, "size": 0,
+                            "truncated": False, "not_exclusion": True})
+                return
+            base = os.path.abspath(GD_DIR)
+            MAX_RESULTS, MAX_SCAN = 500, 100000
+            items, total_size, total_count, scanned, truncated = [], 0, 0, 0, False
+            try:
+                for dirpath, dirnames, filenames in os.walk(base):
+                    keep = []
+                    for dname in dirnames:
+                        scanned += 1
+                        full = os.path.join(dirpath, dname)
+                        rel = os.path.relpath(full, base).replace(os.sep, "/")
+                        if path_is_ignored(rel, [pat]):
+                            # dossier exclu : on le rapporte et on ne descend pas dedans
+                            dsize, dfiles = 0, 0
+                            for dp, _sd, fs in os.walk(full):
+                                for f in fs:
+                                    try:
+                                        dsize += os.path.getsize(os.path.join(dp, f))
+                                    except OSError:
+                                        pass
+                                    dfiles += 1
+                            total_size += dsize
+                            total_count += 1
+                            if len(items) < MAX_RESULTS:
+                                items.append({"path": rel, "is_dir": True, "size": dsize, "count": dfiles})
+                            else:
+                                truncated = True
+                        else:
+                            keep.append(dname)
+                    dirnames[:] = keep
+                    for fname in filenames:
+                        scanned += 1
+                        full = os.path.join(dirpath, fname)
+                        rel = os.path.relpath(full, base).replace(os.sep, "/")
+                        if path_is_ignored(rel, [pat]):
+                            try:
+                                fsize = os.path.getsize(full)
+                            except OSError:
+                                fsize = 0
+                            total_size += fsize
+                            total_count += 1
+                            if len(items) < MAX_RESULTS:
+                                items.append({"path": rel, "is_dir": False, "size": fsize})
+                            else:
+                                truncated = True
+                    if scanned > MAX_SCAN:
+                        truncated = True
+                        break
+                items.sort(key=lambda x: (not x["is_dir"], x["path"].lower()))
+                self._json({"ok": True, "pattern": pat, "items": items,
+                            "count": total_count, "size": total_size, "truncated": truncated})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)})
         elif p in ["/", "/index.html"]:
             self._file(
                 os.path.join(_d, "index.html"), "text/html;charset=utf-8"
@@ -1104,6 +1184,98 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": True, "freed": freed})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)})
+        elif p == "/api/drive_delete":
+            # Suppression côté Google Drive (irréversible) — purge (dossier) ou deletefile (fichier).
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                data = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+                rel = self._safe_rel(data.get("path", ""))
+                if not rel:
+                    self._json({"ok": False, "error": "Chemin invalide"})
+                    return
+                is_dir = bool(data.get("is_dir"))
+                remote = "GoogleDrive:" + rel
+                cmd = ["rclone", "purge", remote] if is_dir else ["rclone", "deletefile", remote]
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                if proc.returncode == 0:
+                    self._json({"ok": True})
+                else:
+                    self._json({"ok": False, "error": (proc.stderr or "échec rclone").strip()[-400:]})
+            except subprocess.TimeoutExpired:
+                self._json({"ok": False, "error": "rclone : délai dépassé"})
+            except FileNotFoundError:
+                self._json({"ok": False, "error": "rclone introuvable"})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)})
+        elif p == "/api/rule_delete":
+            # Supprime TOUT ce qu'une règle exclut, en local et/ou sur le Drive.
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                data = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+                raw = (data.get("rule") or "").strip()
+                mode = data.get("mode") or "none"
+                pat = raw[2:].strip() if raw[:2] in ("- ", "+ ") else raw
+                if not pat or mode not in ("local", "drive", "both"):
+                    self._json({"ok": False, "error": "Requête invalide"})
+                    return
+                base = os.path.abspath(GD_DIR)
+                MAX_TARGETS, MAX_SCAN = 2000, 300000
+                targets, scanned, truncated = [], 0, False
+                for dirpath, dirnames, filenames in os.walk(base):
+                    keep = []
+                    for dname in dirnames:
+                        scanned += 1
+                        rel = os.path.relpath(os.path.join(dirpath, dname), base).replace(os.sep, "/")
+                        if path_is_ignored(rel, [pat]):
+                            targets.append((rel, True))   # dossier exclu : on l'élague
+                        else:
+                            keep.append(dname)
+                    dirnames[:] = keep
+                    for fname in filenames:
+                        scanned += 1
+                        rel = os.path.relpath(os.path.join(dirpath, fname), base).replace(os.sep, "/")
+                        if path_is_ignored(rel, [pat]):
+                            targets.append((rel, False))
+                    if len(targets) >= MAX_TARGETS or scanned > MAX_SCAN:
+                        truncated = True
+                        break
+                freed, ndel, errors = 0, 0, []
+                for rel, is_dir in targets:
+                    full = os.path.abspath(os.path.join(base, rel))
+                    if full == base or not full.startswith(base + os.sep):
+                        continue
+                    if mode in ("local", "both") and os.path.exists(full):
+                        try:
+                            if os.path.isdir(full) and not os.path.islink(full):
+                                for dp, _sd, fs in os.walk(full):
+                                    for f in fs:
+                                        try:
+                                            freed += os.path.getsize(os.path.join(dp, f))
+                                        except OSError:
+                                            pass
+                                shutil.rmtree(full)
+                            else:
+                                try:
+                                    freed += os.path.getsize(full)
+                                except OSError:
+                                    pass
+                                os.remove(full)
+                        except Exception as e:
+                            errors.append(f"local {rel} : {e}")
+                    if mode in ("drive", "both"):
+                        cmd = (["rclone", "purge", "GoogleDrive:" + rel] if is_dir
+                               else ["rclone", "deletefile", "GoogleDrive:" + rel])
+                        try:
+                            pr = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                            if pr.returncode != 0:
+                                errors.append(f"drive {rel} : " + (pr.stderr or "").strip()[-120:])
+                        except Exception as e:
+                            errors.append(f"drive {rel} : {e}")
+                    ndel += 1
+                self._json({"ok": True, "count": ndel, "freed": freed,
+                            "truncated": truncated, "errors": errors[:20]})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)})
         else:
             self.send_response(404)
             self.end_headers()
@@ -1119,6 +1291,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if tp == base or not tp.startswith(base + os.sep) or not os.path.exists(tp):
             return None
         return tp
+
+    def _safe_rel(self, target):
+        """Valide un chemin relatif (dans la base, ≠ base, sans traversée) et le
+        renvoie normalisé — sans exiger qu'il existe localement (utile pour le Drive)."""
+        base = os.path.abspath(GD_DIR)
+        tp = os.path.abspath(os.path.join(base, target or ""))
+        if tp == base or not tp.startswith(base + os.sep):
+            return None
+        return os.path.relpath(tp, base).replace(os.sep, "/")
 
     def _json(self, d):
         b = json.dumps(d).encode()
