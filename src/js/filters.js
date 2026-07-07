@@ -176,7 +176,7 @@ export async function saveFilters() {
   } catch (e) {
     toast('Serveur injoignable — exclusions non enregistrées', 'err');
   } finally {
-    btn.disabled = false;
     btn.textContent = 'Enregistrer';
+    checkFiltersModified();
   }
 }
