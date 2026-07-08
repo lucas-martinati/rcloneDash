@@ -125,6 +125,31 @@
   margin: 0;
 }
 
+/* État vide : au lieu d'un texte perdu en haut d'un grand cadre, on centre un
+   repère visuel et l'invite à agir. Retiré dès que la simulation démarre. */
+.code-output.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.code-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 340px;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--faint);
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.code-empty svg { color: var(--primary); opacity: .8; }
+
 .code-input {
   padding: 9px 12px;
   border: 1px solid var(--border);

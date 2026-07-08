@@ -212,16 +212,35 @@
 }
 
 .ll {
-  padding: 1px 0;
+  padding: 1px 8px;
+  margin: 0 -6px;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
   white-space: pre-wrap;
   word-break: normal;
   overflow-wrap: anywhere;
+  transition: background .12s;
 }
+
+.ll:hover { background: var(--surface-off); }
 
 .ll.error { color: var(--err); }
 .ll.warn { color: var(--warn); }
 .ll.ok { color: var(--ok); }
 .ll.info { color: var(--muted); }
+
+/* Les lignes à problème gagnent un liseré et un fond teinté : repérables d'un
+   coup d'œil, indispensables quand on filtre sur « Problèmes ». */
+.ll.error,
+.ll.warn {
+  border-left-color: currentColor;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.ll.error:hover,
+.ll.warn:hover {
+  background: color-mix(in srgb, currentColor 13%, transparent);
+}
 
 /* Préfixe journalctl (heure · hôte · unité) estompé : le message reste net */
 .ll .log-meta { color: var(--faint); }

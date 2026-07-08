@@ -1,0 +1,19 @@
+/* ═══════════════════════════════════════════════════
+   POINT D'ENTRÉE CSS
+   L'ordre des @import définit l'ordre de la cascade.
+   esbuild --bundle inline et minifie le tout en un seul
+   style.css (même logique que main.js pour le JS).
+   ═══════════════════════════════════════════════════ */
+@import "tokens.css";
+@import "base.css";
+@import "topbar.css";
+@import "pulse.css";
+@import "alerts.css";
+@import "kpis.css";
+@import "live-sync.css";
+@import "panels.css";
+@import "recent-files.css";
+@import "modals.css";
+@import "file-browser.css";
+@import "delete-modal.css";
+@import "extras.css";

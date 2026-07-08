@@ -88,7 +88,7 @@
 /* Stats de transfert */
 .tf-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
   gap: 8px;
 }
 
@@ -104,7 +104,7 @@
   font-size: 9.5px;
   letter-spacing: .05em;
 }
-.tf-stat .kv { font-size: 15px; }
+.tf-stat .kv { font-size: 14px; }
 
 .tf-pbar {
   height: 4px;

@@ -93,16 +93,28 @@
   line-height: 1.5;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--faint) 70%, transparent) transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track { background: transparent; }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--faint);
+  background: color-mix(in srgb, var(--faint) 70%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
   border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
 }
 
 /* ═══════════════════════════════════════════════════

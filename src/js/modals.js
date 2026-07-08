@@ -48,6 +48,7 @@ export async function startDryRun() {
   let out = document.getElementById('dryrun-output');
   btn.disabled = true;
   btn.textContent = 'Analyse en cours…';
+  out.classList.remove('is-empty');
   out.textContent = 'Analyse des différences entre le dossier local et Google Drive…\nCela peut prendre une à deux minutes.';
 
   try {

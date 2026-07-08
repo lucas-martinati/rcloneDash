@@ -9,6 +9,8 @@
 
 .kpi {
   position: relative;
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-m);
@@ -44,6 +46,36 @@
   text-overflow: ellipsis;
 }
 
+/* Label des KPIs : icône discrète + texte, l'icône prend l'accent au survol */
+.kpi .kl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+}
+
+.kpi .kl span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kl-ic {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--faint);
+  transition: color .2s;
+}
+
+.kpi:hover .kl-ic {
+  color: var(--primary);
+}
+
+.kpi.danger .kl-ic,
+.kpi.danger:hover .kl-ic {
+  color: var(--err);
+}
+
 .kv {
   font-family: var(--font-mono);
   font-size: 19px;
@@ -73,6 +105,11 @@
   margin-top: 10px;
   overflow: hidden;
 }
+
+/* La barre se cale en bas de carte, mais jamais à moins de 10px du texte :
+   min-height sur la carte crée le mou nécessaire pour une baseline régulière. */
+.kpi { min-height: 96px; }
+.kpi .dbar { margin-top: auto; }
 
 .dfill {
   height: 100%;

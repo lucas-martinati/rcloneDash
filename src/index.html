@@ -124,7 +124,7 @@
       <!-- KPIs -->
       <div class="krow" id="kpi-row">
         <div class="kpi" id="quota-kpi">
-          <div class="kl">Stockage cloud</div>
+          <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><span>Stockage cloud</span></div>
           <div class="kv" id="quota-text">—</div>
           <div class="ks" id="quota-sub">Google Drive</div>
           <div class="dbar">
@@ -132,7 +132,7 @@
           </div>
         </div>
         <div class="kpi" id="disk-kpi">
-          <div class="kl">Disque local</div>
+          <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg><span>Disque local</span></div>
           <div class="kv" id="kdk">—</div>
           <div class="ks" id="kdks">—</div>
           <div class="dbar">
@@ -140,27 +140,27 @@
           </div>
         </div>
         <div class="kpi" id="kpi-files">
-          <div class="kl">Fichiers suivis</div>
+          <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Fichiers suivis</span></div>
           <div class="kv" id="kf">—</div>
           <div class="ks">~/GoogleDrive</div>
         </div>
         <div class="kpi" id="kpi-today">
-          <div class="kl">Syncs aujourd'hui</div>
+          <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg><span>Syncs aujourd'hui</span></div>
           <div class="kv" id="kr">—</div>
           <div class="ks" id="krs">—</div>
         </div>
         <div class="kpi" id="kpi-speed">
-          <div class="kl">Vitesse moyenne</div>
+          <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>Vitesse moyenne</span></div>
           <div class="kv" id="ksp">—</div>
           <div class="ks">dernier transfert</div>
         </div>
         <div class="kpi" id="conflict-kpi">
-          <div class="kl">Conflits aujourd'hui</div>
+          <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>Conflits aujourd'hui</span></div>
           <div class="kv" id="kc">0</div>
           <div class="ks">détectés dans les journaux</div>
         </div>
         <div class="kpi" id="kpi-rate">
-          <div class="kl">Fiabilité 7 jours</div>
+          <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><span>Fiabilité 7 jours</span></div>
           <div class="kv" id="ksr">—</div>
           <div class="dbar">
             <div class="dfill" id="srfill" style="width:0"></div>
@@ -585,7 +585,7 @@
         <div style="display:flex; gap:8px;">
           <button class="btn" id="start-dryrun-btn" onclick="startDryRun()">Lancer la simulation</button>
         </div>
-        <pre id="dryrun-output" class="code-output">Lancez la simulation pour voir les opérations prévues.</pre>
+        <pre id="dryrun-output" class="code-output is-empty"><span class="code-empty"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Aucune simulation lancée.<br>Cliquez sur « Lancer la simulation » pour prévisualiser les opérations.</span></pre>
       </div>
     </div>
   </div>
