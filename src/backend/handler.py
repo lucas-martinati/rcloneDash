@@ -19,6 +19,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # classe. do_GET/do_POST se contentent d'un lookup ; chaque endpoint vit
     # dans sa propre méthode _api_*, courte et testable isolément.
     def do_GET(self):
+        if not self._host_ok():
+            self._403()
+            return
         p = urlparse(self.path).path
         handler = self._GET_ROUTES.get(p)
         if handler:
@@ -27,12 +30,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._serve_static(p)
 
     def do_POST(self):
+        if not self._host_ok():
+            self._403()
+            return
         p = urlparse(self.path).path
         handler = self._POST_ROUTES.get(p)
         if handler:
             handler(self)
         else:
             self._404()
+
+    def _host_ok(self):
+        """Anti DNS-rebinding : n'accepte que les requêtes dont l'en-tête Host
+        pointe vers la boucle locale. Le serveur n'écoute que sur 127.0.0.1, mais
+        sans ce garde-fou une page web tierce ouverte dans le navigateur pourrait
+        viser http://<nom-qui-résout-en-127.0.0.1>:PORT/ et déclencher les
+        endpoints qui modifient l'état (sync, filtres, suppression…)."""
+        host = self.headers.get("Host", "")
+        if host.startswith("["):                       # IPv6 littéral : [::1]:port
+            hostname = host[1:host.find("]")] if "]" in host else host
+        elif ":" in host:
+            hostname = host.rsplit(":", 1)[0]
+        else:
+            hostname = host
+        return hostname in ("localhost", "127.0.0.1", "::1", "")
 
     # ── Helpers de requête ────────────────────────────────────────────────
     def _q(self, name, default=""):
@@ -660,6 +681,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def _404(self):
         self.send_response(404)
+        self.end_headers()
+
+    def _403(self):
+        self.send_response(403)
         self.end_headers()
 
     # ── Tables de routage (référencent les méthodes définies ci-dessus) ────

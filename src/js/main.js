@@ -7,6 +7,7 @@ import { initDragAndDrop } from './drag-resize.js';
 import { refresh, doSync, cancelSync } from './refresh.js';
 import { initLiveStream } from './live-stream.js';
 import { tickPulse } from './pulse.js';
+import { initFocusTrap } from './focus-trap.js';
 import { setLogFilter, logsBot } from './logs.js';
 import { filterRecent } from './recent.js';
 import { showTooltip, hideTooltip } from './sparkline.js';
@@ -107,6 +108,7 @@ window.addEventListener('blur', function () {
    ═══════════════════════════════════════════════════ */
 applyThemeIcon();
 initDragAndDrop();
+initFocusTrap();
 refresh();
 initLiveStream();
 S.interval = setInterval(refresh, 10000);
