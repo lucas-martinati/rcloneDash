@@ -1,5 +1,5 @@
 import { S } from './state.js';
-import { esc, fmtDT, fmtSize, colorizeLog } from './utils.js';
+import { esc, fmtDT, fmtSize, colorizeLog, renderPath } from './utils.js';
 import { renderSparkline } from './sparkline.js';
 
 /* ═══════════════════════════════════════════════════
@@ -69,10 +69,9 @@ export function updateRuns(runs) {
         let pathArg = esc(f.path).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         let actionCall = "openFile('" + pathArg + "', " + (cls === 'deleted' ? 'true' : 'false') + ', event)';
         let fSize = fmtSize(f.size);
-        detHtml += '<div class="run-details-file recent-item file-link" onclick="event.stopPropagation(); ' + actionCall + '">'
-          + '<span class="recent-dot ' + cls + '"></span>'
+        detHtml += '<div class="run-details-file recent-item file-link ' + cls + '" onclick="event.stopPropagation(); ' + actionCall + '">'
           + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>'
-          + '<span class="recent-path">' + esc(f.path) + '</span>'
+          + renderPath(f.path, f.is_dir)
           + (fSize ? '<span class="recent-size">' + fSize + '</span>' : '')
           + '</div>';
       }

@@ -8,90 +8,179 @@
 }
 
 .recent-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 14px;
-  font-size: 12px;
+  gap: 11px;
+  padding: 8px 14px 8px 15px;
   border-bottom: 1px solid var(--divider);
   cursor: pointer;
-  transition: background .15s;
+  transition: background .13s;
 }
 
+/* Accent latéral coloré selon l'action, révélé au survol. */
+.recent-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2.5px;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  transition: background .13s;
+}
 .recent-item:last-child { border-bottom: none; }
 .recent-item:hover { background: var(--surface-off); }
-.recent-item:hover .recent-path { color: var(--primary); }
+.recent-item:hover .rp-name { color: var(--primary); }
+.recent-item:hover::before { background: var(--faint); }
+.recent-item.new:hover::before { background: var(--ok); }
+.recent-item.modified:hover::before { background: var(--warn); }
+.recent-item.deleted:hover::before { background: var(--err); }
 
-/* ── Ctrl/⌘ maintenu : les liens de fichiers ouvrent le dossier parent ── */
+/* ═══ Ctrl/⌘ maintenu : la ligne cible le dossier parent ═══
+   Plutôt que de simplement teinter le nom, on bascule l'affichage : le dossier
+   passe au premier plan (icône + chemin, couleur d'alerte) et le nom du fichier
+   s'estompe en arrière-plan. Le survol confirme la cible qui s'ouvrira. */
 body.folder-mode .file-link { cursor: alias; }
 body.folder-mode .file-link:hover { background: color-mix(in srgb, var(--warn) 12%, transparent); }
-body.folder-mode .file-link:hover .recent-path,
-body.folder-mode .file-link:hover .fm-name { color: var(--warn); }
-/* Pastille « 📁 » en fin de ligne au survol, pour rendre l'action explicite */
-body.folder-mode .recent-item.file-link:hover::after {
-  content: "📁";
-  margin-left: auto;
-  padding-left: 8px;
-  font-size: 12px;
-  flex-shrink: 0;
+body.folder-mode .recent-item.file-link:hover::before { background: var(--warn); }
+
+/* Le dossier devient l'élément principal : affiché en premier, mis en valeur,
+   et il ne se réduit plus avant le nom.
+   Ctrl → seulement la ligne survolée ; Ctrl+Maj → toutes les lignes. */
+body.folder-mode .recent-item:hover .rp-dir,
+body.folder-mode-all .recent-item .rp-dir {
+  order: -1;
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--warn);
 }
+body.folder-mode .recent-item:hover .rp-dir.root,
+body.folder-mode-all .recent-item .rp-dir.root { display: inline-flex; }
+body.folder-mode .recent-item:hover .rp-dir::before,
+body.folder-mode-all .recent-item .rp-dir::before {
+  content: '';
+  flex-shrink: 0;
+  width: 14px;
+  height: 11px;
+  margin-right: 7px;
+  background: var(--warn);
+  -webkit-mask: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E");
+  mask: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E");
+}
+/* Le nom du fichier recule : estompé, en mono, et c'est lui qui se tronque désormais. */
+body.folder-mode .recent-item:hover .rp-name,
+body.folder-mode-all .recent-item .rp-name {
+  order: 0;
+  flex: 1 1000 auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--faint);
+}
+body.folder-mode .recent-item:hover .rp-name.is-dir::before,
+body.folder-mode-all .recent-item .rp-name.is-dir::before { display: none; }
+
 /* Dans le navigateur, la pastille remplace visuellement l'icône « ouvrir le dossier » au survol */
 body.folder-mode .fm-row.file-link:hover .fm-ic { color: var(--warn); }
+body.folder-mode .fm-row.file-link:hover .fm-name { color: var(--warn); }
 
-.recent-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.recent-dot.new { background: var(--ok); }
-.recent-dot.modified { background: var(--warn); }
-.recent-dot.deleted { background: var(--err); }
-
+/* ── Étiquette d'action : pastille compacte avec pastille de couleur intégrée ── */
 .recent-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  width: 76px;
+  padding: 2px 8px 2px 7px;
+  border-radius: 999px;
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
+  letter-spacing: .02em;
   flex-shrink: 0;
-  width: 72px;
-  text-align: center;
-  letter-spacing: .01em;
+}
+.recent-label::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .recent-label.new { background: var(--ok-bg); color: var(--ok); }
 .recent-label.modified { background: var(--warn-bg); color: var(--warn); }
 .recent-label.deleted { background: var(--err-bg); color: var(--err); }
 
+/* ── Chemin : nom en évidence + dossier estompé ── */
 .recent-path {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+.rp-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text);
+  transition: color .13s;
+}
+.rp-name.is-dir::before {
+  content: '';
+  display: inline-block;
+  width: 13px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  background: currentColor;
+  opacity: .7;
+  -webkit-mask: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E");
+  mask: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E");
+  color: var(--primary);
+}
+.rp-dir {
+  flex: 1 1000 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
-  color: var(--text);
-  font-size: 11px;
-  transition: color .15s;
+  font-size: 10.5px;
+  color: var(--faint);
 }
+/* Fichier à la racine : pas de dossier à montrer en mode normal (révélé en Ctrl). */
+.rp-dir.root { display: none; }
 
 .recent-size {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--muted);
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  min-width: 62px;
+  min-width: 60px;
   text-align: right;
 }
 
 .recent-time {
   color: var(--faint);
-  font-size: 11px;
+  font-size: 10.5px;
   flex-shrink: 0;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  min-width: 72px;
+  min-width: 66px;
   text-align: right;
 }
 

@@ -77,13 +77,38 @@ export function colorizeLog(text) {
   return e;
 }
 
+/* Sépare un chemin en dossier parent + nom de fichier.
+   Le nom (dernier segment) est ce qui compte le plus pour identifier un fichier :
+   on le rend prioritaire à l'affichage, le dossier n'est qu'un contexte. */
+export function splitPath(path) {
+  let full = String(path);
+  let slash = full.lastIndexOf('/');
+  return {
+    name: slash >= 0 ? full.slice(slash + 1) : full,
+    dir: slash >= 0 ? full.slice(0, slash) : ''
+  };
+}
+
+/* Rend le chemin d'un fichier : nom en évidence (jamais tronqué en premier),
+   dossier parent estompé qui se réduit d'abord. Le titre porte le chemin complet.
+   Le segment dossier est toujours émis (masqué en CSS quand il est vide) afin que
+   le mode « Ctrl » puisse le mettre en avant — y compris « Racine » pour un
+   fichier à la racine synchronisée. */
+export function renderPath(path, isDir) {
+  let p = splitPath(path);
+  return '<span class="recent-path" title="' + esc(String(path)) + '">'
+    + '<span class="rp-name' + (isDir ? ' is-dir' : '') + '">' + esc(p.name) + '</span>'
+    + '<span class="rp-dir' + (p.dir ? '' : ' root') + '">' + esc(p.dir || 'Racine') + '</span>'
+    + '</span>';
+}
+
 /* Génération HTML unifiée pour les lignes de fichiers récents et en cours */
 export function renderFileRow(f, extraStyle, opts) {
   opts = opts || {};
   let cls = f.action || 'new';
   let sizeTxt = opts.customSize || fmtSize(f.size);
   let labels = { 'new': 'Copié', 'modified': 'Modifié', 'deleted': 'Supprimé', 'excluded': 'Exclu' };
-  
+
   let timeTxt = '';
   if (f.time && !opts.hideTime) {
     let t = String(f.time);
@@ -92,25 +117,25 @@ export function renderFileRow(f, extraStyle, opts) {
     timeTxt = /\d{4}-\d{2}-\d{2}/.test(t) ? fmtDT(t)
             : (t.indexOf(':') !== -1 ? esc(t) : fmtT(t));
   }
-  
+
   let styleAttr = extraStyle ? ' style="' + extraStyle + '"' : '';
-  
+
   // Délégation d'événements : plus de onclick=openFile('...') à échapper à la
   // main. Le chemin voyage dans un data-attribut (esc gère les guillemets) et un
   // unique écouteur délégué (main.js) déclenche l'ouverture.
   let openAttrs = ' data-openfile="1" data-fpath="' + esc(f.path) + '" data-deleted="' + (cls === 'deleted' ? '1' : '0') + '"';
-  let html = '<div class="recent-item file-link"' + openAttrs + ' title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"' + styleAttr + '>';
-  
+  // La classe d'action colore l'accent latéral au survol.
+  let itemCls = 'recent-item file-link' + (opts.hideAction ? '' : ' ' + cls);
+  let html = '<div class="' + itemCls + '"' + openAttrs + ' title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"' + styleAttr + '>';
+
   if (!opts.hideAction) {
-    html += '<span class="recent-dot ' + cls + '"></span>'
-         + '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>';
+    html += '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>';
   }
-  
-  let namePrefix = f.is_dir ? '📁 ' : '';
-  html += '<span class="recent-path" title="' + esc(f.path) + '">' + namePrefix + esc(f.path) + '</span>';
+
+  html += renderPath(f.path, f.is_dir);
   if (sizeTxt) html += '<span class="recent-size">' + sizeTxt + '</span>';
   if (timeTxt) html += '<span class="recent-time">' + timeTxt + '</span>';
-  
+
   html += '</div>';
   return html;
 }

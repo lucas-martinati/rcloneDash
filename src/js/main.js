@@ -88,13 +88,19 @@ document.addEventListener('click', function (e) {
    Bascule une classe sur <body> pour que le survol des
    liens de fichiers indique qu'on ouvrira le dossier parent.
    ═══════════════════════════════════════════════════ */
+// Ctrl seul → seule la ligne survolée passe en mode dossier.
+// Ctrl+Maj → toutes les lignes passent en mode dossier d'un coup.
 function updateCtrlState(e) {
-  document.body.classList.toggle('folder-mode', e.ctrlKey || e.metaKey);
+  let ctrl = e.ctrlKey || e.metaKey;
+  document.body.classList.toggle('folder-mode', ctrl);
+  document.body.classList.toggle('folder-mode-all', ctrl && e.shiftKey);
 }
 window.addEventListener('keydown', updateCtrlState);
 window.addEventListener('keyup', updateCtrlState);
-// Sécurité : on retire la classe si la fenêtre perd le focus (le keyup peut être manqué)
-window.addEventListener('blur', function () { document.body.classList.remove('folder-mode'); });
+// Sécurité : on retire les classes si la fenêtre perd le focus (le keyup peut être manqué)
+window.addEventListener('blur', function () {
+  document.body.classList.remove('folder-mode', 'folder-mode-all');
+});
 
 /* ═══════════════════════════════════════════════════
    BOOT

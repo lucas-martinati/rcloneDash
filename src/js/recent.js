@@ -34,7 +34,7 @@ export function filterRecent() {
   let q = document.getElementById('recent-search').value.toLowerCase();
   let items = document.querySelectorAll('#recent-list .recent-item');
   for (let i = 0; i < items.length; i++) {
-    let path = items[i].querySelector('.recent-path').textContent.toLowerCase();
+    let path = (items[i].querySelector('.recent-path').getAttribute('title') || '').toLowerCase();
     items[i].style.display = path.indexOf(q) !== -1 ? '' : 'none';
   }
 }
