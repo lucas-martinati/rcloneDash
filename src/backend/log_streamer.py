@@ -65,13 +65,11 @@ class LogStreamer(threading.Thread):
     def _parse(self, line):
         ll = line.lower()
 
-        # Détection du démarrage d'une sync : uniquement la ligne systemd,
-        # sinon un log rclone comme "Starting transaction limiter" réinitialise
-        # la progression en plein milieu d'une sync.
+        # Détection du démarrage d'une sync
         if (
-            "systemd" in ll
-            and ("starting" in ll or "started" in ll)
-            and self.service + ".service" in ll
+            ("systemd" in ll and ("starting" in ll or "started" in ll) and self.service + ".service" in ll)
+            or ("rclone-bisync-guard" in ll and "lancement du bisync" in ll)
+            or ("synching path1" in ll and "with path2" in ll)
         ):
             self._reset()
             self.is_syncing = True

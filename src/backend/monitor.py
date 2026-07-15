@@ -397,6 +397,10 @@ class Monitor:
             show_live = svc["state"] == "running" or (
                 live is not None and live.get("is_syncing")
             )
+            
+            # Si le streamer a détecté une sync mais systemctl n'est pas encore à jour (cache de 5s), on force l'état
+            if show_live and svc["state"] != "running":
+                svc["state"] = "running"
 
             return {
                 "timer": self.timer(),

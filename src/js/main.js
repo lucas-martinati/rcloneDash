@@ -12,6 +12,8 @@ import { setLogFilter, logsBot } from './logs.js';
 import { filterRecent } from './recent.js';
 import { showTooltip, hideTooltip } from './sparkline.js';
 import { toggleRunDetails, copyErrorLogs } from './history.js';
+import './status.js';
+import './live-sync.js';
 import {
   openTreeModal,
   closeTreeModal,
