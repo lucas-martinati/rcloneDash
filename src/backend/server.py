@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request, Query, HTTPException, Body
+from fastapi import FastAPI, Request, Query, HTTPException, Body, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, Dict, Any
@@ -22,19 +22,19 @@ threading.Thread(target=m.update_quota, daemon=True).start()
 def api_status():
     return m.full()
 
-@app.get("/api/live/stream")
-async def api_live_stream(request: Request):
-    async def event_generator():
+@app.websocket("/api/ws")
+async def api_ws(websocket: WebSocket):
+    await websocket.accept()
+    try:
         while True:
-            if await request.is_disconnected():
-                break
             live = m.streamer.get_live()
-            show = (m.service()["state"] == "running" or 
+            show = (m.service()["state"] == "running" or
                     (live is not None and live.get("is_syncing")))
-            payload = json.dumps({"live": live if show else None})
-            yield f"data: {payload}\n\n"
+            payload = {"live": live if show else None}
+            await websocket.send_json(payload)
             await asyncio.sleep(1 if show else 3)
-    return StreamingResponse(event_generator(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    except WebSocketDisconnect:
+        pass
 
 @app.post("/api/trigger")
 def api_trigger():

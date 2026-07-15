@@ -15,3 +15,19 @@ export const S = {
   runsSig: '', // signatures des dernières données rendues,
   recentSig: '' // pour ne pas reconstruire le DOM inutilement
 };
+
+/* ═══════════════════════════════════════════════════
+   EVENT BUS (Pub/Sub)
+   ═══════════════════════════════════════════════════ */
+export const bus = {
+  events: {},
+  on(event, listener) {
+    if (!this.events[event]) this.events[event] = [];
+    this.events[event].push(listener);
+  },
+  emit(event, data) {
+    if (this.events[event]) {
+      this.events[event].forEach((l) => l(data));
+    }
+  }
+};

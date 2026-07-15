@@ -1,9 +1,10 @@
 import { esc, renderFileRow } from './utils.js';
+import { bus } from './state.js';
 
 /* ═══════════════════════════════════════════════════
    SYNC EN COURS
    ═══════════════════════════════════════════════════ */
-export function updateLive(live) {
+function updateLive(live) {
   let section = document.getElementById('live-section');
   if (!live || (!live.is_syncing && live.phase_index <= 0)) {
     section.classList.remove('active');
@@ -153,3 +154,5 @@ export function renderChanges(id, ch) {
     ? items.join('')
     : '<span class="change-empty">Aucun changement</span>';
 }
+
+bus.on('live:update', updateLive);

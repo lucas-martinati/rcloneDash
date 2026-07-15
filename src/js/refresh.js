@@ -1,5 +1,5 @@
 import { spin, fmtT } from './utils.js';
-import { badge, setSmartRefresh } from './status.js';
+import { bus } from './state.js';
 import { updatePulse } from './pulse.js';
 import { updateAlerts, updateKPIs } from './dashboard.js';
 import { updateRuns } from './history.js';
@@ -17,8 +17,7 @@ export async function refresh() {
     if (!r.ok) throw new Error(r.status);
     let d = await r.json();
 
-    badge(d.service.state);
-    setSmartRefresh(d.service.state);
+    bus.emit('sync:status', d.service.state);
     updatePulse(d);
     updateAlerts(d);
     updateKPIs(d);

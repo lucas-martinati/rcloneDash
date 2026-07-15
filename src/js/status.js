@@ -1,4 +1,4 @@
-import { S } from './state.js';
+import { S, bus } from './state.js';
 import { refresh } from './refresh.js';
 
 /* ═══════════════════════════════════════════════════
@@ -35,3 +35,8 @@ export function setSmartRefresh(state) {
   let ms = state === 'running' ? 3000 : state === 'failed' ? 5000 : 10000;
   S.interval = setInterval(refresh, ms);
 }
+
+bus.on('sync:status', (state) => {
+  badge(state);
+  setSmartRefresh(state);
+});
