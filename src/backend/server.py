@@ -44,13 +44,13 @@ def api_trigger():
 def api_cancel():
     return services.api_cancel(m)
 
-@app.get("/api/bwlimit")
-def api_bwlimit():
-    return services.api_bwlimit()
+@app.get("/api/settings")
+def api_settings():
+    return services.api_settings()
 
-@app.post("/api/bwlimit_save")
-def api_bwlimit_save(limit: str = ''):
-    return services.api_bwlimit_save(limit)
+@app.post("/api/settings_save")
+def api_settings_save(data: Dict[str, Any] = Body(...)):
+    return services.api_settings_save(data)
 
 @app.get("/api/dryrun")
 def api_dryrun():

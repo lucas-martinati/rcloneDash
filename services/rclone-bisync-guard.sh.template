@@ -14,9 +14,14 @@
 #                récupérer d'éventuelles modifs faites côté cloud / autre PC.
 #   4. Sinon   : on ne fait rien (bisync ignoré).
 # =============================================================================
+# =============================================================================
 set -u
 
-SYNC_DIR="__HOME__/GoogleDrive"
+CONFIG_FILE="$HOME/.config/rclone/dash-config.json"
+REMOTE=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('remote', 'GoogleDrive:'))" < "$CONFIG_FILE" 2>/dev/null || echo "GoogleDrive:")
+SYNC_DIR=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('local_dir', '~/GoogleDrive'))" < "$CONFIG_FILE" 2>/dev/null || echo "~/GoogleDrive")
+SYNC_DIR="${SYNC_DIR/#\~/$HOME}"
+
 RCLONE_CONF="__HOME__/.config/rclone"
 STAMP="$RCLONE_CONF/.last-full-sync"
 FORCE_FILE="$RCLONE_CONF/.force-sync"
@@ -32,7 +37,7 @@ FULL_INTERVAL=60
 
 run_bisync() {
     mkdir -p "$RCLONE_CONF"
-    /usr/bin/rclone bisync GoogleDrive: "$SYNC_DIR" \
+    /usr/bin/rclone bisync "$REMOTE" "$SYNC_DIR" \
         --config "$RCLONE_CONF/rclone.conf" \
         --filter-from "$RCLONE_CONF/gdrive-filters.txt" \
         --drive-skip-shortcuts \

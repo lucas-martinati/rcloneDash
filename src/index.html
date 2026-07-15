@@ -77,12 +77,12 @@
         </svg>
         <span class="btn-lbl">Exclusions</span>
       </button>
-      <button class="btn btn-g" onclick="openBwModal()" title="Limiter la bande passante utilisée par rclone">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round">
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+      <button class="btn btn-g" onclick="openSettingsModal()" title="Configuration de RcloneDash">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
-        <span class="btn-lbl">Débit</span>
+        <span class="btn-lbl">Paramètres</span>
       </button>
       <button class="tsbtn" onclick="toggleTheme()" title="Changer de thème" id="theme-btn" aria-label="Changer de thème">
         <svg id="ti" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -322,9 +322,116 @@
       </div> <!-- /modules-container -->
 
     </main>
+
+    </main>
   </div>
 
   <!-- ═══════ MODALES ═══════ -->
+  <div id="settings-modal" class="modal-overlay" onclick="if(event.target===this) closeSettingsModal()">
+    <div class="modal modal-lg" role="dialog" aria-label="Paramètres de RcloneDash" style="height:auto; max-height:85vh;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Paramètres de RcloneDash
+        </div>
+        <button class="modal-close" onclick="closeSettingsModal()" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div class="modal-body col" style="gap: 20px;">
+
+        <!-- ── Cible et source ── -->
+        <div class="set-section">
+          <div class="set-section-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+            Cible et source
+          </div>
+
+          <div class="set-field">
+            <div class="set-field-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              Remote rclone
+            </div>
+            <input type="text" id="set-remote" class="set-input" placeholder="ex: GoogleDrive:">
+            <div class="set-field-hint">Le nom du remote tel que configuré dans <code>rclone config</code> (avec les éventuels <code>:</code> terminaux).</div>
+          </div>
+
+          <div class="set-field">
+            <div class="set-field-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              Dossier local (Sync Dir)
+            </div>
+            <input type="text" id="set-local-dir" class="set-input" placeholder="ex: ~/GoogleDrive">
+            <div class="set-field-hint">Le dossier local à synchroniser avec le remote. Vous pouvez utiliser <code>~</code> pour votre dossier personnel.</div>
+          </div>
+        </div>
+
+        <hr class="set-divider">
+
+        <!-- ── Planification ── -->
+        <div class="set-section">
+          <div class="set-section-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Planification
+          </div>
+
+          <div class="set-field">
+            <div class="set-field-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Fréquence du Timer
+            </div>
+            <select id="set-timer" class="set-select">
+              <option value="1min">Toutes les minutes</option>
+              <option value="5min">Toutes les 5 minutes</option>
+              <option value="10min">Toutes les 10 minutes</option>
+              <option value="30min">Toutes les 30 minutes</option>
+              <option value="1h">Toutes les heures</option>
+              <option value="6h">Toutes les 6 heures</option>
+              <option value="12h">Toutes les 12 heures</option>
+              <option value="1d">Tous les jours</option>
+            </select>
+            <div class="set-field-hint">Intervalle de vérification des modifications locales et de lancement du bisync.</div>
+          </div>
+        </div>
+
+        <hr class="set-divider">
+
+        <!-- ── Réseau ── -->
+        <div class="set-section">
+          <div class="set-section-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Réseau
+          </div>
+
+          <div class="set-field">
+            <div class="set-field-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Limite de débit (Bande passante)
+            </div>
+            <select id="set-bwlimit" class="set-select">
+              <option value="">Aucune limite (vitesse maximale)</option>
+              <option value="10M">10 Mo/s</option>
+              <option value="5M">5 Mo/s</option>
+              <option value="1M">1 Mo/s</option>
+              <option value="500K">500 Ko/s</option>
+            </select>
+            <div class="set-field-hint">Plafonne la bande passante utilisée par rclone pour préserver votre connexion.</div>
+          </div>
+        </div>
+
+        <!-- ── Actions ── -->
+        <div class="set-actions">
+          <button class="btn btn-g" onclick="closeSettingsModal()">Annuler</button>
+          <button class="btn" id="btn-save-settings" onclick="saveSettings()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Enregistrer & Redémarrer
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <div id="tree-modal" class="modal-overlay" onclick="if(event.target===this) closeTreeModal()">
     <div class="modal modal-fm" role="dialog" aria-label="Fichiers synchronisés">
       <div class="modal-header">
@@ -590,38 +697,7 @@
     </div>
   </div>
 
-  <div id="bw-modal" class="modal-overlay" onclick="if(event.target===this) closeBwModal()">
-    <div class="modal modal-sm" role="dialog" aria-label="Limite de débit">
-      <div class="modal-header">
-        <div class="modal-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round">
-            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-          </svg>
-          Limite de débit
-        </div>
-        <button class="modal-close" onclick="closeBwModal()" aria-label="Fermer">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-      </div>
-      <div class="modal-body col">
-        <div class="modal-hint">Plafonne la bande passante utilisée par rclone pour préserver votre connexion. La
-          limite s'applique à partir de la prochaine synchronisation.</div>
-        <select id="bw-select" class="select-input">
-          <option value="">Aucune limite (vitesse maximale)</option>
-          <option value="10M">10 Mo/s</option>
-          <option value="5M">5 Mo/s</option>
-          <option value="1M">1 Mo/s</option>
-          <option value="500K">500 Ko/s</option>
-        </select>
-        <button class="btn" id="save-bw-btn" onclick="saveBw()">Appliquer la limite</button>
-      </div>
-    </div>
-  </div>
+
 
   <div id="filters-modal" class="modal-overlay" onclick="if(event.target===this) closeFiltersModal()">
     <div class="modal modal-lg" role="dialog" aria-label="Fichiers exclus">

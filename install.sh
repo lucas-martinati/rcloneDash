@@ -105,26 +105,29 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-#  Étape 4 — Service & timer de synchronisation (système, sudo requis)
+#  Étape 4 — Service & timer de synchronisation (utilisateur)
 # --------------------------------------------------------------------------- #
 step 4 "Service & timer de synchronisation"
 
-sed -e "s|__USER__|$USER|g" -e "s|__HOME__|$HOME|g" \
-    services/rclone-bisync.service.template > /tmp/rclone-bisync.service
+sed -e "s|__HOME__|$HOME|g" \
+    services/rclone-bisync.service.template > "$HOME/.config/systemd/user/rclone-bisync.service"
+cp services/rclone-bisync.timer "$HOME/.config/systemd/user/"
 
-warn "Installation dans /etc/systemd/system/ — droits administrateur requis"
-detail "Votre mot de passe (sudo) peut vous être demandé ci-dessous."
+systemctl --user daemon-reload
+systemctl --user enable --now rclone-bisync.timer >/dev/null 2>&1
+ok "Service et timer installés et activés (niveau utilisateur)"
 
-# On désactive temporairement le trap ERR pour gérer nous-mêmes l'échec de sudo.
-trap - ERR
-if sudo cp /tmp/rclone-bisync.service /etc/systemd/system/rclone-bisync.service \
-   && sudo cp services/rclone-bisync.timer /etc/systemd/system/rclone-bisync.timer; then
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now rclone-bisync.timer >/dev/null 2>&1
-    ok "Service et timer installés et activés"
-else
-    err "Impossible de copier les fichiers dans /etc/systemd/system/ (droits refusés)."
-    exit 1
+# Création du fichier de config par défaut si inexistant
+CONFIG_FILE="$HOME/.config/rclone/dash-config.json"
+if [ ! -f "$CONFIG_FILE" ]; then
+    cat <<EOF > "$CONFIG_FILE"
+{
+  "remote": "GoogleDrive:",
+  "local_dir": "~/GoogleDrive",
+  "timer_interval": "10min"
+}
+EOF
+    info "Fichier de configuration par défaut généré"
 fi
 
 # --------------------------------------------------------------------------- #

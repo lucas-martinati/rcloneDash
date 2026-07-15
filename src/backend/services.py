@@ -39,24 +39,62 @@ def api_cancel(m):
     return {"ok": ok, "error": err}
 
 
-def api_bwlimit():
+def api_settings():
     try:
-        limit = ""
+        import json
+        settings = {"remote": "GoogleDrive:", "local_dir": "~/GoogleDrive", "timer_interval": "10min", "bwlimit": ""}
+        config_path = os.path.expanduser("~/.config/rclone/dash-config.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                saved = json.load(f)
+                settings.update(saved)
+        
         if os.path.exists(config.BWLIMIT_PATH):
             with open(config.BWLIMIT_PATH, "r") as f:
                 match = re.search(r"RCLONE_BWLIMIT=(.*)", f.read())
                 if match:
-                    limit = match.group(1).strip()
-        return {"limit": limit}
+                    settings["bwlimit"] = match.group(1).strip()
+        
+        return settings
     except Exception as e:
         return {"error": str(e)}
 
 
-def api_bwlimit_save(limit: str = ""):
+def api_settings_save(data: Dict[str, Any] = None):
     try:
+        import json
+        data = data or {}
+        config_path = os.path.expanduser("~/.config/rclone/dash-config.json")
+        settings = {"remote": "GoogleDrive:", "local_dir": "~/GoogleDrive", "timer_interval": "10min"}
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                settings.update(json.load(f))
+                
+        settings["remote"] = data.get("remote", settings["remote"])
+        settings["local_dir"] = data.get("local_dir", settings["local_dir"])
+        timer_interval = data.get("timer_interval", settings["timer_interval"])
+        settings["timer_interval"] = timer_interval
+        
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        with open(config_path, "w") as f:
+            json.dump(settings, f)
+            
+        limit = data.get("bwlimit", "")
         os.makedirs(os.path.dirname(config.BWLIMIT_PATH), exist_ok=True)
         with open(config.BWLIMIT_PATH, "w") as f:
             f.write(f"RCLONE_BWLIMIT={limit}\n" if limit else "")
+            
+        timer_file = os.path.expanduser("~/.config/systemd/user/rclone-bisync.timer")
+        if os.path.exists(timer_file):
+            with open(timer_file, "r") as f:
+                timer_content = f.read()
+            timer_content = re.sub(r"OnUnitActiveSec=.*", f"OnUnitActiveSec={timer_interval}", timer_content)
+            with open(timer_file, "w") as f:
+                f.write(timer_content)
+                
+            cmd = "sleep 1 && systemctl --user daemon-reload && systemctl --user restart rclone-bisync.timer && systemctl --user restart rclonedash.service"
+            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
         return {"ok": True}
     except Exception as e:
         return {"error": str(e)}

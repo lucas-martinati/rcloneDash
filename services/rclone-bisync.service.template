@@ -5,7 +5,6 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=__USER__
 EnvironmentFile=-__HOME__/.config/rclone/bwlimit.env
 # La garde ne lance le bisync que si c'est utile (changement local récent,
 # sync complet périodique, ou déclenchement manuel). Voir rclone-bisync-guard.sh.

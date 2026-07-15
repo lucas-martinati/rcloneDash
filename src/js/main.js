@@ -47,9 +47,9 @@ import {
   confirmAddFilter
 } from './filters.js';
 import {
-  openBwModal,
-  closeBwModal,
-  saveBw,
+  openSettingsModal,
+  closeSettingsModal,
+  saveSettings,
   openDryRunModal,
   closeDryRunModal,
   startDryRun
@@ -109,10 +109,10 @@ Object.assign(window, {
   closeImpactModal,
   impOnChoice,
   confirmAddFilter,
-  // bandwidth & dry run modals
-  openBwModal,
-  closeBwModal,
-  saveBw,
+  // config & dry run modals
+  openSettingsModal,
+  closeSettingsModal,
+  saveSettings,
   openDryRunModal,
   closeDryRunModal,
   startDryRun
