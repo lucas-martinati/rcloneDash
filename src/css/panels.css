@@ -23,15 +23,19 @@
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
   color: var(--muted);
   min-height: 38px;
 }
 
-.ph > span { flex: 1; }
+.ph > span {
+  flex: 1;
+}
 
 /* Petite pointe de couleur : les icônes d'en-tête passent en accent lagon */
-.ph > svg { color: var(--primary); }
+.ph > svg {
+  color: var(--primary);
+}
 
 .ph-count {
   font-weight: 400;
@@ -66,11 +70,15 @@
   padding: 3px 9px;
   border-radius: 99px;
   cursor: pointer;
-  letter-spacing: .02em;
-  transition: background .15s, color .15s;
+  letter-spacing: 0.02em;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
-.chip:hover { color: var(--text); }
+.chip:hover {
+  color: var(--text);
+}
 
 .chip.on {
   background: var(--surface-2);
@@ -109,11 +117,13 @@
 }
 
 .chart-bar {
-  transition: opacity .15s;
+  transition: opacity 0.15s;
   cursor: pointer;
 }
 
-.chart-bar:hover { opacity: .75; }
+.chart-bar:hover {
+  opacity: 0.75;
+}
 
 .chart-tooltip {
   position: fixed;
@@ -149,12 +159,15 @@
   border-bottom: 1px solid var(--divider);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: .07em;
+  letter-spacing: 0.07em;
   white-space: nowrap;
   z-index: 1;
 }
 
-.rt th.num, .rt td.num { text-align: right; }
+.rt th.num,
+.rt td.num {
+  text-align: right;
+}
 
 .rt td {
   padding: 6px 10px;
@@ -167,22 +180,32 @@
   white-space: nowrap;
 }
 
-.rt td.dim { color: var(--faint); }
+.rt td.dim {
+  color: var(--faint);
+}
 
-.rt tr:last-child td { border-bottom: none; }
+.rt tr:last-child td {
+  border-bottom: none;
+}
 
-.rt tbody tr.clickable { cursor: pointer; }
-.rt tbody tr.clickable:hover td { background: var(--surface-off); }
+.rt tbody tr.clickable {
+  cursor: pointer;
+}
+.rt tbody tr.clickable:hover td {
+  background: var(--surface-off);
+}
 
 .rt .chev {
   display: inline-block;
   color: var(--faint);
   font-size: 9px;
   margin-right: 6px;
-  transition: transform .2s;
+  transition: transform 0.2s;
 }
 
-.rt tr.open .chev { transform: rotate(90deg); }
+.rt tr.open .chev {
+  transform: rotate(90deg);
+}
 
 .pill {
   display: inline-flex;
@@ -196,9 +219,18 @@
   white-space: nowrap;
 }
 
-.pill.ok { background: var(--ok-bg); color: var(--ok); }
-.pill.err { background: var(--err-bg); color: var(--err); }
-.pill.run { background: var(--run-bg); color: var(--run); }
+.pill.ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.pill.err {
+  background: var(--err-bg);
+  color: var(--err);
+}
+.pill.run {
+  background: var(--run-bg);
+  color: var(--run);
+}
 
 /* Logs */
 .lw {
@@ -218,15 +250,25 @@
   white-space: pre-wrap;
   word-break: normal;
   overflow-wrap: anywhere;
-  transition: background .12s;
+  transition: background 0.12s;
 }
 
-.ll:hover { background: var(--surface-off); }
+.ll:hover {
+  background: var(--surface-off);
+}
 
-.ll.error { color: var(--err); }
-.ll.warn { color: var(--warn); }
-.ll.ok { color: var(--ok); }
-.ll.info { color: var(--muted); }
+.ll.error {
+  color: var(--err);
+}
+.ll.warn {
+  color: var(--warn);
+}
+.ll.ok {
+  color: var(--ok);
+}
+.ll.info {
+  color: var(--muted);
+}
 
 /* Les lignes à problème gagnent un liseré et un fond teinté : repérables d'un
    coup d'œil, indispensables quand on filtre sur « Problèmes ». */
@@ -242,4 +284,6 @@
 }
 
 /* Préfixe journalctl (heure · hôte · unité) estompé : le message reste net */
-.ll .log-meta { color: var(--faint); }
+.ll .log-meta {
+  color: var(--faint);
+}

@@ -4,7 +4,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(12, 10, 8, .62);
+  background: rgba(12, 10, 8, 0.62);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12,7 +12,9 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity .2s, visibility .2s;
+  transition:
+    opacity 0.2s,
+    visibility 0.2s;
   padding: 20px;
 }
 
@@ -23,7 +25,12 @@
 }
 
 /* Modales « secondaires » : s'ouvrent par-dessus une autre modale → au premier plan */
-#impact-modal, #reinc-modal, #exclude-modal, #delete-modal { z-index: 110; }
+#impact-modal,
+#reinc-modal,
+#exclude-modal,
+#delete-modal {
+  z-index: 110;
+}
 
 .modal {
   background: var(--surface);
@@ -34,13 +41,15 @@
   box-shadow: var(--sh-l);
   display: flex;
   flex-direction: column;
-  transform: translateY(10px) scale(.98);
-  transition: transform .2s;
+  transform: translateY(10px) scale(0.98);
+  transition: transform 0.2s;
   border: 1px solid var(--border);
   overflow: hidden;
 }
 
-.modal-overlay.show .modal { transform: none; }
+.modal-overlay.show .modal {
+  transform: none;
+}
 
 .modal.modal-lg {
   width: 800px;
@@ -48,7 +57,9 @@
   max-height: none;
 }
 
-.modal.modal-sm { width: 420px; }
+.modal.modal-sm {
+  width: 420px;
+}
 
 .modal-header {
   padding: 13px 18px;
@@ -69,7 +80,9 @@
   gap: 9px;
 }
 
-.modal-title svg { color: var(--primary); }
+.modal-title svg {
+  color: var(--primary);
+}
 
 .modal-close {
   background: none;
@@ -106,7 +119,9 @@
   line-height: 1.5;
 }
 
-.modal-hint b { color: var(--text); }
+.modal-hint b {
+  color: var(--text);
+}
 
 .code-output {
   flex: 1;
@@ -148,7 +163,10 @@
   overflow-wrap: break-word;
 }
 
-.code-empty svg { color: var(--primary); opacity: .8; }
+.code-empty svg {
+  color: var(--primary);
+  opacity: 0.8;
+}
 
 .code-input {
   padding: 9px 12px;
@@ -159,11 +177,15 @@
   font-family: var(--font-mono);
   font-size: 12px;
   outline: none;
-  transition: border-color .15s;
+  transition: border-color 0.15s;
 }
 
-.code-input:focus { border-color: var(--primary); }
-.code-input::placeholder { color: var(--faint); }
+.code-input:focus {
+  border-color: var(--primary);
+}
+.code-input::placeholder {
+  color: var(--faint);
+}
 
 textarea.code-input {
   flex: 1;
@@ -187,4 +209,6 @@ textarea.code-input {
   cursor: pointer;
 }
 
-.select-input:focus { border-color: var(--primary); }
+.select-input:focus {
+  border-color: var(--primary);
+}

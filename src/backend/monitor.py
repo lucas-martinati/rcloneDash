@@ -11,6 +11,7 @@ from .filters import local_size
 from .parsing import parse_synced_file
 from .log_streamer import LogStreamer
 
+
 class Monitor:
     """Collecte toutes les données de monitoring rclone-bisync."""
 
@@ -51,9 +52,7 @@ class Monitor:
         now = time.time()
         if now - self._timer_time < 5 and self._timer is not None:
             return self._timer
-        o, _, _ = self.cmd(
-            ["systemctl", "status", self.tmr, "--no-pager", "-l"]
-        )
+        o, _, _ = self.cmd(["systemctl", "status", self.tmr, "--no-pager", "-l"])
         s = {"active": False, "next_run": "—", "last_run": "—"}
         for l in (o or "").split("\n"):
             if "Active:" in l:
@@ -71,9 +70,7 @@ class Monitor:
         now = time.time()
         if now - self._service_time < 5 and self._service is not None:
             return self._service
-        o, _, _ = self.cmd(
-            ["systemctl", "status", self.svc, "--no-pager", "-l"]
-        )
+        o, _, _ = self.cmd(["systemctl", "status", self.svc, "--no-pager", "-l"])
         s = {"state": "idle", "result": "—", "duration": "—"}
         for l in (o or "").split("\n"):
             if "Active:" in l:
@@ -99,14 +96,16 @@ class Monitor:
                 out = subprocess.check_output(
                     ["rclone", "about", config.REMOTE, "--json"],
                     timeout=30,
-                    stderr=subprocess.STDOUT
-                ).decode('utf-8')
+                    stderr=subprocess.STDOUT,
+                ).decode("utf-8")
                 self.quota = json.loads(out)
             except subprocess.CalledProcessError as e:
                 # On garde la dernière valeur valide plutôt que d'afficher
                 # une erreur transitoire pendant 5 minutes.
                 if not self.quota or "error" in self.quota:
-                    self.quota = {"error": str(e.output.decode('utf-8', errors='ignore')).strip()}
+                    self.quota = {
+                        "error": str(e.output.decode("utf-8", errors="ignore")).strip()
+                    }
             except Exception as e:
                 if not self.quota or "error" in self.quota:
                     self.quota = {"error": str(e)}
@@ -117,7 +116,7 @@ class Monitor:
         try:
             p = self.gd if os.path.exists(self.gd) else os.path.expanduser("~")
             t, u, f = shutil.disk_usage(p)
-            g = 1024 ** 3
+            g = 1024**3
             return {
                 "total": round(t / g, 1),
                 "used": round(u / g, 1),
@@ -153,8 +152,15 @@ class Monitor:
         if now - self._logs_time < 5 and self._logs is not None:
             return self._logs
         o, _, _ = self.cmd(
-            ["journalctl", "-u", self.svc, "--no-pager", "-n", str(n),
-             "--output=short-iso"]
+            [
+                "journalctl",
+                "-u",
+                self.svc,
+                "--no-pager",
+                "-n",
+                str(n),
+                "--output=short-iso",
+            ]
         )
         rows = []
         for l in (o or "").split("\n"):
@@ -175,7 +181,7 @@ class Monitor:
 
     def parse_runs(self):
         """Parse les logs récents pour extraire : runs enrichis, fichiers récents, KPIs.
-        
+
         Une seule requête journalctl -n 2000, résultat caché 10s.
         """
         now = time.time()
@@ -183,8 +189,15 @@ class Monitor:
             return self._parsed
 
         o, _, _ = self.cmd(
-            ["journalctl", "-u", self.svc, "--no-pager", "-n", "2000",
-             "--output=short-iso"]
+            [
+                "journalctl",
+                "-u",
+                self.svc,
+                "--no-pager",
+                "-n",
+                "2000",
+                "--output=short-iso",
+            ]
         )
         lines = (o or "").split("\n")
         runs = []
@@ -206,14 +219,23 @@ class Monitor:
             # du type "Starting transaction limiter" créent des runs fantômes
             # (l'identifiant journal "rclone-bisync-guard.sh" contient déjà
             # "rclone" et "bisync").
-            if "systemd" in ll and ("starting" in ll or "started" in ll) \
-                    and self.svc + ".service" in ll:
+            if (
+                "systemd" in ll
+                and ("starting" in ll or "started" in ll)
+                and self.svc + ".service" in ll
+            ):
                 if cur:
                     runs.append(cur)
                 cur = {
-                    "start": ts, "end": "", "status": "running",
-                    "files": 0, "errors": 0, "error_logs": [],
-                    "copied": 0, "modified": 0, "deleted": 0,
+                    "start": ts,
+                    "end": "",
+                    "status": "running",
+                    "files": 0,
+                    "errors": 0,
+                    "error_logs": [],
+                    "copied": 0,
+                    "modified": 0,
+                    "deleted": 0,
                     "elapsed": "",
                     "synced_files": [],
                 }
@@ -230,10 +252,16 @@ class Monitor:
                 parsed = parse_synced_file(l)
                 if parsed:
                     fpath, category = parsed
-                    cur[{"new": "copied", "modified": "modified", "deleted": "deleted"}[category]] += 1
+                    cur[
+                        {"new": "copied", "modified": "modified", "deleted": "deleted"}[
+                            category
+                        ]
+                    ] += 1
                     cur["files"] += 1
                     rf = {
-                        "action": category, "path": fpath, "time": ts,
+                        "action": category,
+                        "path": fpath,
+                        "time": ts,
                         "size": None if category == "deleted" else local_size(fpath),
                     }
                     recent_files.append(rf)
@@ -250,9 +278,8 @@ class Monitor:
                     avg_speed = sm.group(1)
 
                 # Erreurs
-                if (
-                    any(w in ll for w in ["error", "errno", "fatal"])
-                    and not any(w in ll for w in ["starting", "started"])
+                if any(w in ll for w in ["error", "errno", "fatal"]) and not any(
+                    w in ll for w in ["starting", "started"]
                 ):
                     cur["errors"] += 1
                     last_error = l.strip()
@@ -316,8 +343,17 @@ class Monitor:
         if now - self._rate_time < 120:
             return self._rate
         o, _, _ = self.cmd(
-            ["journalctl", "-u", self.svc, "--no-pager",
-             "--since", "7 days ago", "--output=short-iso", "-n", "10000"],
+            [
+                "journalctl",
+                "-u",
+                self.svc,
+                "--no-pager",
+                "--since",
+                "7 days ago",
+                "--output=short-iso",
+                "-n",
+                "10000",
+            ],
             timeout=15,
         )
         total = 0
@@ -358,9 +394,8 @@ class Monitor:
             live = self.streamer.get_live()
 
             # N'afficher le live que si on est en running ou si le streamer détecte une sync
-            show_live = (
-                svc["state"] == "running"
-                or (live is not None and live.get("is_syncing"))
+            show_live = svc["state"] == "running" or (
+                live is not None and live.get("is_syncing")
             )
 
             return {
@@ -382,4 +417,3 @@ class Monitor:
                 },
                 "ts": datetime.now().isoformat(),
             }
-

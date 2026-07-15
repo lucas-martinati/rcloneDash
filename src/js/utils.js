@@ -2,13 +2,21 @@
    UTILS
    ═══════════════════════════════════════════════════ */
 export function esc(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export function fmtT(ts) {
   if (!ts) return '—';
   try {
-    return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return new Date(ts).toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
   } catch {
     return ts.slice(11, 19) || ts;
   }
@@ -19,28 +27,32 @@ export function fmtDT(ts) {
   let d = new Date(ts);
   if (isNaN(d)) return ts.slice(0, 16);
   let now = new Date();
-  let yest = new Date(now); yest.setDate(now.getDate() - 1);
+  let yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
   let hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  if (d.toDateString() === now.toDateString()) return "Auj. " + hm;
+  if (d.toDateString() === now.toDateString()) return 'Auj. ' + hm;
   if (d.toDateString() === yest.toDateString()) return 'Hier ' + hm;
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
 }
 
-export function spin(v) { document.getElementById('spin').classList.toggle('on', v); }
+export function spin(v) {
+  document.getElementById('spin').classList.toggle('on', v);
+}
 
 export function fmtSize(bytes) {
   if (bytes == null || isNaN(bytes)) return '';
   if (bytes < 1024) return bytes + ' o';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
   if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
-  if (bytes < 1024 ** 4) return (bytes / (1024 ** 3)).toFixed(1) + ' Go';
-  return (bytes / (1024 ** 4)).toFixed(2) + ' To';
+  if (bytes < 1024 ** 4) return (bytes / 1024 ** 3).toFixed(1) + ' Go';
+  return (bytes / 1024 ** 4).toFixed(2) + ' To';
 }
 
 /* "2m9.5s" / "1h2m3s" / "45.6s" → secondes */
 export function parseElapsed(e) {
   if (!e) return 0;
-  let s = 0, m;
+  let s = 0,
+    m;
   if ((m = e.match(/(\d+)h/))) s += parseInt(m[1]) * 3600;
   if ((m = e.match(/(\d+)m(?!s)/))) s += parseInt(m[1]) * 60;
   if ((m = e.match(/([\d.]+)s/))) s += parseFloat(m[1]);
@@ -50,8 +62,11 @@ export function parseElapsed(e) {
 export function fmtRemaining(s) {
   if (s <= 0) return 'imminente…';
   if (s < 60) return Math.round(s) + ' s';
-  if (s < 3600) return Math.floor(s / 60) + ' min ' + String(Math.round(s % 60)).padStart(2, '0') + ' s';
-  return Math.floor(s / 3600) + ' h ' + String(Math.floor((s % 3600) / 60)).padStart(2, '0') + ' min';
+  if (s < 3600)
+    return Math.floor(s / 60) + ' min ' + String(Math.round(s % 60)).padStart(2, '0') + ' s';
+  return (
+    Math.floor(s / 3600) + ' h ' + String(Math.floor((s % 3600) / 60)).padStart(2, '0') + ' min'
+  );
 }
 
 /* Extracted utils */
@@ -60,12 +75,15 @@ export function colorizeLog(text) {
   // Préfixe journalctl « <ISO> <hôte> <unité[pid]>: » → ne garder que l'heure
   // lisible et estomper hôte + unité, pour que le message ressorte.
   e = e.replace(
-    /^\d{4}[-\/]\d{2}[-\/]\d{2}[T ](\d{2}:\d{2}:\d{2})[^\s]*\s+(\S+)\s+(\S+?):/,
+    /^\d{4}[-/]\d{2}[-/]\d{2}[T ](\d{2}:\d{2}:\d{2})[^\s]*\s+(\S+)\s+(\S+?):/,
     '<span class="log-meta">$1</span> <span class="log-meta">$2 $3:</span>'
   );
   // Repli : si le préfixe complet n'est pas reconnu, estomper au moins l'horodatage.
   if (e.indexOf('log-meta') === -1) {
-    e = e.replace(/^(\d{4}[-\/]\d{2}[-\/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/, '<span class="log-meta">$1</span>');
+    e = e.replace(
+      /^(\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/,
+      '<span class="log-meta">$1</span>'
+    );
   }
   e = e.replace(/ ERROR /g, ' <strong style="color:var(--err)">ERROR </strong>');
   e = e.replace(/ NOTICE(:| )/g, ' <strong style="color:var(--warn)">NOTICE</strong>$1');
@@ -96,10 +114,22 @@ export function splitPath(path) {
    fichier à la racine synchronisée. */
 export function renderPath(path, isDir) {
   let p = splitPath(path);
-  return '<span class="recent-path" title="' + esc(String(path)) + '">'
-    + '<span class="rp-name' + (isDir ? ' is-dir' : '') + '">' + esc(p.name) + '</span>'
-    + '<span class="rp-dir' + (p.dir ? '' : ' root') + '">' + esc(p.dir || 'Racine') + '</span>'
-    + '</span>';
+  return (
+    '<span class="recent-path" title="' +
+    esc(String(path)) +
+    '">' +
+    '<span class="rp-name' +
+    (isDir ? ' is-dir' : '') +
+    '">' +
+    esc(p.name) +
+    '</span>' +
+    '<span class="rp-dir' +
+    (p.dir ? '' : ' root') +
+    '">' +
+    esc(p.dir || 'Racine') +
+    '</span>' +
+    '</span>'
+  );
 }
 
 /* Génération HTML unifiée pour les lignes de fichiers récents et en cours */
@@ -107,15 +137,14 @@ export function renderFileRow(f, extraStyle, opts) {
   opts = opts || {};
   let cls = f.action || 'new';
   let sizeTxt = opts.customSize || fmtSize(f.size);
-  let labels = { 'new': 'Copié', 'modified': 'Modifié', 'deleted': 'Supprimé', 'excluded': 'Exclu' };
+  let labels = { new: 'Copié', modified: 'Modifié', deleted: 'Supprimé', excluded: 'Exclu' };
 
   let timeTxt = '';
   if (f.time && !opts.hideTime) {
     let t = String(f.time);
     // Horodatage ISO complet → format court cohérent avec l'historique
     // (« Auj. 18:19 ») ; heure déjà courte → telle quelle.
-    timeTxt = /\d{4}-\d{2}-\d{2}/.test(t) ? fmtDT(t)
-            : (t.indexOf(':') !== -1 ? esc(t) : fmtT(t));
+    timeTxt = /\d{4}-\d{2}-\d{2}/.test(t) ? fmtDT(t) : t.indexOf(':') !== -1 ? esc(t) : fmtT(t);
   }
 
   let styleAttr = extraStyle ? ' style="' + extraStyle + '"' : '';
@@ -123,10 +152,22 @@ export function renderFileRow(f, extraStyle, opts) {
   // Délégation d'événements : plus de onclick=openFile('...') à échapper à la
   // main. Le chemin voyage dans un data-attribut (esc gère les guillemets) et un
   // unique écouteur délégué (main.js) déclenche l'ouverture.
-  let openAttrs = ' data-openfile="1" data-fpath="' + esc(f.path) + '" data-deleted="' + (cls === 'deleted' ? '1' : '0') + '"';
+  let openAttrs =
+    ' data-openfile="1" data-fpath="' +
+    esc(f.path) +
+    '" data-deleted="' +
+    (cls === 'deleted' ? '1' : '0') +
+    '"';
   // La classe d'action colore l'accent latéral au survol.
   let itemCls = 'recent-item file-link' + (opts.hideAction ? '' : ' ' + cls);
-  let html = '<div class="' + itemCls + '"' + openAttrs + ' title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"' + styleAttr + '>';
+  let html =
+    '<div class="' +
+    itemCls +
+    '"' +
+    openAttrs +
+    ' title="Ouvrir le fichier — Ctrl+clic pour ouvrir son dossier"' +
+    styleAttr +
+    '>';
 
   if (!opts.hideAction) {
     html += '<span class="recent-label ' + cls + '">' + (labels[cls] || cls) + '</span>';

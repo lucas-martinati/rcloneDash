@@ -8,7 +8,10 @@ export function updatePulse(d) {
   let runs = d.runs || [];
   let last = null;
   for (let i = 0; i < runs.length; i++) {
-    if (runs[i].status !== 'running') { last = runs[i]; break; }
+    if (runs[i].status !== 'running') {
+      last = runs[i];
+      break;
+    }
   }
 
   // Dernière sync
@@ -23,10 +26,13 @@ export function updatePulse(d) {
     dot.className = 'pulse-dot';
   }
   if (last) {
-    let mark = last.status === 'success'
-      ? '<span class="st-ok">✓</span>' : '<span class="st-err">✗</span>';
-    lastEl.innerHTML = esc(fmtT(last.start)) + ' ' + mark
-      + (last.elapsed ? ' <span style="color:var(--muted)">· ' + esc(last.elapsed) + '</span>' : '');
+    let mark =
+      last.status === 'success' ? '<span class="st-ok">✓</span>' : '<span class="st-err">✗</span>';
+    lastEl.innerHTML =
+      esc(fmtT(last.start)) +
+      ' ' +
+      mark +
+      (last.elapsed ? ' <span style="color:var(--muted)">· ' + esc(last.elapsed) + '</span>' : '');
   } else {
     lastEl.textContent = '—';
   }
@@ -69,8 +75,10 @@ export function updatePulse(d) {
 
   if (runs.length) S.lastStartTs = new Date(runs[0].start).getTime() || null;
 
-  S.livePct = (S.isSyncing && d.live && d.live.transfer && d.live.transfer.pct != null)
-    ? d.live.transfer.pct : null;
+  S.livePct =
+    S.isSyncing && d.live && d.live.transfer && d.live.transfer.pct != null
+      ? d.live.transfer.pct
+      : null;
 
   document.getElementById('pulse').classList.toggle('syncing', S.isSyncing);
   tickPulse();

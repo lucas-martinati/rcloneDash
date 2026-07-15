@@ -5,6 +5,7 @@ et `log_streamer.py` (live) : le motif d'une ligne « fichier synchronisé » et
 correspondance action rclone → catégorie. Toute évolution du format de log
 rclone se répercute désormais en un seul endroit.
 """
+
 import re
 
 # INFO  : chemin/du/fichier: Copied (new)  /  Deleted  /  Updated file …

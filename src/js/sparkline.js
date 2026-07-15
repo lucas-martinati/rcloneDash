@@ -8,19 +8,36 @@ window._sparkTips = [];
 export function renderSparkline(runs) {
   let wrap = document.getElementById('sparkline-wrap');
   let data = runs.slice(0, 24).reverse();
-  if (data.length < 2) { wrap.innerHTML = ''; return; }
+  if (data.length < 2) {
+    wrap.innerHTML = '';
+    return;
+  }
 
-  let w = wrap.clientWidth || 300, h = 54, px = 6, py = 6;
-  let values = data.map(function (r) { return parseElapsed(r.elapsed); });
+  let w = wrap.clientWidth || 300,
+    h = 54,
+    px = 6,
+    py = 6;
+  let values = data.map(function (r) {
+    return parseElapsed(r.elapsed);
+  });
   let maxV = Math.max.apply(null, values);
   if (maxV === 0) {
-    values = data.map(function (r) { return r.files || 0; });
+    values = data.map(function (r) {
+      return r.files || 0;
+    });
     maxV = Math.max.apply(null, values) || 1;
   }
 
   window._sparkTips = [];
   let slot = (w - px * 2) / data.length;
-  let html = '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:' + h + 'px;display:block" preserveAspectRatio="none" aria-label="Durée des dernières syncs">';
+  let html =
+    '<svg viewBox="0 0 ' +
+    w +
+    ' ' +
+    h +
+    '" style="width:100%;height:' +
+    h +
+    'px;display:block" preserveAspectRatio="none" aria-label="Durée des dernières syncs">';
 
   for (let i = 0; i < data.length; i++) {
     let r = data[i];
@@ -29,15 +46,30 @@ export function renderSparkline(runs) {
     let bx = px + i * slot;
     let bh = Math.max(2, (v / maxV) * (h - py * 2));
     let by = h - py - bh;
-    let color = r.status === 'failed' ? 'var(--err)' : (r.status === 'success' ? 'var(--ok)' : 'var(--run)');
-    let st = r.status === 'failed' ? '✗ erreur' : (r.status === 'success' ? '✓ réussie' : '⟳ en cours');
-    window._sparkTips.push(fmtDT(r.start) + ' — ' + (r.elapsed || '—') + ' · '
-      + (r.files || 0) + ' fichier(s) · ' + st);
+    let color =
+      r.status === 'failed' ? 'var(--err)' : r.status === 'success' ? 'var(--ok)' : 'var(--run)';
+    let st =
+      r.status === 'failed' ? '✗ erreur' : r.status === 'success' ? '✓ réussie' : '⟳ en cours';
+    window._sparkTips.push(
+      fmtDT(r.start) + ' — ' + (r.elapsed || '—') + ' · ' + (r.files || 0) + ' fichier(s) · ' + st
+    );
 
-    html += '<rect class="chart-bar" x="' + bx + '" y="' + by + '" width="' + bw + '" height="' + bh
-      + '" fill="' + color + '" rx="1.5"'
-      + ' onmousemove="showTooltip(event, _sparkTips[' + i + '])"'
-      + ' onmouseout="hideTooltip()"/>';
+    html +=
+      '<rect class="chart-bar" x="' +
+      bx +
+      '" y="' +
+      by +
+      '" width="' +
+      bw +
+      '" height="' +
+      bh +
+      '" fill="' +
+      color +
+      '" rx="1.5"' +
+      ' onmousemove="showTooltip(event, _sparkTips[' +
+      i +
+      '])"' +
+      ' onmouseout="hideTooltip()"/>';
   }
   html += '</svg>';
   wrap.innerHTML = html;

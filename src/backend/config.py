@@ -17,5 +17,5 @@ PHASES = [
     "Updating Path1",
     "Updating Path2",
     "Queued",
-    "Done"
+    "Done",
 ]

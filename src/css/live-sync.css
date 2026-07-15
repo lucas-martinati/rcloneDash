@@ -7,14 +7,22 @@
   border: 1px solid color-mix(in srgb, var(--run) 45%, transparent);
   border-radius: var(--r-m);
   overflow: hidden;
-  animation: fadeIn .3s ease;
+  animation: fadeIn 0.3s ease;
 }
 
-.live-section.active { display: block; }
+.live-section.active {
+  display: block;
+}
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .live-header {
@@ -28,10 +36,12 @@
   font-weight: 700;
   color: var(--run);
   text-transform: uppercase;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 
-.live-header svg { animation: blink 1.4s ease-in-out infinite; }
+.live-header svg {
+  animation: blink 1.4s ease-in-out infinite;
+}
 
 .live-elapsed {
   margin-left: auto;
@@ -68,10 +78,14 @@
   padding: 3px 8px;
   border-radius: 5px;
   white-space: nowrap;
-  transition: color .2s, background .2s;
+  transition:
+    color 0.2s,
+    background 0.2s;
 }
 
-.phase-step.done { color: var(--ok); }
+.phase-step.done {
+  color: var(--ok);
+}
 
 .phase-step.current {
   color: var(--run);
@@ -102,9 +116,11 @@
 .tf-stat .kl {
   margin-bottom: 2px;
   font-size: 9.5px;
-  letter-spacing: .05em;
+  letter-spacing: 0.05em;
 }
-.tf-stat .kv { font-size: 14px; }
+.tf-stat .kv {
+  font-size: 14px;
+}
 
 .tf-pbar {
   height: 4px;
@@ -117,7 +133,7 @@
   height: 100%;
   border-radius: 99px;
   background: var(--grad-run);
-  transition: width .3s ease;
+  transition: width 0.3s ease;
 }
 
 .active-file-wrap,
@@ -137,7 +153,9 @@
   white-space: nowrap;
 }
 
-.live-synced-list { margin-top: 6px; }
+.live-synced-list {
+  margin-top: 6px;
+}
 
 .changes-grid {
   display: grid;
@@ -146,7 +164,9 @@
 }
 
 @media (max-width: 600px) {
-  .changes-grid { grid-template-columns: 1fr; }
+  .changes-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .changes-col-title {
@@ -154,7 +174,7 @@
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
   margin-bottom: 6px;
 }
 
@@ -178,12 +198,17 @@
   flex-shrink: 0;
 }
 
-.change-dot.new { background: var(--ok); }
-.change-dot.modified { background: var(--warn); }
-.change-dot.deleted { background: var(--err); }
+.change-dot.new {
+  background: var(--ok);
+}
+.change-dot.modified {
+  background: var(--warn);
+}
+.change-dot.deleted {
+  background: var(--err);
+}
 
 .change-empty {
   color: var(--faint);
   font-size: 11px;
 }
-

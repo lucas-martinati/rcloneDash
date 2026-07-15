@@ -6,12 +6,18 @@ import { colorizeLog } from './utils.js';
    ═══════════════════════════════════════════════════ */
 export function openBwModal() {
   document.getElementById('bw-modal').classList.add('show');
-  fetch('/api/bwlimit').then(function (r) { return r.json(); }).then(function (d) {
-    if (d.limit != null) document.getElementById('bw-select').value = d.limit;
-  });
+  fetch('/api/bwlimit')
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (d) {
+      if (d.limit != null) document.getElementById('bw-select').value = d.limit;
+    });
 }
 
-export function closeBwModal() { document.getElementById('bw-modal').classList.remove('show'); }
+export function closeBwModal() {
+  document.getElementById('bw-modal').classList.remove('show');
+}
 
 export async function saveBw() {
   let btn = document.getElementById('save-bw-btn');
@@ -19,15 +25,18 @@ export async function saveBw() {
   btn.disabled = true;
   btn.textContent = 'Application…';
   try {
-    let r = await fetch('/api/bwlimit_save?limit=' + encodeURIComponent(limit));
+    let r = await fetch('/api/bwlimit_save?limit=' + encodeURIComponent(limit), { method: 'POST' });
     let d = await r.json();
     if (d.ok) {
-      toast(limit
-        ? 'Limite de débit appliquée — active dès la prochaine sync'
-        : 'Limite de débit supprimée — vitesse maximale rétablie', 'ok');
+      toast(
+        limit
+          ? 'Limite de débit appliquée — active dès la prochaine sync'
+          : 'Limite de débit supprimée — vitesse maximale rétablie',
+        'ok'
+      );
       closeBwModal();
     } else {
-      toast('Impossible d\'appliquer la limite : ' + d.error, 'err');
+      toast("Impossible d'appliquer la limite : " + d.error, 'err');
     }
   } catch (e) {
     toast('Serveur injoignable — limite non appliquée', 'err');
@@ -40,8 +49,12 @@ export async function saveBw() {
 /* ═══════════════════════════════════════════════════
    SIMULATION (dry run)
    ═══════════════════════════════════════════════════ */
-export function openDryRunModal() { document.getElementById('dryrun-modal').classList.add('show'); }
-export function closeDryRunModal() { document.getElementById('dryrun-modal').classList.remove('show'); }
+export function openDryRunModal() {
+  document.getElementById('dryrun-modal').classList.add('show');
+}
+export function closeDryRunModal() {
+  document.getElementById('dryrun-modal').classList.remove('show');
+}
 
 export async function startDryRun() {
   let btn = document.getElementById('start-dryrun-btn');
@@ -49,13 +62,16 @@ export async function startDryRun() {
   btn.disabled = true;
   btn.textContent = 'Analyse en cours…';
   out.classList.remove('is-empty');
-  out.textContent = 'Analyse des différences entre le dossier local et Google Drive…\nCela peut prendre une à deux minutes.';
+  out.textContent =
+    'Analyse des différences entre le dossier local et Google Drive…\nCela peut prendre une à deux minutes.';
 
   try {
     let r = await fetch('/api/dryrun');
     let d = await r.json();
     if (d.ok) {
-      out.innerHTML = colorizeLog(d.log || 'Aucun changement à appliquer : tout est déjà synchronisé.');
+      out.innerHTML = colorizeLog(
+        d.log || 'Aucun changement à appliquer : tout est déjà synchronisé.'
+      );
     } else {
       out.innerHTML = colorizeLog('La simulation a échoué :\n' + d.error);
     }

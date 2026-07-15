@@ -8,10 +8,10 @@ export const S = {
   curState: '',
   logFilter: 'all',
   lastLogs: '',
-  nextSyncTs: 0,       // timestamp (ms) de la prochaine sync planifiée
-  lastStartTs: 0,      // timestamp (ms) du dernier déclenchement
+  nextSyncTs: 0, // timestamp (ms) de la prochaine sync planifiée
+  lastStartTs: 0, // timestamp (ms) du dernier déclenchement
   isSyncing: false,
-  livePct: -1,          // % de transfert connu pendant une sync
-  runsSig: '',          // signatures des dernières données rendues,
-  recentSig: ''         // pour ne pas reconstruire le DOM inutilement
+  livePct: -1, // % de transfert connu pendant une sync
+  runsSig: '', // signatures des dernières données rendues,
+  recentSig: '' // pour ne pas reconstruire le DOM inutilement
 };

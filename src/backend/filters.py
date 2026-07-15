@@ -2,12 +2,14 @@ import os
 import re
 from . import config
 
+
 def local_size(fpath):
     """Taille du fichier local (en octets), ou None si introuvable."""
     try:
         return os.path.getsize(os.path.join(config.GD_DIR, fpath))
     except OSError:
         return None
+
 
 def load_exclude_rules():
     """Renvoie la liste des motifs d'exclusion (lignes « - motif ») du fichier de filtres."""
@@ -33,10 +35,10 @@ def _glob_to_regex(pat):
     i = 0
     n = len(pat)
     while i < n:
-        if pat[i:i + 3] == "**/":
+        if pat[i : i + 3] == "**/":
             out.append("(?:.*/)?")
             i += 3
-        elif pat[i:i + 2] == "**":
+        elif pat[i : i + 2] == "**":
             out.append(".*")
             i += 2
         elif pat[i] == "*":
@@ -88,4 +90,3 @@ def path_is_ignored(rel, rules):
             if _match_any_level(rx_base, rel, anchored):
                 return True
     return False
-

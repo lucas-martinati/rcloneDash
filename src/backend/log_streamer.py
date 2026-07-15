@@ -8,6 +8,7 @@ from . import config
 from .filters import local_size
 from .parsing import parse_synced_file
 
+
 class LogStreamer(threading.Thread):
     """Thread daemon qui streame journalctl -f et parse les données de sync live."""
 
@@ -39,8 +40,13 @@ class LogStreamer(threading.Thread):
             try:
                 proc = subprocess.Popen(
                     [
-                        "journalctl", "-f", "-u", self.service,
-                        "--output=short-iso", "-n", "0",
+                        "journalctl",
+                        "-f",
+                        "-u",
+                        self.service,
+                        "--output=short-iso",
+                        "-n",
+                        "0",
                     ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -62,8 +68,11 @@ class LogStreamer(threading.Thread):
         # Détection du démarrage d'une sync : uniquement la ligne systemd,
         # sinon un log rclone comme "Starting transaction limiter" réinitialise
         # la progression en plein milieu d'une sync.
-        if "systemd" in ll and ("starting" in ll or "started" in ll) \
-                and self.service + ".service" in ll:
+        if (
+            "systemd" in ll
+            and ("starting" in ll or "started" in ll)
+            and self.service + ".service" in ll
+        ):
             self._reset()
             self.is_syncing = True
             self.phase = "Building listings"
@@ -114,9 +123,7 @@ class LogStreamer(threading.Thread):
             self.transfer["elapsed"] = m.group(1)
 
         # Fichier actif : * path/to/file: 45% /1.234Mi, 4.5Mi/s, 2m3s
-        m = re.search(
-            r"\*\s+(.+?):\s*(\d+)%\s*/([^,]+),\s*([^,]+),\s*(\S+)", line
-        )
+        m = re.search(r"\*\s+(.+?):\s*(\d+)%\s*/([^,]+),\s*([^,]+),\s*(\S+)", line)
         if not m:
             # Forme courte sans vitesse/ETA : * file: 45% /1.234Mi
             m = re.search(r"\*\s+(.+?):\s*(\d+)%\s*/(\S+)", line)
@@ -152,12 +159,14 @@ class LogStreamer(threading.Thread):
         if parsed:
             fpath, act = parsed
             if not any(f["path"] == fpath for f in self.synced_files):
-                self.synced_files.append({
-                    "path": fpath,
-                    "action": act,
-                    "size": None if act == "deleted" else local_size(fpath),
-                    "time": datetime.now().strftime("%H:%M:%S")
-                })
+                self.synced_files.append(
+                    {
+                        "path": fpath,
+                        "action": act,
+                        "size": None if act == "deleted" else local_size(fpath),
+                        "time": datetime.now().strftime("%H:%M:%S"),
+                    }
+                )
 
         # Changements détectés sur Path1/Path2
         for pk, pl in [("path1", "Path1"), ("path2", "Path2")]:
@@ -193,20 +202,29 @@ class LogStreamer(threading.Thread):
             self.is_syncing = False
         elif "systemd" in ll and "failed" in ll and self.service in ll:
             self.is_syncing = False
-            subprocess.run(["notify-send", "RcloneDash", "Échec de la synchronisation. Consultez le tableau de bord.", "--icon=dialog-error", "-u", "critical"], check=False)
+            subprocess.run(
+                [
+                    "notify-send",
+                    "RcloneDash",
+                    "Échec de la synchronisation. Consultez le tableau de bord.",
+                    "--icon=dialog-error",
+                    "-u",
+                    "critical",
+                ],
+                check=False,
+            )
 
     def get_live(self):
         """Retourne l'état live de la sync en cours, ou None."""
         with self.lock:
             if self.phase_index < 0:
                 return None
-            
+
             now = time.time()
             self.active_files = {
-                k: v for k, v in self.active_files.items()
-                if now - v["last_seen"] < 4.0
+                k: v for k, v in self.active_files.items() if now - v["last_seen"] < 4.0
             }
-            
+
             active_list = [
                 {
                     "name": k,
@@ -218,14 +236,14 @@ class LogStreamer(threading.Thread):
                 }
                 for k, v in self.active_files.items()
             ]
-            
+
             if active_list:
                 self.active_file = active_list[0]["name"]
                 self.active_file_pct = active_list[0]["pct"]
             else:
                 self.active_file = ""
                 self.active_file_pct = 0
-                
+
             return {
                 "phase": self.phase,
                 "phase_index": self.phase_index,
@@ -240,8 +258,7 @@ class LogStreamer(threading.Thread):
                     for k, d in self.changes.items()
                 },
                 "is_syncing": self.is_syncing,
-                "duration_s": int(time.time() - self.sync_start)
-                if self.sync_start
-                else 0,
+                "duration_s": (
+                    int(time.time() - self.sync_start) if self.sync_start else 0
+                ),
             }
-

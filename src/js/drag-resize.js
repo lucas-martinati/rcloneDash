@@ -11,23 +11,33 @@ function handleDragStart(e) {
 }
 
 function handleDragOver(e) {
-  if (e.preventDefault) { e.preventDefault(); }
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
   e.dataTransfer.dropEffect = 'move';
   return false;
 }
 
-function handleDragEnter(e) { this.classList.add('over'); }
-function handleDragLeave(e) { this.classList.remove('over'); }
+function handleDragEnter() {
+  this.classList.add('over');
+}
+function handleDragLeave() {
+  this.classList.remove('over');
+}
 
 function handleDrop(e) {
-  if (e.stopPropagation) { e.stopPropagation(); }
+  if (e.stopPropagation) {
+    e.stopPropagation();
+  }
   if (dragSrcEl !== this) {
     let srcOrder = window.getComputedStyle(dragSrcEl).order;
     let destOrder = window.getComputedStyle(this).order;
 
     if (srcOrder === destOrder) {
       let panels = document.querySelectorAll('.drag-panel');
-      panels.forEach(function (p, i) { p.style.order = p.style.order || i; });
+      panels.forEach(function (p, i) {
+        p.style.order = p.style.order || i;
+      });
       srcOrder = dragSrcEl.style.order;
       destOrder = this.style.order;
     }
@@ -46,9 +56,11 @@ function handleDrop(e) {
   return false;
 }
 
-function handleDragEnd(e) {
+function handleDragEnd() {
   this.classList.remove('dragging');
-  document.querySelectorAll('.drag-panel').forEach(function (p) { p.classList.remove('over'); });
+  document.querySelectorAll('.drag-panel').forEach(function (p) {
+    p.classList.remove('over');
+  });
 }
 
 export function initDragAndDrop() {
@@ -60,8 +72,12 @@ export function initDragAndDrop() {
 
     let header = panel.querySelector('.ph');
     if (header) {
-      header.addEventListener('mouseenter', function () { panel.setAttribute('draggable', 'true'); });
-      header.addEventListener('mouseleave', function () { panel.removeAttribute('draggable'); });
+      header.addEventListener('mouseenter', function () {
+        panel.setAttribute('draggable', 'true');
+      });
+      header.addEventListener('mouseleave', function () {
+        panel.removeAttribute('draggable');
+      });
     }
 
     panel.addEventListener('dragstart', handleDragStart, false);
@@ -78,7 +94,9 @@ export function initDragAndDrop() {
 
 function updateFullWidthPanel() {
   let panels = Array.from(document.querySelectorAll('.drag-panel'));
-  panels.sort(function (a, b) { return parseInt(a.style.order || 0) - parseInt(b.style.order || 0); });
+  panels.sort(function (a, b) {
+    return parseInt(a.style.order || 0) - parseInt(b.style.order || 0);
+  });
   panels.forEach(function (p, idx) {
     p.classList.toggle('full-width', idx === 2);
   });
@@ -104,18 +122,23 @@ export function initResizer() {
   }
 
   let hoverRaf = 0;
-  let lastMx = 0, lastMy = 0;
+  let lastMx = 0,
+    lastMy = 0;
 
   function updateHoverCursor(clientX, clientY) {
     let panels = Array.from(document.querySelectorAll('.drag-panel'));
-    panels.sort(function (a, b) { return parseInt(a.style.order || 0) - parseInt(b.style.order || 0); });
+    panels.sort(function (a, b) {
+      return parseInt(a.style.order || 0) - parseInt(b.style.order || 0);
+    });
     if (panels.length < 3) return;
     let p1 = panels[0].getBoundingClientRect();
     let p2 = panels[1].getBoundingClientRect();
     let p3 = panels[2].getBoundingClientRect();
 
-    let isH = (clientX > p1.right - 5 && clientX < p2.left + 5 && clientY > p1.top && clientY < p1.bottom);
-    let isV = (clientY > p1.bottom - 5 && clientY < p3.top + 5 && clientX > p3.left && clientX < p3.right);
+    let isH =
+      clientX > p1.right - 5 && clientX < p2.left + 5 && clientY > p1.top && clientY < p1.bottom;
+    let isV =
+      clientY > p1.bottom - 5 && clientY < p3.top + 5 && clientX > p3.left && clientX < p3.right;
 
     let cursor = isH && isV ? 'move' : isH ? 'col-resize' : isV ? 'row-resize' : '';
     if (container.style.cursor !== cursor) container.style.cursor = cursor;
@@ -146,7 +169,8 @@ export function initResizer() {
       return;
     }
 
-    lastMx = e.clientX; lastMy = e.clientY;
+    lastMx = e.clientX;
+    lastMy = e.clientY;
     if (hoverRaf) return;
     hoverRaf = requestAnimationFrame(function () {
       hoverRaf = 0;

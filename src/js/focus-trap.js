@@ -9,8 +9,9 @@
 const SEL = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 function focusables(modal) {
-  return Array.from(modal.querySelectorAll(SEL))
-    .filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+  return Array.from(modal.querySelectorAll(SEL)).filter(function (el) {
+    return !el.disabled && el.offsetParent !== null;
+  });
 }
 
 /* Modale « au-dessus » = la .show avec le plus grand z-index (les modales
@@ -19,8 +20,10 @@ function topModal() {
   const shown = Array.from(document.querySelectorAll('.modal-overlay.show'));
   if (!shown.length) return null;
   return shown.sort(function (a, b) {
-    return (parseInt(getComputedStyle(a).zIndex, 10) || 0)
-         - (parseInt(getComputedStyle(b).zIndex, 10) || 0);
+    return (
+      (parseInt(getComputedStyle(a).zIndex, 10) || 0) -
+      (parseInt(getComputedStyle(b).zIndex, 10) || 0)
+    );
   })[shown.length - 1];
 }
 
@@ -32,8 +35,12 @@ export function initFocusTrap() {
     const modal = topModal();
     if (!modal) return;
     const f = focusables(modal);
-    if (!f.length) { e.preventDefault(); return; }
-    const first = f[0], last = f[f.length - 1];
+    if (!f.length) {
+      e.preventDefault();
+      return;
+    }
+    const first = f[0],
+      last = f[f.length - 1];
     const active = document.activeElement;
     if (!modal.contains(active)) {
       e.preventDefault();

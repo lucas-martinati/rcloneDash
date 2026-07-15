@@ -37,21 +37,27 @@ export function updateAlerts(data) {
 
   if (kpis.consecutive_failures >= 2) {
     ban.className = 'alert-banner show-err';
-    msg.textContent = kpis.consecutive_failures + ' syncs consécutives en erreur — '
-      + (kpis.last_error_msg || 'consultez le journal pour le détail');
+    msg.textContent =
+      kpis.consecutive_failures +
+      ' syncs consécutives en erreur — ' +
+      (kpis.last_error_msg || 'consultez le journal pour le détail');
   } else if (live && live.is_syncing && live.duration_s > 300) {
     ban.className = 'alert-banner show-warn';
-    msg.textContent = 'Synchronisation longue — en cours depuis '
-      + Math.floor(live.duration_s / 60) + ' min ' + (live.duration_s % 60) + ' s';
+    msg.textContent =
+      'Synchronisation longue — en cours depuis ' +
+      Math.floor(live.duration_s / 60) +
+      ' min ' +
+      (live.duration_s % 60) +
+      ' s';
   } else if (disk.pct > 90) {
     ban.className = 'alert-banner show-err';
-    msg.textContent = 'Disque local rempli à ' + disk.pct + ' % — libérez de l\'espace';
+    msg.textContent = 'Disque local rempli à ' + disk.pct + " % — libérez de l'espace";
   } else {
     ban.className = 'alert-banner';
   }
 
   let sb = document.getElementById('slow-badge');
-  sb.style.display = (live && live.is_syncing && live.duration_s > 300) ? '' : 'none';
+  sb.style.display = live && live.is_syncing && live.duration_s > 300 ? '' : 'none';
 }
 
 /* ═══════════════════════════════════════════════════
@@ -59,7 +65,8 @@ export function updateAlerts(data) {
    ═══════════════════════════════════════════════════ */
 export function updateKPIs(data) {
   let disk = data.disk;
-  let runs = data.runs || [], kpis = data.kpis;
+  let runs = data.runs || [],
+    kpis = data.kpis;
 
   // Disque local
   let dkpi = document.getElementById('disk-kpi');
@@ -74,15 +81,22 @@ export function updateKPIs(data) {
 
   // Syncs aujourd'hui
   let today = new Date().toISOString().slice(0, 10);
-  let td = runs.filter(function (r) { return r.start && r.start.startsWith(today); });
-  let tok = td.filter(function (r) { return r.status === 'success'; }).length;
-  let terr = td.filter(function (r) { return r.status === 'failed'; }).length;
+  let td = runs.filter(function (r) {
+    return r.start && r.start.startsWith(today);
+  });
+  let tok = td.filter(function (r) {
+    return r.status === 'success';
+  }).length;
+  let terr = td.filter(function (r) {
+    return r.status === 'failed';
+  }).length;
   document.getElementById('kr').textContent = td.length;
-  document.getElementById('krs').textContent = tok + ' réussie(s)' + (terr ? ' · ' + terr + ' en erreur' : '');
+  document.getElementById('krs').textContent =
+    tok + ' réussie(s)' + (terr ? ' · ' + terr + ' en erreur' : '');
 
   // Fichiers, vitesse, conflits
-  document.getElementById('kf').textContent = kpis.total_files > 0
-    ? kpis.total_files.toLocaleString('fr-FR') : '—';
+  document.getElementById('kf').textContent =
+    kpis.total_files > 0 ? kpis.total_files.toLocaleString('fr-FR') : '—';
   document.getElementById('ksp').textContent = kpis.avg_speed || '—';
 
   let kcEl = document.getElementById('kc');
@@ -93,7 +107,8 @@ export function updateKPIs(data) {
   // Fiabilité 7 jours
   let rateVal = kpis.success_rate_7d;
   document.getElementById('ksr').textContent = rateVal + ' %';
-  document.getElementById('ksr').style.color = rateVal < 90 ? 'var(--err)' : rateVal < 99 ? 'var(--warn)' : '';
+  document.getElementById('ksr').style.color =
+    rateVal < 90 ? 'var(--err)' : rateVal < 99 ? 'var(--warn)' : '';
   document.getElementById('srfill').style.width = rateVal + '%';
   document.getElementById('srfill').classList.toggle('danger', rateVal < 90);
 }

@@ -3,7 +3,8 @@
    ═══════════════════════════════════════════════════ */
 :root {
   --font-ui: 'Satoshi', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'DejaVu Sans Mono', Consolas, monospace;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, 'Cascadia Code', 'DejaVu Sans Mono', Consolas, monospace;
   --r-s: 6px;
   --r-m: 10px;
   --r-l: 14px;
@@ -16,21 +17,21 @@
 }
 
 :root,
-[data-theme="light"] {
+[data-theme='light'] {
   --bg: #f4f2ec;
   --surface: #fbfaf7;
   --surface-2: #ffffff;
   --surface-off: #ece9e1;
-  --border: rgba(46, 42, 32, .12);
-  --divider: rgba(46, 42, 32, .08);
+  --border: rgba(46, 42, 32, 0.12);
+  --divider: rgba(46, 42, 32, 0.08);
   --text: #26231c;
   --muted: #6d6a62;
   --faint: #a3a098;
   --primary: #0b7078;
   --primary-h: #095b62;
-  --primary-soft: rgba(11, 112, 120, .1);
+  --primary-soft: rgba(11, 112, 120, 0.1);
   --accent-2: #3d52c9;
-  --glow-accent: 0 4px 16px rgba(21, 90, 130, .22);
+  --glow-accent: 0 4px 16px rgba(21, 90, 130, 0.22);
   --ok: #4a7d22;
   --ok-bg: #e2ecd6;
   --err: #a62c7e;
@@ -39,25 +40,25 @@
   --warn-bg: #f0e0d2;
   --run: #1265a0;
   --run-bg: #dbe7f2;
-  --sh: 0 2px 10px rgba(46, 42, 32, .08);
-  --sh-l: 0 12px 40px rgba(46, 42, 32, .18);
+  --sh: 0 2px 10px rgba(46, 42, 32, 0.08);
+  --sh-l: 0 12px 40px rgba(46, 42, 32, 0.18);
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   --bg: #151413;
   --surface: #1d1c1a;
   --surface-2: #232120;
   --surface-off: #262421;
-  --border: rgba(255, 253, 245, .09);
-  --divider: rgba(255, 253, 245, .06);
+  --border: rgba(255, 253, 245, 0.09);
+  --divider: rgba(255, 253, 245, 0.06);
   --text: #e9e7e2;
   --muted: #98958f;
   --faint: #57544e;
   --primary: #5cb3bf;
   --primary-h: #79c4cf;
-  --primary-soft: rgba(92, 179, 191, .12);
+  --primary-soft: rgba(92, 179, 191, 0.12);
   --accent-2: #7e8bec;
-  --glow-accent: 0 4px 18px rgba(92, 179, 191, .28);
+  --glow-accent: 0 4px 18px rgba(92, 179, 191, 0.28);
   --ok: #8fbe63;
   --ok-bg: #26331c;
   --err: #dd7fb4;
@@ -66,6 +67,6 @@
   --warn-bg: #362413;
   --run: #77a9d8;
   --run-bg: #1a2634;
-  --sh: 0 2px 12px rgba(0, 0, 0, .35);
-  --sh-l: 0 16px 50px rgba(0, 0, 0, .55);
+  --sh: 0 2px 12px rgba(0, 0, 0, 0.35);
+  --sh-l: 0 16px 50px rgba(0, 0, 0, 0.55);
 }

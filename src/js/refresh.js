@@ -44,7 +44,7 @@ export async function doSync() {
   b.disabled = true;
   lbl.textContent = 'Démarrage…';
   try {
-    let r = await fetch('/api/trigger');
+    let r = await fetch('/api/trigger', { method: 'POST' });
     let d = await r.json();
     if (d.ok) {
       toast('Synchronisation lancée', 'ok');
@@ -67,7 +67,7 @@ export async function cancelSync() {
   b.disabled = true;
   lbl.textContent = 'Arrêt…';
   try {
-    await fetch('/api/cancel');
+    await fetch('/api/cancel', { method: 'POST' });
     toast('Arrêt de la synchronisation demandé', 'warn');
   } catch (e) {
     toast('Serveur injoignable', 'err');

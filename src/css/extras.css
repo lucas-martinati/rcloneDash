@@ -70,7 +70,9 @@
   line-height: 1.45;
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity .25s, transform .25s;
+  transition:
+    opacity 0.25s,
+    transform 0.25s;
 }
 
 .toast.in {
@@ -78,9 +80,15 @@
   transform: none;
 }
 
-.toast.ok { border-left-color: var(--ok); }
-.toast.err { border-left-color: var(--err); }
-.toast.warn { border-left-color: var(--warn); }
+.toast.ok {
+  border-left-color: var(--ok);
+}
+.toast.err {
+  border-left-color: var(--err);
+}
+.toast.warn {
+  border-left-color: var(--warn);
+}
 
 /* ═══════════════════════════════════════════════════
    DIVERS
@@ -103,7 +111,9 @@
   height: 8px;
 }
 
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 ::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--faint) 70%, transparent);
@@ -130,7 +140,9 @@
 }
 
 .drag-panel {
-  transition: transform .2s, opacity .2s;
+  transition:
+    transform 0.2s,
+    opacity 0.2s;
   order: 0;
   grid-column: span 1;
 }
@@ -142,8 +154,8 @@
 }
 
 .drag-panel.dragging {
-  opacity: .5;
-  transform: scale(.98);
+  opacity: 0.5;
+  transform: scale(0.98);
   z-index: 100;
 }
 
@@ -151,8 +163,12 @@
   border: 2px dashed var(--primary) !important;
 }
 
-.drag-panel .ph { cursor: grab; }
-.drag-panel .ph:active { cursor: grabbing; }
+.drag-panel .ph {
+  cursor: grab;
+}
+.drag-panel .ph:active {
+  cursor: grabbing;
+}
 
 @media (max-width: 860px) {
   .modules-container {

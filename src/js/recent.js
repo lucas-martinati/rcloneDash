@@ -13,13 +13,13 @@ export function updateRecentFiles(files) {
   let countEl = document.getElementById('recent-count');
 
   if (!files || !files.length) {
-    list.innerHTML = '<div class="empty">Aucun fichier synchronisé récemment.<br>Les fichiers copiés, modifiés ou supprimés apparaîtront ici.</div>';
+    list.innerHTML =
+      '<div class="empty">Aucun fichier synchronisé récemment.<br>Les fichiers copiés, modifiés ou supprimés apparaîtront ici.</div>';
     countEl.textContent = '';
     return;
   }
 
   countEl.textContent = '· ' + files.length;
-  let labels = { 'new': 'Copié', modified: 'Modifié', deleted: 'Supprimé' };
   let reversed = files.slice().reverse();
   let html = '';
 

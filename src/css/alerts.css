@@ -47,7 +47,9 @@
   border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
 }
 
-.alert-banner svg { flex-shrink: 0; }
+.alert-banner svg {
+  flex-shrink: 0;
+}
 
 .alert-msg {
   overflow: hidden;

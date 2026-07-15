@@ -12,7 +12,7 @@
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   overflow: hidden;
-  transition: background .4s;
+  transition: background 0.4s;
 }
 
 .pulse.syncing {
@@ -32,10 +32,12 @@
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 
-.pulse.syncing .pulse-cap { color: color-mix(in srgb, var(--run) 75%, var(--text)); }
+.pulse.syncing .pulse-cap {
+  color: color-mix(in srgb, var(--run) 75%, var(--text));
+}
 
 .pulse-val {
   font-family: var(--font-mono);
@@ -47,8 +49,12 @@
   text-overflow: ellipsis;
 }
 
-.pulse-val .st-ok { color: var(--ok); }
-.pulse-val .st-err { color: var(--err); }
+.pulse-val .st-ok {
+  color: var(--ok);
+}
+.pulse-val .st-err {
+  color: var(--err);
+}
 
 .pulse-dot {
   width: 8px;
@@ -59,8 +65,12 @@
   flex-shrink: 0;
 }
 
-.pulse-dot.ok { background: var(--ok); }
-.pulse-dot.err { background: var(--err); }
+.pulse-dot.ok {
+  background: var(--ok);
+}
+.pulse-dot.err {
+  background: var(--err);
+}
 .pulse-dot.run {
   background: var(--run);
   animation: blink 1.4s ease-in-out infinite;
@@ -81,10 +91,14 @@
   height: 2px;
   width: 0;
   background: var(--grad-accent);
-  transition: width 1s linear, background .4s;
+  transition:
+    width 1s linear,
+    background 0.4s;
 }
 
-.pulse.syncing .pulse-line { background: var(--run); }
+.pulse.syncing .pulse-line {
+  background: var(--run);
+}
 
 .pulse-line.indet {
   width: 30% !important;
@@ -92,11 +106,19 @@
 }
 
 @keyframes slide {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(433%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(433%);
+  }
 }
 
 @media (max-width: 720px) {
-  .pulse { gap: 12px; }
-  .pulse-cap { display: none; }
+  .pulse {
+    gap: 12px;
+  }
+  .pulse-cap {
+    display: none;
+  }
 }

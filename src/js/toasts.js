@@ -7,9 +7,13 @@ export function toast(msg, type) {
   t.className = 'toast ' + (type || '');
   t.textContent = msg;
   c.appendChild(t);
-  requestAnimationFrame(function () { t.classList.add('in'); });
+  requestAnimationFrame(function () {
+    t.classList.add('in');
+  });
   setTimeout(function () {
     t.classList.remove('in');
-    setTimeout(function () { t.remove(); }, 300);
+    setTimeout(function () {
+      t.remove();
+    }, 300);
   }, 4200);
 }

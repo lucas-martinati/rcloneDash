@@ -1,5 +1,5 @@
 import { ICO_CHECK } from './icons.js';
-import { esc, fmtSize, renderFileRow, colorizeLog } from './utils.js';
+import { esc, fmtSize, renderFileRow } from './utils.js';
 import { toast } from './toasts.js';
 import { loadTree, _fm } from './file-browser.js';
 
@@ -11,7 +11,9 @@ export async function openFiltersModal() {
   await loadFilters();
 }
 
-export function closeFiltersModal() { document.getElementById('filters-modal').classList.remove('show'); }
+export function closeFiltersModal() {
+  document.getElementById('filters-modal').classList.remove('show');
+}
 
 export let _originalFiltersText = '';
 
@@ -43,7 +45,10 @@ export function addFilter() {
     rule = '- ' + rule;
   }
   // commentaires et inclusions (« + ») n'excluent rien → ajout direct
-  if (rule.startsWith('#') || rule.startsWith('+ ')) { commitFilter(rule); return; }
+  if (rule.startsWith('#') || rule.startsWith('+ ')) {
+    commitFilter(rule);
+    return;
+  }
   // règle d'exclusion → on montre d'abord tout ce qu'elle affecte
   openImpactModal(rule);
 }
@@ -65,37 +70,58 @@ export function openImpactModal(rule) {
   let noneRadio = document.querySelector('input[name="imp-action"][value="none"]');
   if (noneRadio) noneRadio.checked = true;
   impOnChoice();
-  document.getElementById('impact-summary').innerHTML = '<div class="del-loading">Analyse de l\'impact…</div>';
+  document.getElementById('impact-summary').innerHTML =
+    '<div class="del-loading">Analyse de l\'impact…</div>';
   document.getElementById('impact-files').innerHTML = '';
   document.getElementById('impact-confirm').disabled = true;
-  fetch('/api/rule_impact?rule=' + encodeURIComponent(rule)).then(function (r) { return r.json(); }).then(function (d) {
-    if (!d.ok) {
-      document.getElementById('impact-summary').innerHTML = '<div class="del-count">Impact non calculable : ' + esc(d.error || '') + '</div>';
+  fetch('/api/rule_impact?rule=' + encodeURIComponent(rule))
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (d) {
+      if (!d.ok) {
+        document.getElementById('impact-summary').innerHTML =
+          '<div class="del-count">Impact non calculable : ' + esc(d.error || '') + '</div>';
+        document.getElementById('impact-confirm').disabled = false;
+        return;
+      }
+      let summary;
+      if (d.count === 0) {
+        summary =
+          '<div class="del-banner ok">' +
+          ICO_CHECK +
+          "<div>Aucun élément présent ne correspond pour l'instant. La règle s'appliquera aux futurs fichiers.</div></div>";
+      } else {
+        let noun = d.count > 1 ? 'éléments' : 'élément';
+        summary =
+          '<div class="del-count">Cette règle exclut <span class="del-big2">' +
+          d.count +
+          '</span> ' +
+          noun +
+          ' · <b>' +
+          esc(fmtSize(d.size) || '0 o') +
+          '</b>' +
+          (d.truncated ? ' (aperçu partiel)' : '') +
+          '</div>';
+      }
+      document.getElementById('impact-summary').innerHTML = summary;
+      let fl = '';
+      d.items.forEach(function (it) {
+        let meta = it.is_dir
+          ? (it.count || 0) + (it.count > 1 ? ' fichiers' : ' fichier')
+          : fmtSize(it.size) || '';
+        it.action = 'excluded';
+        fl += renderFileRow(it, '', { hideTime: true, customSize: meta, hideAction: true });
+      });
+      if (d.truncated) fl += '<div class="del-more">… et d\'autres éléments non listés</div>';
+      document.getElementById('impact-files').innerHTML = fl;
       document.getElementById('impact-confirm').disabled = false;
-      return;
-    }
-    let summary;
-    if (d.count === 0) {
-      summary = '<div class="del-banner ok">' + ICO_CHECK + '<div>Aucun élément présent ne correspond pour l\'instant. La règle s\'appliquera aux futurs fichiers.</div></div>';
-    } else {
-      let noun = d.count > 1 ? 'éléments' : 'élément';
-      summary = '<div class="del-count">Cette règle exclut <span class="del-big2">' + d.count + '</span> ' + noun
-        + ' · <b>' + esc(fmtSize(d.size) || '0 o') + '</b>' + (d.truncated ? ' (aperçu partiel)' : '') + '</div>';
-    }
-    document.getElementById('impact-summary').innerHTML = summary;
-    let fl = '';
-    d.items.forEach(function (it) {
-      let meta = it.is_dir ? ((it.count || 0) + (it.count > 1 ? ' fichiers' : ' fichier')) : (fmtSize(it.size) || '');
-      it.action = 'excluded';
-      fl += renderFileRow(it, '', { hideTime: true, customSize: meta, hideAction: true });
+    })
+    .catch(function () {
+      document.getElementById('impact-summary').innerHTML =
+        '<div class="del-count">Serveur injoignable</div>';
+      document.getElementById('impact-confirm').disabled = false;
     });
-    if (d.truncated) fl += '<div class="del-more">… et d\'autres éléments non listés</div>';
-    document.getElementById('impact-files').innerHTML = fl;
-    document.getElementById('impact-confirm').disabled = false;
-  }).catch(function () {
-    document.getElementById('impact-summary').innerHTML = '<div class="del-count">Serveur injoignable</div>';
-    document.getElementById('impact-confirm').disabled = false;
-  });
 }
 export function closeImpactModal() {
   document.getElementById('impact-modal').classList.remove('show');
@@ -119,7 +145,10 @@ export function impOnChoice() {
 }
 export async function confirmAddFilter() {
   let rule = _pendingFilter;
-  if (!rule) { closeImpactModal(); return; }
+  if (!rule) {
+    closeImpactModal();
+    return;
+  }
   let choice = impChoice();
   let btn = document.getElementById('impact-confirm');
   btn.disabled = true;
@@ -130,12 +159,15 @@ export async function confirmAddFilter() {
     // 2) Suppression de tout ce que la règle couvre, si demandé
     if (choice !== 'none') {
       let r = await fetch('/api/rule_delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rule: rule, mode: choice })
       });
       let d = await r.json();
       if (d.ok) {
-        let parts = [d.count + ' élément' + (d.count > 1 ? 's' : '') + ' traité' + (d.count > 1 ? 's' : '')];
+        let parts = [
+          d.count + ' élément' + (d.count > 1 ? 's' : '') + ' traité' + (d.count > 1 ? 's' : '')
+        ];
         if (choice !== 'drive') parts.push((fmtSize(d.freed) || '0 o') + ' libérés');
         if (d.truncated) parts.push('liste tronquée');
         let hasErr = d.errors && d.errors.length;

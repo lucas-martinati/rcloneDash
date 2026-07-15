@@ -1,0 +1,13 @@
+{
+  "name": "rclonedash",
+  "version": "1.0.0",
+  "description": "RcloneDash",
+  "scripts": {
+    "lint": "eslint src/js/**/*.js",
+    "format": "prettier --write 'src/**/*.{js,css,html}'"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
+  }
+}

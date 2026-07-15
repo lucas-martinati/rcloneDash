@@ -12,13 +12,26 @@ export function updateLive(live) {
   section.classList.add('active');
 
   // Étapes
-  let phaseNames = ['Listings', 'Diffs locaux', 'Diffs distants', 'Application', 'Mise à jour', 'Terminé'];
+  let phaseNames = [
+    'Listings',
+    'Diffs locaux',
+    'Diffs distants',
+    'Application',
+    'Mise à jour',
+    'Terminé'
+  ];
   let stepper = document.getElementById('phase-stepper');
   let html = '';
   for (let i = 0; i < phaseNames.length; i++) {
-    let cls = '', icon = '○';
-    if (i < live.phase_index) { cls = 'done'; icon = '✓'; }
-    else if (i === live.phase_index) { cls = 'current'; icon = '●'; }
+    let cls = '',
+      icon = '○';
+    if (i < live.phase_index) {
+      cls = 'done';
+      icon = '✓';
+    } else if (i === live.phase_index) {
+      cls = 'current';
+      icon = '●';
+    }
     if (i > 0) html += '<span class="phase-arrow">→</span>';
     html += '<span class="phase-step ' + cls + '">' + icon + ' ' + phaseNames[i] + '</span>';
   }
@@ -51,9 +64,12 @@ export function updateLive(live) {
   let aw = document.getElementById('active-wrap');
   if (live.active_files && live.active_files.length > 0) {
     aw.style.display = '';
-    let html = '<div class="kl">' + (live.active_files.length > 1
-      ? 'Fichiers en cours de transfert (' + live.active_files.length + ')'
-      : 'Fichier en cours de transfert') + '</div>';
+    let html =
+      '<div class="kl">' +
+      (live.active_files.length > 1
+        ? 'Fichiers en cours de transfert (' + live.active_files.length + ')'
+        : 'Fichier en cours de transfert') +
+      '</div>';
     for (let i = 0; i < live.active_files.length; i++) {
       let f = live.active_files[i];
       let details = [];
@@ -61,20 +77,36 @@ export function updateLive(live) {
       if (f.size) details.push(f.size);
       if (f.speed) details.push(f.speed);
       if (f.eta && f.eta !== '-') details.push('ETA ' + f.eta);
-      html += '<div style="margin:6px 0 8px;">'
-        + '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">'
-        + '<div class="active-fname" style="flex:1;" title="' + esc(f.name) + '">' + esc(f.name) + ' (' + f.pct + ' %)</div>'
-        + '<div class="recent-size">' + esc(details.join(' · ')) + '</div>'
-        + '</div>'
-        + '<div class="tf-pbar"><div class="tf-pfill" style="width:' + f.pct + '%"></div></div>'
-        + '</div>';
+      html +=
+        '<div style="margin:6px 0 8px;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">' +
+        '<div class="active-fname" style="flex:1;" title="' +
+        esc(f.name) +
+        '">' +
+        esc(f.name) +
+        ' (' +
+        f.pct +
+        ' %)</div>' +
+        '<div class="recent-size">' +
+        esc(details.join(' · ')) +
+        '</div>' +
+        '</div>' +
+        '<div class="tf-pbar"><div class="tf-pfill" style="width:' +
+        f.pct +
+        '%"></div></div>' +
+        '</div>';
     }
     aw.innerHTML = html;
   } else if (live.active_file) {
     aw.style.display = '';
-    aw.innerHTML = '<div class="kl">Fichier en cours de transfert</div>'
-      + '<div class="active-fname">' + esc(live.active_file) + '</div>'
-      + '<div class="tf-pbar"><div class="tf-pfill" style="width:' + live.active_file_pct + '%"></div></div>';
+    aw.innerHTML =
+      '<div class="kl">Fichier en cours de transfert</div>' +
+      '<div class="active-fname">' +
+      esc(live.active_file) +
+      '</div>' +
+      '<div class="tf-pbar"><div class="tf-pfill" style="width:' +
+      live.active_file_pct +
+      '%"></div></div>';
   } else {
     aw.style.display = 'none';
   }
@@ -84,7 +116,6 @@ export function updateLive(live) {
   let lsl = document.getElementById('live-synced-list');
   if (live.synced_files && live.synced_files.length > 0) {
     lsw.style.display = '';
-    let labels = { 'new': 'Copié', modified: 'Modifié', deleted: 'Supprimé' };
     let html = '';
     for (let i = live.synced_files.length - 1; i >= 0; i--) {
       html += renderFileRow(live.synced_files[i], 'padding:4px 0;');
@@ -101,12 +132,24 @@ export function updateLive(live) {
 export function renderChanges(id, ch) {
   let el = document.getElementById(id);
   let items = [];
-  let kinds = [['new', 'new'], ['modified', 'modified'], ['deleted', 'deleted']];
+  let kinds = [
+    ['new', 'new'],
+    ['modified', 'modified'],
+    ['deleted', 'deleted']
+  ];
   for (let k = 0; k < kinds.length; k++) {
     let arr = ch[kinds[k][0]] || [];
     for (let i = 0; i < arr.length; i++) {
-      items.push('<div class="change-item"><span class="change-dot ' + kinds[k][1] + '"></span>' + esc(arr[i]) + '</div>');
+      items.push(
+        '<div class="change-item"><span class="change-dot ' +
+          kinds[k][1] +
+          '"></span>' +
+          esc(arr[i]) +
+          '</div>'
+      );
     }
   }
-  el.innerHTML = items.length ? items.join('') : '<span class="change-empty">Aucun changement</span>';
+  el.innerHTML = items.length
+    ? items.join('')
+    : '<span class="change-empty">Aucun changement</span>';
 }

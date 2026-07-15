@@ -15,7 +15,9 @@ export function initLiveStream() {
     try {
       let d = JSON.parse(e.data);
       updateLive(d.live);
-    } catch (_) { /* trame partielle : on ignore */ }
+    } catch (_) {
+      /* trame partielle : on ignore */
+    }
   };
   // En cas d'erreur, EventSource retente automatiquement — rien à faire.
 }
