@@ -63,14 +63,14 @@ step 1 "Copie des fichiers de l'application"
 mkdir -p "$TARGET_DIR"
 detail "Destination : $TARGET_DIR"
 rm -rf "$TARGET_DIR/js" "$TARGET_DIR/app.js"
-npx -y esbuild src/js/main.js --bundle --outfile="$TARGET_DIR/app.js" --minify
-npx -y esbuild src/css/main.css --bundle --minify --outfile="$TARGET_DIR/style.css"
+npx -y esbuild src/js/main.js --bundle --outfile="$TARGET_DIR/app.js" --minify >/dev/null 2>&1
+npx -y esbuild src/css/main.css --bundle --minify --outfile="$TARGET_DIR/style.css" >/dev/null 2>&1
 cp src/rclone-monitor.py "$TARGET_DIR/"
 sed 's|<script type="module" src="js/main.js"></script>|<script src="app.js"></script>|' src/index.html > "$TARGET_DIR/index.html"
 cp -r src/backend "$TARGET_DIR/"
 cp requirements.txt "$TARGET_DIR/"
 python3 -m venv "$TARGET_DIR/venv"
-"$TARGET_DIR/venv/bin/pip" install -r "$TARGET_DIR/requirements.txt"
+"$TARGET_DIR/venv/bin/pip" install -r "$TARGET_DIR/requirements.txt" >/dev/null 2>&1
 ok "Interface et backend copiés, dépendances installées"
 
 # Garde légère : ne lance le bisync que si c'est utile (changement local
