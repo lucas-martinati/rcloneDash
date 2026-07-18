@@ -1,11 +1,12 @@
 import os
 from fastapi import FastAPI, Request, Query, HTTPException, Body, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, Dict, Any
 import threading
 import json
 import asyncio
+import subprocess
 
 from . import config
 from .monitor import Monitor
@@ -111,6 +112,14 @@ def api_drive_delete(data: Dict[str, Any] = Body(...)):
 @app.post("/api/rule_delete")
 def api_rule_delete(data: Dict[str, Any] = Body(...)):
     return services.api_rule_delete(data)
+
+@app.get("/api/raw_logs", response_class=PlainTextResponse)
+def api_raw_logs(n: int = 2000):
+    try:
+        o = subprocess.check_output(["journalctl", "-u", "rclone-bisync", "--no-pager", "-n", str(n)], text=True)
+        return o
+    except Exception as e:
+        return str(e)
 
 
 static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
