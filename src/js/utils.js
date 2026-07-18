@@ -51,11 +51,13 @@ export function fmtSize(bytes) {
 /* "2m9.5s" / "1h2m3s" / "45.6s" → secondes */
 export function parseElapsed(e) {
   if (!e) return 0;
-  let s = 0,
-    m;
-  if ((m = e.match(/(\d+)h/))) s += parseInt(m[1]) * 3600;
-  if ((m = e.match(/(\d+)m(?!s)/))) s += parseInt(m[1]) * 60;
-  if ((m = e.match(/([\d.]+)s/))) s += parseFloat(m[1]);
+  let s = 0;
+  let m = e.match(/(\d+)h/);
+  if (m) s += parseInt(m[1]) * 3600;
+  m = e.match(/(\d+)m(?!s)/);
+  if (m) s += parseInt(m[1]) * 60;
+  m = e.match(/([\d.]+)s/);
+  if (m) s += parseFloat(m[1]);
   return s;
 }
 
