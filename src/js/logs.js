@@ -25,8 +25,8 @@ export function renderLogs() {
     html =
       '<div class="empty">' +
       (S.logFilter === 'all'
-        ? 'Le journal est vide pour le moment.'
-        : 'Aucune ligne de ce type dans le journal récent.') +
+        ? 'Les logs sont vides pour le moment.'
+        : 'Aucune ligne de ce type dans les logs récents.') +
       '</div>';
   }
   w.innerHTML = html;

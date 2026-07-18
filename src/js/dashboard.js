@@ -40,7 +40,7 @@ export function updateAlerts(data) {
     msg.textContent =
       kpis.consecutive_failures +
       ' syncs consécutives en erreur — ' +
-      (kpis.last_error_msg || 'consultez le journal pour le détail');
+      (kpis.last_error_msg || 'consultez les logs pour le détail');
   } else if (live && live.is_syncing && live.duration_s > 300) {
     ban.className = 'alert-banner show-warn';
     msg.textContent =

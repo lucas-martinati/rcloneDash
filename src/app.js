@@ -454,7 +454,7 @@
     let live = data.live;
     if (kpis.consecutive_failures >= 2) {
       ban.className = "alert-banner show-err";
-      msg.textContent = kpis.consecutive_failures + " syncs cons\xE9cutives en erreur \u2014 " + (kpis.last_error_msg || "consultez le journal pour le d\xE9tail");
+      msg.textContent = kpis.consecutive_failures + " syncs cons\xE9cutives en erreur \u2014 " + (kpis.last_error_msg || "consultez les logs pour le d\xE9tail");
     } else if (live && live.is_syncing && live.duration_s > 300) {
       ban.className = "alert-banner show-warn";
       msg.textContent = "Synchronisation longue \u2014 en cours depuis " + Math.floor(live.duration_s / 60) + " min " + live.duration_s % 60 + " s";
@@ -656,7 +656,7 @@
       shown++;
     }
     if (!shown) {
-      html = '<div class="empty">' + (S.logFilter === "all" ? "Le journal est vide pour le moment." : "Aucune ligne de ce type dans le journal r\xE9cent.") + "</div>";
+      html = '<div class="empty">' + (S.logFilter === "all" ? "Les logs sont vides pour le moment." : "Aucune ligne de ce type dans les logs r\xE9cents.") + "</div>";
     }
     w.innerHTML = html;
     if (atBot) sc.scrollTop = sc.scrollHeight;

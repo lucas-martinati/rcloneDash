@@ -102,6 +102,23 @@
   color: var(--text);
 }
 
+.logs-scroll-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.logs-scroll-btn:hover {
+  transform: translateY(2px);
+  background: var(--surface-2);
+  border-color: var(--muted);
+}
+
 /* Sparkline */
 .sparkline-wrap {
   padding: 12px 14px 4px;

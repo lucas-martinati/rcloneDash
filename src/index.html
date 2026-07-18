@@ -157,7 +157,7 @@
         <div class="kpi" id="conflict-kpi">
           <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>Conflits aujourd'hui</span></div>
           <div class="kv" id="kc">0</div>
-          <div class="ks">détectés dans les journaux</div>
+          <div class="ks">détectés dans les logs</div>
         </div>
         <div class="kpi" id="kpi-rate">
           <div class="kl"><svg class="kl-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><span>Fiabilité 7 jours</span></div>
@@ -275,7 +275,7 @@
               </thead>
               <tbody id="rtb"></tbody>
             </table>
-            <div class="empty" id="rem" style="display:none">Aucune synchronisation dans les journaux.<br>La première
+            <div class="empty" id="rem" style="display:none">Aucune synchronisation dans les logs.<br>La première
               apparaîtra ici dès qu'elle s'exécutera.</div>
           </div>
         </div>
@@ -289,13 +289,17 @@
               <line x1="3" y1="9" x2="21" y2="9" />
               <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
-            <span>Journal</span>
-            <div class="chiprow" role="group" aria-label="Filtrer le journal">
+            <span>Logs</span>
+            <div class="chiprow" role="group" aria-label="Filtrer les logs">
               <button class="chip on" id="lf-all" onclick="setLogFilter('all', this)">Tout</button>
               <button class="chip" id="lf-files" onclick="setLogFilter('files', this)">Fichiers</button>
               <button class="chip" id="lf-issues" onclick="setLogFilter('issues', this)">Problèmes</button>
             </div>
-            <button class="iconbtn" onclick="logsBot()" id="logs-bottom-btn" title="Aller aux lignes les plus récentes">↓</button>
+            <button class="iconbtn logs-scroll-btn" onclick="logsBot()" id="logs-bottom-btn" title="Aller aux lignes les plus récentes">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
           </div>
           <div class="pb" id="lscroll">
             <div class="lw" id="lwrap"></div>
