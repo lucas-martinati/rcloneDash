@@ -23,7 +23,7 @@ export function initLiveStream() {
         // On émet l'événement sur le bus au lieu d'appeler directement la fonction
         bus.emit('live:update', d.live);
       } catch (_) {
-        /* trame partielle : on ignore */
+        return; /* trame partielle : on ignore */
       }
     };
 

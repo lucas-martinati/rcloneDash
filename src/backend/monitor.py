@@ -163,9 +163,55 @@ class Monitor:
             ]
         )
         rows = []
+        
+        skip_patterns = [
+            "Starting transaction limiter",
+            "Setting --ignore-listing-checksum",
+            "Bisyncing with Comparison Settings",
+            "Lockfile info",
+            "Valid lock file found",
+            "Building Path1",
+            "Synching Path1",
+            "Failed with result",
+            "Transferred:",
+            "Checks:",
+            "Elapsed time:",
+            "prior lock file found",
+            "Tip: this indicates",
+            "If you're SURE you want",
+            "rclone deletefile",
+            "Consumed ",
+            "Details:"
+        ]
+        
         for l in (o or "").split("\n"):
-            if not l.strip():
+            ls = l.strip()
+            if not ls:
                 continue
+                
+            # Ignore noise lines
+            if any(p in l for p in skip_patterns):
+                continue
+                
+            # Ignore json formatting noise unless it contains error keywords
+            if ls.startswith("{") or ls.startswith("}") or ls.startswith("[") or ls.startswith("]") or ls.startswith('"') or ls.startswith("@") or ls.startswith(", "):
+                if not any(w in ls.lower() for w in ["error", "fatal", "failed"]):
+                    continue
+
+            # Identify if the line is just an empty header like "... rclone[123]: INFO    :"
+            # By splitting on "]: " to get the actual message part
+            msg_part = ls
+            if "]: " in ls:
+                msg_part = ls.split("]: ", 1)[1].strip()
+            
+            # If after stripping the prefix, it's just "INFO  :" or "ERROR :" etc, it's an empty line
+            if msg_part.startswith("INFO") or msg_part.startswith("ERROR") or msg_part.startswith("NOTICE") or msg_part.startswith("DEBUG"):
+                # Check if it has any actual text after the level tag
+                # Level tags usually end with ":"
+                after_colon = msg_part.split(":", 1)
+                if len(after_colon) == 1 or not after_colon[1].strip():
+                    continue
+
             ll = l.lower()
             lv = "info"
             if any(w in ll for w in ["error", "failed", "fatal", "errno", "corrupt"]):

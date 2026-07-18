@@ -279,19 +279,19 @@
   function colorizeLog(text) {
     let e = esc(text);
     e = e.replace(
-      /^\d{4}[-/]\d{2}[-/]\d{2}[T ](\d{2}:\d{2}:\d{2})[^\s]*\s+(\S+)\s+(\S+?):/,
-      '<span class="log-meta">$1</span> <span class="log-meta">$2 $3:</span>'
+      /^\d{4}[-/]\d{2}[-/]\d{2}[T ](\d{2}:\d{2}:\d{2})[^\s]*\s+(\S+)\s+(\S+?):\s*/,
+      '<span class="log-meta">$1</span> '
     );
     if (e.indexOf("log-meta") === -1) {
       e = e.replace(
-        /^(\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/,
-        '<span class="log-meta">$1</span>'
+        /^(\d{4}[-/]\d{2}[-/]\d{2}[T ](\d{2}:\d{2}:\d{2}))[^\s]*\s*/,
+        '<span class="log-meta">$2</span> '
       );
     }
-    e = e.replace(/ ERROR /g, ' <strong style="color:var(--err)">ERROR </strong>');
-    e = e.replace(/ NOTICE(:| )/g, ' <strong style="color:var(--warn)">NOTICE</strong>$1');
-    e = e.replace(/ INFO(:| )/g, ' <strong style="color:var(--run)">INFO  </strong>$1');
-    e = e.replace(/ DEBUG(:| )/g, ' <strong style="color:var(--faint)">DEBUG </strong>$1');
+    e = e.replace(/INFO\+?\d*(:| )\s*/g, '<strong style="color:var(--faint)">INFO : </strong>');
+    e = e.replace(/ERROR(:| )\s*/g, '<strong style="color:var(--err)">ERREUR : </strong>');
+    e = e.replace(/NOTICE(:| )\s*/g, '<strong style="color:var(--warn)">NOTICE : </strong>');
+    e = e.replace(/DEBUG(:| )\s*/g, '<strong style="color:var(--faint)">DEBUG : </strong>');
     e = e.replace(/(Deleted .*|File was deleted.*)/g, '<span style="color:var(--err)">$1</span>');
     e = e.replace(/(Copied .*|File is new.*)/g, '<span style="color:var(--ok)">$1</span>');
     e = e.replace(/(Updated .*|File was modified.*)/g, '<span style="color:var(--warn)">$1</span>');
@@ -808,6 +808,7 @@
           let d = JSON.parse(e.data);
           bus.emit("live:update", d.live);
         } catch (_) {
+          return;
         }
       };
       ws.onopen = function() {
