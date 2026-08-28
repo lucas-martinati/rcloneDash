@@ -113,11 +113,7 @@ sed -e "s|__HOME__|$HOME|g" \
     services/rclone-bisync.service.template > "$HOME/.config/systemd/user/rclone-bisync.service"
 cp services/rclone-bisync.timer "$HOME/.config/systemd/user/"
 
-systemctl --user daemon-reload
-systemctl --user enable --now rclone-bisync.timer >/dev/null 2>&1
-ok "Service et timer installés et activés (niveau utilisateur)"
-
-# Création du fichier de config par défaut si inexistant
+# Création du fichier de config par défaut si inexistant, ou conservation du timer configuré
 CONFIG_FILE="$HOME/.config/rclone/dash-config.json"
 if [ ! -f "$CONFIG_FILE" ]; then
     cat <<EOF > "$CONFIG_FILE"
@@ -128,7 +124,18 @@ if [ ! -f "$CONFIG_FILE" ]; then
 }
 EOF
     info "Fichier de configuration par défaut généré"
+else
+    # Restaurer l'intervalle personnalisé déjà configuré
+    CUSTOM_INTERVAL=$(python3 -c "import sys, json; print(json.load(open(sys.argv[1])).get('timer_interval', '10min'))" "$CONFIG_FILE" 2>/dev/null || echo "10min")
+    if [ -n "$CUSTOM_INTERVAL" ]; then
+        sed -i "s|OnUnitActiveSec=.*|OnUnitActiveSec=$CUSTOM_INTERVAL|" "$HOME/.config/systemd/user/rclone-bisync.timer"
+    fi
 fi
+
+systemctl --user daemon-reload
+systemctl --user enable --now rclone-bisync.timer >/dev/null 2>&1
+systemctl --user restart rclone-bisync.timer >/dev/null 2>&1
+ok "Service et timer installés et activés (niveau utilisateur)"
 
 # --------------------------------------------------------------------------- #
 #  Récapitulatif

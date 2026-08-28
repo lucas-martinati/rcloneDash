@@ -116,7 +116,7 @@ def api_rule_delete(data: Dict[str, Any] = Body(...)):
 @app.get("/api/raw_logs", response_class=PlainTextResponse)
 def api_raw_logs(n: int = 2000):
     try:
-        o = subprocess.check_output(["journalctl", "-u", "rclone-bisync", "--no-pager", "-n", str(n)], text=True)
+        o = subprocess.check_output(["journalctl", "--user", "-u", "rclone-bisync", "--no-pager", "-n", str(n)], text=True)
         return o
     except Exception as e:
         return str(e)

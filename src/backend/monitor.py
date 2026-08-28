@@ -52,7 +52,7 @@ class Monitor:
         now = time.time()
         if now - self._timer_time < 5 and self._timer is not None:
             return self._timer
-        o, _, _ = self.cmd(["systemctl", "status", self.tmr, "--no-pager", "-l"])
+        o, _, _ = self.cmd(["systemctl", "--user", "status", self.tmr, "--no-pager", "-l"])
         s = {"active": False, "next_run": "—", "last_run": "—"}
         for l in (o or "").split("\n"):
             if "Active:" in l:
@@ -70,7 +70,7 @@ class Monitor:
         now = time.time()
         if now - self._service_time < 5 and self._service is not None:
             return self._service
-        o, _, _ = self.cmd(["systemctl", "status", self.svc, "--no-pager", "-l"])
+        o, _, _ = self.cmd(["systemctl", "--user", "status", self.svc, "--no-pager", "-l"])
         s = {"state": "idle", "result": "—", "duration": "—"}
         for l in (o or "").split("\n"):
             if "Active:" in l:
@@ -154,6 +154,7 @@ class Monitor:
         o, _, _ = self.cmd(
             [
                 "journalctl",
+                "--user",
                 "-u",
                 self.svc,
                 "--no-pager",
@@ -237,6 +238,7 @@ class Monitor:
         o, _, _ = self.cmd(
             [
                 "journalctl",
+                "--user",
                 "-u",
                 self.svc,
                 "--no-pager",
@@ -391,6 +393,7 @@ class Monitor:
         o, _, _ = self.cmd(
             [
                 "journalctl",
+                "--user",
                 "-u",
                 self.svc,
                 "--no-pager",
@@ -424,12 +427,12 @@ class Monitor:
             open(force_file, "w").close()
         except Exception:
             pass
-        _, err, code = self.cmd(["systemctl", "start", "--no-block", self.svc])
+        _, err, code = self.cmd(["systemctl", "--user", "start", "--no-block", self.svc])
         return code == 0, err
 
     def cancel(self):
         """Annule une sync en cours (--no-block pour ne pas attendre la fin)."""
-        _, err, code = self.cmd(["systemctl", "stop", "--no-block", self.svc])
+        _, err, code = self.cmd(["systemctl", "--user", "stop", "--no-block", self.svc])
         return code == 0, err
 
     def full(self):

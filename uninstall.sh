@@ -23,16 +23,14 @@ printf '%s%s  Désinstallation de RcloneDash%s\n' "$BOLD" "$RED" "$RESET"
 printf '%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$BOLD" "$RED" "$RESET"
 
 # 1. Arrêt et suppression des services utilisateur
-info "Arrêt du service utilisateur (rclonedash.service)..."
-systemctl --user stop rclonedash.service 2>/dev/null || true
-systemctl --user disable rclonedash.service 2>/dev/null || true
-if [ -f "$HOME/.config/systemd/user/rclonedash.service" ]; then
-    rm -f "$HOME/.config/systemd/user/rclonedash.service"
-    systemctl --user daemon-reload
-    ok "Service utilisateur supprimé."
-else
-    info "Service utilisateur non trouvé."
-fi
+info "Arrêt des services utilisateur (rclonedash & rclone-bisync)..."
+systemctl --user stop rclonedash.service rclone-bisync.timer rclone-bisync.service 2>/dev/null || true
+systemctl --user disable rclonedash.service rclone-bisync.timer 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/rclonedash.service"
+rm -f "$HOME/.config/systemd/user/rclone-bisync.service"
+rm -f "$HOME/.config/systemd/user/rclone-bisync.timer"
+systemctl --user daemon-reload
+ok "Services et timers utilisateur supprimés."
 
 # 2. Arrêt et suppression des services système (sudo requis)
 if [ -f "/etc/systemd/system/rclone-bisync.timer" ] || [ -f "/etc/systemd/system/rclone-bisync.service" ]; then

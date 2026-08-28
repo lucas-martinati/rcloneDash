@@ -41,6 +41,7 @@ class LogStreamer(threading.Thread):
                 proc = subprocess.Popen(
                     [
                         "journalctl",
+                        "--user",
                         "-f",
                         "-u",
                         self.service,
