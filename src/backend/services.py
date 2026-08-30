@@ -100,7 +100,7 @@ def api_settings_save(data: Dict[str, Any] = None):
         if os.path.exists(timer_file):
             with open(timer_file, "r") as f:
                 timer_content = f.read()
-            timer_content = re.sub(r"OnUnitActiveSec=.*", f"OnUnitActiveSec={timer_interval}", timer_content)
+            timer_content = re.sub(r"(OnUnitActiveSec|OnUnitInactiveSec)=.*", f"OnUnitInactiveSec={timer_interval}", timer_content)
             with open(timer_file, "w") as f:
                 f.write(timer_content)
                 

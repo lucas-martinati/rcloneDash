@@ -1,9 +1,9 @@
 [Unit]
-Description=Sync Google Drive toutes les 10 minutes
+Description=Sync Google Drive périodique (après chaque exécution)
 
 [Timer]
 OnBootSec=1min
-OnUnitActiveSec=10min
+OnUnitInactiveSec=10min
 Persistent=true
 
 [Install]
