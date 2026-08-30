@@ -8,6 +8,7 @@ import { loadTree, _fm } from './file-browser.js';
    ═══════════════════════════════════════════════════ */
 export async function openFiltersModal() {
   document.getElementById('filters-modal').classList.add('show');
+  checkNewFilterInput();
   await loadFilters();
 }
 
@@ -20,27 +21,45 @@ export let _originalFiltersText = '';
 export function checkFiltersModified() {
   let tf = document.getElementById('filters-text');
   let btn = document.getElementById('save-filters-btn');
-  btn.disabled = tf.value === _originalFiltersText;
+  if (tf && btn) {
+    btn.disabled = tf.value === _originalFiltersText;
+  }
 }
+
+export function checkNewFilterInput() {
+  let input = document.getElementById('new-filter-input');
+  let btn = document.getElementById('btn-add-filter');
+  if (input && btn) {
+    btn.disabled = !input.value.trim();
+  }
+}
+
 export async function loadFilters() {
   let tf = document.getElementById('filters-text');
-  tf.value = 'Chargement…';
+  if (tf) tf.value = 'Chargement…';
   try {
     let r = await fetch('/api/filters');
     let d = await r.json();
-    tf.value = d.content || (d.error ? 'Erreur : ' + d.error : '');
-    _originalFiltersText = tf.value;
-    checkFiltersModified();
-    tf.scrollTop = tf.scrollHeight;
+    if (tf) {
+      tf.value = d.content || (d.error ? 'Erreur : ' + d.error : '');
+      _originalFiltersText = tf.value;
+      checkFiltersModified();
+      tf.scrollTop = tf.scrollHeight;
+    }
   } catch (e) {
-    tf.value = 'Serveur injoignable';
+    if (tf) tf.value = 'Serveur injoignable';
   }
+  checkNewFilterInput();
 }
 
 export function addFilter() {
   let input = document.getElementById('new-filter-input');
+  if (!input) return;
   let rule = input.value.trim();
-  if (!rule) return;
+  if (!rule) {
+    checkNewFilterInput();
+    return;
+  }
   if (!rule.startsWith('- ') && !rule.startsWith('+ ') && !rule.startsWith('#')) {
     rule = '- ' + rule;
   }
@@ -56,9 +75,10 @@ export function addFilter() {
 export function commitFilter(rule) {
   let input = document.getElementById('new-filter-input');
   let tf = document.getElementById('filters-text');
-  tf.value += (tf.value.endsWith('\n') || !tf.value ? '' : '\n') + rule + '\n';
-  input.value = '';
-  tf.scrollTop = tf.scrollHeight;
+  if (tf) tf.value += (tf.value.endsWith('\n') || !tf.value ? '' : '\n') + rule + '\n';
+  if (input) input.value = '';
+  checkNewFilterInput();
+  if (tf) tf.scrollTop = tf.scrollHeight;
   return saveFilters();
 }
 

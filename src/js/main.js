@@ -43,6 +43,7 @@ import {
   addFilter,
   saveFilters,
   checkFiltersModified,
+  checkNewFilterInput,
   openImpactModal,
   closeImpactModal,
   impOnChoice,
@@ -51,6 +52,8 @@ import {
 import {
   openSettingsModal,
   closeSettingsModal,
+  checkSettingsModified,
+  initSettingsModal,
   saveSettings,
   openDryRunModal,
   closeDryRunModal,
@@ -107,6 +110,7 @@ Object.assign(window, {
   addFilter,
   saveFilters,
   checkFiltersModified,
+  checkNewFilterInput,
   openImpactModal,
   closeImpactModal,
   impOnChoice,
@@ -114,6 +118,7 @@ Object.assign(window, {
   // config & dry run modals
   openSettingsModal,
   closeSettingsModal,
+  checkSettingsModified,
   saveSettings,
   openDryRunModal,
   closeDryRunModal,
@@ -167,6 +172,7 @@ window.addEventListener('blur', function () {
 applyThemeIcon();
 initDragAndDrop();
 initFocusTrap();
+initSettingsModal();
 refresh();
 initLiveStream();
 S.interval = setInterval(refresh, 10000);

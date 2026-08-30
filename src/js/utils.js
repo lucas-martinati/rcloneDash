@@ -87,10 +87,10 @@ export function colorizeLog(text) {
       '<span class="log-meta">$1</span>'
     );
   }
-  e = e.replace(/ ERROR /g, ' <strong style="color:var(--err)">ERROR </strong>');
+  e = e.replace(/ ERROR(:| )/g, ' <strong style="color:var(--err)">ERROR</strong>$1');
   e = e.replace(/ NOTICE(:| )/g, ' <strong style="color:var(--warn)">NOTICE</strong>$1');
-  e = e.replace(/ INFO(:| )/g, ' <strong style="color:var(--run)">INFO  </strong>$1');
-  e = e.replace(/ DEBUG(:| )/g, ' <strong style="color:var(--faint)">DEBUG </strong>$1');
+  e = e.replace(/ INFO(:| )/g, ' <strong style="color:var(--faint)">INFO</strong>$1');
+  e = e.replace(/ DEBUG(:| )/g, ' <strong style="color:var(--faint)">DEBUG</strong>$1');
   e = e.replace(/(Deleted .*|File was deleted.*)/g, '<span style="color:var(--err)">$1</span>');
   e = e.replace(/(Copied .*|File is new.*)/g, '<span style="color:var(--ok)">$1</span>');
   e = e.replace(/(Updated .*|File was modified.*)/g, '<span style="color:var(--warn)">$1</span>');

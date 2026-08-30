@@ -279,19 +279,19 @@
   function colorizeLog(text) {
     let e = esc(text);
     e = e.replace(
-      /^\d{4}[-/]\d{2}[-/]\d{2}[T ](\d{2}:\d{2}:\d{2})[^\s]*\s+(\S+)\s+(\S+?):\s*/,
-      '<span class="log-meta">$1</span> '
+      /^\d{4}[-/]\d{2}[-/]\d{2}[T ](\d{2}:\d{2}:\d{2})[^\s]*\s+(\S+)\s+(\S+?):/,
+      '<span class="log-meta">$1</span> <span class="log-meta">$2 $3:</span>'
     );
     if (e.indexOf("log-meta") === -1) {
       e = e.replace(
-        /^(\d{4}[-/]\d{2}[-/]\d{2}[T ](\d{2}:\d{2}:\d{2}))[^\s]*\s*/,
-        '<span class="log-meta">$2</span> '
+        /^(\d{4}[-/]\d{2}[-/]\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*)/,
+        '<span class="log-meta">$1</span>'
       );
     }
-    e = e.replace(/INFO\+?\d*(:| )\s*/g, '<strong style="color:var(--faint)">INFO : </strong>');
-    e = e.replace(/ERROR(:| )\s*/g, '<strong style="color:var(--err)">ERREUR : </strong>');
-    e = e.replace(/NOTICE(:| )\s*/g, '<strong style="color:var(--warn)">NOTICE : </strong>');
-    e = e.replace(/DEBUG(:| )\s*/g, '<strong style="color:var(--faint)">DEBUG : </strong>');
+    e = e.replace(/ ERROR(:| )/g, ' <strong style="color:var(--err)">ERROR</strong>$1');
+    e = e.replace(/ NOTICE(:| )/g, ' <strong style="color:var(--warn)">NOTICE</strong>$1');
+    e = e.replace(/ INFO(:| )/g, ' <strong style="color:var(--faint)">INFO</strong>$1');
+    e = e.replace(/ DEBUG(:| )/g, ' <strong style="color:var(--faint)">DEBUG</strong>$1');
     e = e.replace(/(Deleted .*|File was deleted.*)/g, '<span style="color:var(--err)">$1</span>');
     e = e.replace(/(Copied .*|File is new.*)/g, '<span style="color:var(--ok)">$1</span>');
     e = e.replace(/(Updated .*|File was modified.*)/g, '<span style="color:var(--warn)">$1</span>');
@@ -883,6 +883,141 @@
       }).observe(modal, { attributes: true, attributeFilter: ["class"] });
     });
   }
+
+  // src/js/status.js
+  function badge(state) {
+    let b = document.getElementById("sbadge");
+    let l = document.getElementById("slbl");
+    let d = document.getElementById("sdot");
+    let map = {
+      running: ["run", "Synchronisation\u2026"],
+      success: ["ok", "\xC0 jour"],
+      failed: ["err", "Erreur"],
+      idle: ["idle", "En attente"]
+    };
+    let info = map[state] || ["idle", state];
+    b.className = "badge " + info[0];
+    l.textContent = info[1];
+    d.className = "dot" + (state === "running" ? " pulse-anim" : "");
+    let bsync = document.getElementById("bsync");
+    let bcancel = document.getElementById("bcancel");
+    bsync.style.display = state === "running" ? "none" : "inline-flex";
+    bcancel.style.display = state === "running" ? "inline-flex" : "none";
+  }
+  function setSmartRefresh(state) {
+    if (state === S.curState) return;
+    S.curState = state;
+    if (S.interval) clearInterval(S.interval);
+    let ms = state === "running" ? 3e3 : state === "failed" ? 5e3 : 1e4;
+    S.interval = setInterval(refresh, ms);
+  }
+  bus.on("sync:status", (state) => {
+    badge(state);
+    setSmartRefresh(state);
+  });
+
+  // src/js/live-sync.js
+  function updateLive(live) {
+    let section = document.getElementById("live-section");
+    if (!live || !live.is_syncing && live.phase_index <= 0) {
+      section.classList.remove("active");
+      return;
+    }
+    section.classList.add("active");
+    let phaseNames = [
+      "Listings",
+      "Diffs locaux",
+      "Diffs distants",
+      "Application",
+      "Mise \xE0 jour",
+      "Termin\xE9"
+    ];
+    let stepper = document.getElementById("phase-stepper");
+    let html = "";
+    for (let i = 0; i < phaseNames.length; i++) {
+      let cls = "", icon = "\u25CB";
+      if (i < live.phase_index) {
+        cls = "done";
+        icon = "\u2713";
+      } else if (i === live.phase_index) {
+        cls = "current";
+        icon = "\u25CF";
+      }
+      if (i > 0) html += '<span class="phase-arrow">\u2192</span>';
+      html += '<span class="phase-step ' + cls + '">' + icon + " " + phaseNames[i] + "</span>";
+    }
+    stepper.innerHTML = html;
+    let elapsed = document.getElementById("live-elapsed");
+    if (live.duration_s > 0) {
+      let mn = Math.floor(live.duration_s / 60);
+      let s = live.duration_s % 60;
+      elapsed.textContent = (mn > 0 ? mn + " min " : "") + s + " s";
+    } else {
+      elapsed.textContent = live.transfer && live.transfer.elapsed || "";
+    }
+    let t = live.transfer || {};
+    document.getElementById("tf-done").textContent = t.done || "\u2014";
+    document.getElementById("tf-total").textContent = t.total || "\u2014";
+    document.getElementById("tf-pct").textContent = t.pct != null ? t.pct + " %" : "\u2014";
+    document.getElementById("tf-speed").textContent = t.speed || "\u2014";
+    document.getElementById("tf-eta").textContent = t.eta || "\u2014";
+    document.getElementById("tf-checks").textContent = t.checks_done != null ? t.checks_done + " / " + t.checks_total : "\u2014";
+    document.getElementById("tf-files").textContent = t.files_done != null ? t.files_done + " / " + t.files_total : "\u2014";
+    document.getElementById("tf-bar").style.width = (t.pct || 0) + "%";
+    let aw = document.getElementById("active-wrap");
+    if (live.active_files && live.active_files.length > 0) {
+      aw.style.display = "";
+      let html2 = '<div class="kl">' + (live.active_files.length > 1 ? "Fichiers en cours de transfert (" + live.active_files.length + ")" : "Fichier en cours de transfert") + "</div>";
+      for (let i = 0; i < live.active_files.length; i++) {
+        let f = live.active_files[i];
+        let details = [];
+        if (f.status === "checking") details.push("v\xE9rification\u2026");
+        if (f.size) details.push(f.size);
+        if (f.speed) details.push(f.speed);
+        if (f.eta && f.eta !== "-") details.push("ETA " + f.eta);
+        html2 += '<div style="margin:6px 0 8px;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;"><div class="active-fname" style="flex:1;" title="' + esc(f.name) + '">' + esc(f.name) + " (" + f.pct + ' %)</div><div class="recent-size">' + esc(details.join(" \xB7 ")) + '</div></div><div class="tf-pbar"><div class="tf-pfill" style="width:' + f.pct + '%"></div></div></div>';
+      }
+      aw.innerHTML = html2;
+    } else if (live.active_file) {
+      aw.style.display = "";
+      aw.innerHTML = '<div class="kl">Fichier en cours de transfert</div><div class="active-fname">' + esc(live.active_file) + '</div><div class="tf-pbar"><div class="tf-pfill" style="width:' + live.active_file_pct + '%"></div></div>';
+    } else {
+      aw.style.display = "none";
+    }
+    let lsw = document.getElementById("live-synced-wrap");
+    let lsl = document.getElementById("live-synced-list");
+    if (live.synced_files && live.synced_files.length > 0) {
+      lsw.style.display = "";
+      let html2 = "";
+      for (let i = live.synced_files.length - 1; i >= 0; i--) {
+        html2 += renderFileRow(live.synced_files[i], "padding:4px 0;");
+      }
+      lsl.innerHTML = html2;
+    } else {
+      lsw.style.display = "none";
+    }
+    renderChanges("ch-p1", live.changes.path1);
+    renderChanges("ch-p2", live.changes.path2);
+  }
+  function renderChanges(id, ch) {
+    let el = document.getElementById(id);
+    let items = [];
+    let kinds = [
+      ["new", "new"],
+      ["modified", "modified"],
+      ["deleted", "deleted"]
+    ];
+    for (let k = 0; k < kinds.length; k++) {
+      let arr = ch[kinds[k][0]] || [];
+      for (let i = 0; i < arr.length; i++) {
+        items.push(
+          '<div class="change-item"><span class="change-dot ' + kinds[k][1] + '"></span>' + esc(arr[i]) + "</div>"
+        );
+      }
+    }
+    el.innerHTML = items.length ? items.join("") : '<span class="change-empty">Aucun changement</span>';
+  }
+  bus.on("live:update", updateLive);
 
   // src/js/icons.js
   function _svg(inner, sz) {
@@ -1547,6 +1682,7 @@
   // src/js/filters.js
   async function openFiltersModal() {
     document.getElementById("filters-modal").classList.add("show");
+    checkNewFilterInput();
     await loadFilters();
   }
   function closeFiltersModal() {
@@ -1556,26 +1692,42 @@
   function checkFiltersModified() {
     let tf = document.getElementById("filters-text");
     let btn = document.getElementById("save-filters-btn");
-    btn.disabled = tf.value === _originalFiltersText;
+    if (tf && btn) {
+      btn.disabled = tf.value === _originalFiltersText;
+    }
+  }
+  function checkNewFilterInput() {
+    let input = document.getElementById("new-filter-input");
+    let btn = document.getElementById("btn-add-filter");
+    if (input && btn) {
+      btn.disabled = !input.value.trim();
+    }
   }
   async function loadFilters() {
     let tf = document.getElementById("filters-text");
-    tf.value = "Chargement\u2026";
+    if (tf) tf.value = "Chargement\u2026";
     try {
       let r = await fetch("/api/filters");
       let d = await r.json();
-      tf.value = d.content || (d.error ? "Erreur : " + d.error : "");
-      _originalFiltersText = tf.value;
-      checkFiltersModified();
-      tf.scrollTop = tf.scrollHeight;
+      if (tf) {
+        tf.value = d.content || (d.error ? "Erreur : " + d.error : "");
+        _originalFiltersText = tf.value;
+        checkFiltersModified();
+        tf.scrollTop = tf.scrollHeight;
+      }
     } catch (e) {
-      tf.value = "Serveur injoignable";
+      if (tf) tf.value = "Serveur injoignable";
     }
+    checkNewFilterInput();
   }
   function addFilter() {
     let input = document.getElementById("new-filter-input");
+    if (!input) return;
     let rule = input.value.trim();
-    if (!rule) return;
+    if (!rule) {
+      checkNewFilterInput();
+      return;
+    }
     if (!rule.startsWith("- ") && !rule.startsWith("+ ") && !rule.startsWith("#")) {
       rule = "- " + rule;
     }
@@ -1588,9 +1740,10 @@
   function commitFilter(rule) {
     let input = document.getElementById("new-filter-input");
     let tf = document.getElementById("filters-text");
-    tf.value += (tf.value.endsWith("\n") || !tf.value ? "" : "\n") + rule + "\n";
-    input.value = "";
-    tf.scrollTop = tf.scrollHeight;
+    if (tf) tf.value += (tf.value.endsWith("\n") || !tf.value ? "" : "\n") + rule + "\n";
+    if (input) input.value = "";
+    checkNewFilterInput();
+    if (tf) tf.scrollTop = tf.scrollHeight;
     return saveFilters();
   }
   var _pendingFilter = null;
@@ -1721,26 +1874,76 @@
     }
   }
 
-  // src/js/modals.js
+  // src/js/settings.js
+  var _originalSettings = null;
+  function getSettingsFromDOM() {
+    return {
+      remote: document.getElementById("set-remote")?.value || "",
+      local_dir: document.getElementById("set-local-dir")?.value || "",
+      timer_interval: document.getElementById("set-timer")?.value || "",
+      bwlimit: document.getElementById("set-bwlimit")?.value || ""
+    };
+  }
+  function checkSettingsModified() {
+    let btn = document.getElementById("btn-save-settings");
+    if (!btn) return;
+    let current = getSettingsFromDOM();
+    let isValid = current.remote.trim() !== "" && current.local_dir.trim() !== "";
+    if (!_originalSettings) {
+      _originalSettings = { ...current };
+      btn.disabled = true;
+      return;
+    }
+    let isDirty = current.remote !== _originalSettings.remote || current.local_dir !== _originalSettings.local_dir || current.timer_interval !== _originalSettings.timer_interval || current.bwlimit !== _originalSettings.bwlimit;
+    btn.disabled = !(isDirty && isValid);
+  }
+  function setSettingsInputsDisabled(disabled) {
+    ["set-remote", "set-local-dir", "set-timer", "set-bwlimit"].forEach((id) => {
+      let el = document.getElementById(id);
+      if (el) el.disabled = disabled;
+    });
+  }
   function openSettingsModal() {
-    document.getElementById("settings-modal").classList.add("show");
+    let modal = document.getElementById("settings-modal");
+    if (modal) modal.classList.add("show");
+    let btn = document.getElementById("btn-save-settings");
+    if (btn) btn.disabled = true;
+    setSettingsInputsDisabled(true);
     fetch("/api/settings").then((r) => r.json()).then((d) => {
       if (d.remote != null) document.getElementById("set-remote").value = d.remote;
       if (d.local_dir != null) document.getElementById("set-local-dir").value = d.local_dir;
       if (d.timer_interval != null) document.getElementById("set-timer").value = d.timer_interval;
       if (d.bwlimit != null) document.getElementById("set-bwlimit").value = d.bwlimit;
+      _originalSettings = getSettingsFromDOM();
+      setSettingsInputsDisabled(false);
+      checkSettingsModified();
+    }).catch(() => {
+      _originalSettings = getSettingsFromDOM();
+      setSettingsInputsDisabled(false);
+      checkSettingsModified();
     });
   }
   function closeSettingsModal() {
-    document.getElementById("settings-modal").classList.remove("show");
+    let modal = document.getElementById("settings-modal");
+    if (modal) modal.classList.remove("show");
+    setSettingsInputsDisabled(false);
+  }
+  function initSettingsModal() {
+    let modal = document.getElementById("settings-modal");
+    if (!modal) return;
+    modal.addEventListener("input", checkSettingsModified);
+    modal.addEventListener("change", checkSettingsModified);
+    modal.addEventListener("keyup", checkSettingsModified);
+    modal.addEventListener("paste", () => setTimeout(checkSettingsModified, 0));
   }
   async function saveSettings() {
     let btn = document.getElementById("btn-save-settings");
+    let current = getSettingsFromDOM();
     let data = {
-      remote: document.getElementById("set-remote").value.trim(),
-      local_dir: document.getElementById("set-local-dir").value.trim(),
-      timer_interval: document.getElementById("set-timer").value,
-      bwlimit: document.getElementById("set-bwlimit").value
+      remote: current.remote.trim(),
+      local_dir: current.local_dir.trim(),
+      timer_interval: current.timer_interval,
+      bwlimit: current.bwlimit
     };
     if (!data.remote || !data.local_dir) {
       toast("La cible et le dossier local sont requis.", "err");
@@ -1756,22 +1959,28 @@
       });
       let d = await r.json();
       if (d.ok) {
+        _originalSettings = getSettingsFromDOM();
+        checkSettingsModified();
         toast("Param\xE8tres appliqu\xE9s. Red\xE9marrage du Dashboard...", "ok");
         setTimeout(() => {
           window.location.reload();
         }, 2e3);
       } else {
         toast("Impossible d'appliquer : " + d.error, "err");
-        btn.disabled = false;
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Enregistrer & Red\xE9marrer';
+        checkSettingsModified();
       }
     } catch (e) {
+      _originalSettings = getSettingsFromDOM();
+      checkSettingsModified();
       toast("Param\xE8tres appliqu\xE9s. Red\xE9marrage du Dashboard...", "ok");
       setTimeout(() => {
         window.location.reload();
       }, 2e3);
     }
   }
+
+  // src/js/modals.js
   function openDryRunModal() {
     document.getElementById("dryrun-modal").classList.add("show");
   }
@@ -1853,6 +2062,7 @@
     addFilter,
     saveFilters,
     checkFiltersModified,
+    checkNewFilterInput,
     openImpactModal,
     closeImpactModal,
     impOnChoice,
@@ -1860,6 +2070,7 @@
     // config & dry run modals
     openSettingsModal,
     closeSettingsModal,
+    checkSettingsModified,
     saveSettings,
     openDryRunModal,
     closeDryRunModal,
@@ -1889,6 +2100,7 @@
   applyThemeIcon();
   initDragAndDrop();
   initFocusTrap();
+  initSettingsModal();
   refresh();
   initLiveStream();
   S.interval = setInterval(refresh, 1e4);

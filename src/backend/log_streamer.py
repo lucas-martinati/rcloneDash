@@ -201,17 +201,32 @@ class LogStreamer(threading.Thread):
             self.is_syncing = False
         elif "systemd" in ll and "failed" in ll and self.service in ll:
             self.is_syncing = False
-            subprocess.run(
-                [
+            self._send_failure_notification()
+
+    def _send_failure_notification(self):
+        """Envoie une notification bureau avec action cliquable ouvrant RcloneDash."""
+        def _notify():
+            try:
+                cmd = [
                     "notify-send",
                     "RcloneDash",
-                    "Échec de la synchronisation. Consultez le tableau de bord.",
+                    "Échec de la synchronisation. Cliquez pour ouvrir le tableau de bord.",
                     "--icon=dialog-error",
                     "-u",
                     "critical",
-                ],
-                check=False,
-            )
+                    "-a",
+                    "RcloneDash",
+                    "--action=default=Ouvrir",
+                    "--action=open=Ouvrir le tableau de bord",
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+                action = (res.stdout or "").strip()
+                if action in ("default", "open", "0", "1"):
+                    subprocess.run(["xdg-open", f"http://127.0.0.1:{config.PORT}"], check=False)
+            except Exception:
+                pass
+
+        threading.Thread(target=_notify, daemon=True).start()
 
     def get_live(self):
         """Retourne l'état live de la sync en cours, ou None."""

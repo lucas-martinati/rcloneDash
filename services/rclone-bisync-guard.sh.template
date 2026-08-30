@@ -37,6 +37,19 @@ FULL_INTERVAL=60
 
 run_bisync() {
     mkdir -p "$RCLONE_CONF"
+    # Nettoyage préventif des verrous orphelins (processus interrompu ou tué)
+    local cache_dir="$HOME/.cache/rclone/bisync"
+    if [ -d "$cache_dir" ]; then
+        for lck in "$cache_dir"/*.lck; do
+            [ -f "$lck" ] || continue
+            local lck_pid
+            lck_pid=$(python3 -c "import json; print(json.load(open('$lck')).get('PID', ''))" 2>/dev/null || true)
+            if [ -n "$lck_pid" ] && ! kill -0 "$lck_pid" 2>/dev/null; then
+                echo "RcloneDash: suppression du verrou orphelin (PID $lck_pid inactif)"
+                rm -f "$lck"
+            fi
+        done
+    fi
     /usr/bin/rclone bisync "$REMOTE" "$SYNC_DIR" \
         --config "$RCLONE_CONF/rclone.conf" \
         --filter-from "$RCLONE_CONF/gdrive-filters.txt" \

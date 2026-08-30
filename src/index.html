@@ -327,8 +327,6 @@
       </div> <!-- /modules-container -->
 
     </main>
-
-    </main>
   </div>
 
   <!-- ═══════ MODALES ═══════ -->
@@ -357,7 +355,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
               Remote rclone
             </div>
-            <input type="text" id="set-remote" class="set-input" placeholder="ex: GoogleDrive:">
+            <input type="text" id="set-remote" class="set-input" placeholder="ex: GoogleDrive:" oninput="checkSettingsModified()">
             <div class="set-field-hint">Le nom du remote tel que configuré dans <code>rclone config</code> (avec les éventuels <code>:</code> terminaux).</div>
           </div>
 
@@ -366,7 +364,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
               Dossier local (Sync Dir)
             </div>
-            <input type="text" id="set-local-dir" class="set-input" placeholder="ex: ~/GoogleDrive">
+            <input type="text" id="set-local-dir" class="set-input" placeholder="ex: ~/GoogleDrive" oninput="checkSettingsModified()">
             <div class="set-field-hint">Le dossier local à synchroniser avec le remote. Vous pouvez utiliser <code>~</code> pour votre dossier personnel.</div>
           </div>
         </div>
@@ -385,7 +383,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               Fréquence du Timer
             </div>
-            <select id="set-timer" class="set-select">
+            <select id="set-timer" class="set-select" onchange="checkSettingsModified()">
               <option value="1min">Toutes les minutes</option>
               <option value="5min">Toutes les 5 minutes</option>
               <option value="10min">Toutes les 10 minutes</option>
@@ -413,7 +411,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               Limite de débit (Bande passante)
             </div>
-            <select id="set-bwlimit" class="set-select">
+            <select id="set-bwlimit" class="set-select" onchange="checkSettingsModified()">
               <option value="">Aucune limite (vitesse maximale)</option>
               <option value="10M">10 Mo/s</option>
               <option value="5M">5 Mo/s</option>
@@ -427,7 +425,7 @@
         <!-- ── Actions ── -->
         <div class="set-actions">
           <button class="btn btn-g" onclick="closeSettingsModal()">Annuler</button>
-          <button class="btn" id="btn-save-settings" onclick="saveSettings()">
+          <button class="btn" id="btn-save-settings" onclick="saveSettings()" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
             Enregistrer & Redémarrer
           </button>
@@ -733,8 +731,8 @@
         
         <div style="display:flex;gap:8px;flex-shrink:0;">
           <input type="text" id="new-filter-input" class="code-input" style="flex:1"
-            placeholder="Nouvelle règle (ex: - *.tmp)" onkeydown="if(event.key==='Enter') addFilter()">
-          <button class="btn btn-g" onclick="addFilter()">
+            placeholder="Nouvelle règle (ex: - *.tmp)" oninput="checkNewFilterInput()" onkeydown="if(event.key==='Enter') addFilter()">
+          <button class="btn btn-g" id="btn-add-filter" onclick="addFilter()" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Ajouter
           </button>

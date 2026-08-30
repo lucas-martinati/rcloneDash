@@ -129,17 +129,20 @@
   font-size: 12px;
   font-weight: 600;
   font-family: var(--font-ui);
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   background: var(--grad-accent);
   color: var(--bg);
   box-shadow: var(--glow-accent);
   white-space: nowrap;
   transition:
-    box-shadow 0.18s,
-    filter 0.18s,
-    opacity 0.15s,
-    transform 0.1s;
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.1s ease;
 }
 
 .btn:hover {
@@ -150,12 +153,29 @@
   transform: translateY(1px);
 }
 
-.btn:disabled {
-  opacity: 0.55;
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.45;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-  filter: none;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  background: var(--surface-off) !important;
+  color: var(--muted) !important;
+  border-color: var(--border) !important;
+}
+
+.btn:disabled:hover,
+.btn[disabled]:hover,
+.btn:disabled:active,
+.btn[disabled]:active {
+  transform: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  background: var(--surface-off) !important;
+  color: var(--muted) !important;
+  border-color: var(--border) !important;
+  cursor: not-allowed;
 }
 
 .btn-g {
@@ -172,6 +192,20 @@
   box-shadow: none;
 }
 
+.btn-g:disabled,
+.btn-g[disabled],
+.btn-g:disabled:hover,
+.btn-g[disabled]:hover {
+  background: var(--surface-off) !important;
+  color: var(--muted) !important;
+  border-color: var(--border) !important;
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
 .btn-danger {
   background: transparent;
   color: var(--err);
@@ -182,6 +216,20 @@
 .btn-danger:hover {
   background: var(--err-bg);
   color: var(--err);
+}
+
+.btn-danger:disabled,
+.btn-danger[disabled],
+.btn-danger:disabled:hover,
+.btn-danger[disabled]:hover {
+  background: var(--surface-off) !important;
+  color: var(--muted) !important;
+  border-color: var(--border) !important;
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
 }
 
 .tsbtn {
