@@ -104,13 +104,15 @@
   padding: 16px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 
 .modal-body.col {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .modal-hint {

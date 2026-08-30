@@ -1881,6 +1881,7 @@
       remote: document.getElementById("set-remote")?.value || "",
       local_dir: document.getElementById("set-local-dir")?.value || "",
       timer_interval: document.getElementById("set-timer")?.value || "",
+      full_sync_interval: document.getElementById("set-full-sync")?.value || "",
       bwlimit: document.getElementById("set-bwlimit")?.value || ""
     };
   }
@@ -1894,11 +1895,11 @@
       btn.disabled = true;
       return;
     }
-    let isDirty = current.remote !== _originalSettings.remote || current.local_dir !== _originalSettings.local_dir || current.timer_interval !== _originalSettings.timer_interval || current.bwlimit !== _originalSettings.bwlimit;
+    let isDirty = current.remote !== _originalSettings.remote || current.local_dir !== _originalSettings.local_dir || current.timer_interval !== _originalSettings.timer_interval || current.full_sync_interval !== _originalSettings.full_sync_interval || current.bwlimit !== _originalSettings.bwlimit;
     btn.disabled = !(isDirty && isValid);
   }
   function setSettingsInputsDisabled(disabled) {
-    ["set-remote", "set-local-dir", "set-timer", "set-bwlimit"].forEach((id) => {
+    ["set-remote", "set-local-dir", "set-timer", "set-full-sync", "set-bwlimit"].forEach((id) => {
       let el = document.getElementById(id);
       if (el) el.disabled = disabled;
     });
@@ -1913,6 +1914,7 @@
       if (d.remote != null) document.getElementById("set-remote").value = d.remote;
       if (d.local_dir != null) document.getElementById("set-local-dir").value = d.local_dir;
       if (d.timer_interval != null) document.getElementById("set-timer").value = d.timer_interval;
+      if (d.full_sync_interval != null) document.getElementById("set-full-sync").value = String(d.full_sync_interval);
       if (d.bwlimit != null) document.getElementById("set-bwlimit").value = d.bwlimit;
       _originalSettings = getSettingsFromDOM();
       setSettingsInputsDisabled(false);
@@ -1943,6 +1945,7 @@
       remote: current.remote.trim(),
       local_dir: current.local_dir.trim(),
       timer_interval: current.timer_interval,
+      full_sync_interval: current.full_sync_interval,
       bwlimit: current.bwlimit
     };
     if (!data.remote || !data.local_dir) {

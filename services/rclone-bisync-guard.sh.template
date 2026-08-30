@@ -9,11 +9,9 @@
 #                (fichier marqueur .force-sync) -> on lance, sans condition.
 #   2. LOCAL   : un fichier du dossier synchronisé a été modifié récemment
 #                (fenêtre LOCAL_WINDOW minutes) -> on lance.
-#   3. CLOUD   : aucun changement local, mais le dernier sync complet date de
-#                plus de FULL_INTERVAL minutes -> on relance quand même pour
-#                récupérer d'éventuelles modifs faites côté cloud / autre PC.
+#   3. CLOUD   : filet de sécurité périodique pour récupérer les modifications
+#                faites directement côté cloud / autre PC (configurable).
 #   4. Sinon   : on ne fait rien (bisync ignoré).
-# =============================================================================
 # =============================================================================
 set -u
 
@@ -21,6 +19,7 @@ CONFIG_FILE="$HOME/.config/rclone/dash-config.json"
 REMOTE=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('remote', 'GoogleDrive:'))" < "$CONFIG_FILE" 2>/dev/null || echo "GoogleDrive:")
 SYNC_DIR=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('local_dir', '~/GoogleDrive'))" < "$CONFIG_FILE" 2>/dev/null || echo "~/GoogleDrive")
 SYNC_DIR="${SYNC_DIR/#\~/$HOME}"
+FULL_INTERVAL=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('full_sync_interval', '60'))" < "$CONFIG_FILE" 2>/dev/null || echo "60")
 
 RCLONE_CONF="__HOME__/.config/rclone"
 STAMP="$RCLONE_CONF/.last-full-sync"
@@ -30,10 +29,6 @@ FORCE_FILE="$RCLONE_CONF/.force-sync"
 # Volontairement un peu plus large que l'intervalle du timer (10 min) pour ne
 # jamais laisser passer un fichier modifié juste au bord d'une fenêtre.
 LOCAL_WINDOW=12
-
-# Intervalle maximum entre deux syncs complets, en minutes. Sert de filet pour
-# récupérer les changements venus du cloud même si rien ne bouge en local.
-FULL_INTERVAL=60
 
 run_bisync() {
     mkdir -p "$RCLONE_CONF"
@@ -92,13 +87,13 @@ elif [ -d "$SYNC_DIR" ] && \
      [ -n "$(find "$SYNC_DIR" -type f -newermt "$WIN_LO" ! -newermt "$WIN_HI" -print -quit 2>/dev/null)" ]; then
     reason="changement local détecté (< ${LOCAL_WINDOW} min)"
 
-# 3. Filet pour les changements distants : sync complet périodique.
-else
+# 3. Filet de sécurité Cloud : sync complet périodique (si configuré)
+elif [ "$FULL_INTERVAL" != "never" ] && [ "$FULL_INTERVAL" != "0" ] && [ "$FULL_INTERVAL" -gt 0 ] 2>/dev/null; then
     now=$(date +%s)
     last=0
     [ -f "$STAMP" ] && last=$(cat "$STAMP" 2>/dev/null || echo 0)
     if [ "$(( (now - last) / 60 ))" -ge "$FULL_INTERVAL" ]; then
-        reason="sync complet périodique (dernier > ${FULL_INTERVAL} min)"
+        reason="filet cloud périodique (dernier > ${FULL_INTERVAL} min)"
     fi
 fi
 
@@ -108,5 +103,5 @@ if [ -n "$reason" ]; then
     exit $?
 fi
 
-echo "RcloneDash: aucun changement local et sync complet récent — bisync ignoré"
+echo "RcloneDash: aucun changement local et filet cloud non échu — bisync ignoré"
 exit 0

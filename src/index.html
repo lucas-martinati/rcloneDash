@@ -341,7 +341,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
       </div>
-      <div class="modal-body col" style="gap: 20px;">
+      <div class="modal-body col" style="gap: 20px; overflow-y: auto; flex: 1; min-height: 0;">
 
         <!-- ── Cible et source ── -->
         <div class="set-section">
@@ -384,16 +384,33 @@
               Fréquence du Timer
             </div>
             <select id="set-timer" class="set-select" onchange="checkSettingsModified()">
-              <option value="1min">Toutes les minutes</option>
-              <option value="5min">Toutes les 5 minutes</option>
-              <option value="10min">Toutes les 10 minutes</option>
-              <option value="30min">Toutes les 30 minutes</option>
-              <option value="1h">Toutes les heures</option>
-              <option value="6h">Toutes les 6 heures</option>
-              <option value="12h">Toutes les 12 heures</option>
-              <option value="1d">Tous les jours</option>
+              <option value="1min">Toutes les minutes (1 min)</option>
+              <option value="5min">Toutes les 5 minutes (5 min)</option>
+              <option value="10min">Toutes les 10 minutes (10 min)</option>
+              <option value="30min">Toutes les 30 minutes (30 min — Recommandé)</option>
+              <option value="1h">Toutes les heures (1h)</option>
+              <option value="6h">Toutes les 6 heures (6h)</option>
+              <option value="12h">Toutes les 12 heures (12h)</option>
+              <option value="1d">Tous les jours (24h)</option>
             </select>
-            <div class="set-field-hint">Intervalle de vérification des modifications locales et de lancement du bisync.</div>
+            <div class="set-field-hint">Intervalle de réveil du timer pour vérifier les modifications de fichiers locaux.</div>
+          </div>
+
+          <div class="set-field" style="margin-top: 14px;">
+            <div class="set-field-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              Filet de sécurité Cloud (Sync complet périodique)
+            </div>
+            <select id="set-full-sync" class="set-select" onchange="checkSettingsModified()">
+              <option value="60">Toutes les heures (1h — Recommandé)</option>
+              <option value="120">Toutes les 2 heures (2h)</option>
+              <option value="240">Toutes les 4 heures (4h)</option>
+              <option value="360">Toutes les 6 heures (6h)</option>
+              <option value="720">Toutes les 12 heures (12h)</option>
+              <option value="1440">Une fois par jour (24h)</option>
+              <option value="never">Jamais (détection locale uniquement)</option>
+            </select>
+            <div class="set-field-hint">Force une vérification complète pour rapatrier les changements effectués directement sur Google Drive (web/mobile/autre PC) même si rien n'a bougé en local.</div>
           </div>
         </div>
 
@@ -422,15 +439,13 @@
           </div>
         </div>
 
-        <!-- ── Actions ── -->
-        <div class="set-actions">
-          <button class="btn btn-g" onclick="closeSettingsModal()">Annuler</button>
-          <button class="btn" id="btn-save-settings" onclick="saveSettings()" disabled>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-            Enregistrer & Redémarrer
-          </button>
-        </div>
-
+      </div>
+      <div class="set-actions">
+        <button class="btn btn-g" onclick="closeSettingsModal()">Annuler</button>
+        <button class="btn" id="btn-save-settings" onclick="saveSettings()" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          Enregistrer & Redémarrer
+        </button>
       </div>
     </div>
   </div>

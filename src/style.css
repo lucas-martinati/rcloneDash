@@ -1384,12 +1384,14 @@ body.folder-mode .fm-row.file-link:hover .fm-name {
   padding: 16px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 .modal-body.col {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  min-height: 0;
 }
 .modal-hint {
   color: var(--muted);
@@ -1594,9 +1596,12 @@ textarea.code-input {
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  padding-top: 8px;
+  padding: 14px 22px;
+  background: var(--surface-2);
   border-top: 1px solid var(--divider);
   flex-shrink: 0;
+  border-bottom-left-radius: var(--r-l);
+  border-bottom-right-radius: var(--r-l);
 }
 @media (max-width: 620px) {
   .set-field {

@@ -42,7 +42,13 @@ def api_cancel(m):
 def api_settings():
     try:
         import json
-        settings = {"remote": "GoogleDrive:", "local_dir": "~/GoogleDrive", "timer_interval": "10min", "bwlimit": ""}
+        settings = {
+            "remote": "GoogleDrive:",
+            "local_dir": "~/GoogleDrive",
+            "timer_interval": "10min",
+            "full_sync_interval": "60",
+            "bwlimit": ""
+        }
         config_path = os.path.expanduser("~/.config/rclone/dash-config.json")
         if os.path.exists(config_path):
             with open(config_path, "r") as f:
@@ -65,7 +71,12 @@ def api_settings_save(data: Dict[str, Any] = None):
         import json
         data = data or {}
         config_path = os.path.expanduser("~/.config/rclone/dash-config.json")
-        settings = {"remote": "GoogleDrive:", "local_dir": "~/GoogleDrive", "timer_interval": "10min"}
+        settings = {
+            "remote": "GoogleDrive:",
+            "local_dir": "~/GoogleDrive",
+            "timer_interval": "10min",
+            "full_sync_interval": "60"
+        }
         if os.path.exists(config_path):
             with open(config_path, "r") as f:
                 settings.update(json.load(f))
@@ -74,6 +85,7 @@ def api_settings_save(data: Dict[str, Any] = None):
         settings["local_dir"] = data.get("local_dir", settings["local_dir"])
         timer_interval = data.get("timer_interval", settings["timer_interval"])
         settings["timer_interval"] = timer_interval
+        settings["full_sync_interval"] = str(data.get("full_sync_interval", settings.get("full_sync_interval", "60")))
         
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         with open(config_path, "w") as f:
