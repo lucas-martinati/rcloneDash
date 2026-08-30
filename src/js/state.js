@@ -10,6 +10,7 @@ export const S = {
   lastLogs: '',
   nextSyncTs: 0, // timestamp (ms) de la prochaine sync planifiée
   lastStartTs: 0, // timestamp (ms) du dernier déclenchement
+  fullSync: null, // données du filet de sécurité cloud ({ interval, last_sync })
   isSyncing: false,
   livePct: -1, // % de transfert connu pendant une sync
   runsSig: '', // signatures des dernières données rendues,

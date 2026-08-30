@@ -46,6 +46,10 @@ export function updatePulse(d) {
     mid.style.display = 'none';
   }
 
+  // Filet Cloud
+  S.fullSync = d.full_sync || null;
+  updateCloudPulse();
+
   // Prochaine sync : on parse la date du trigger systemd
   let cap = document.getElementById('pulse-next-cap');
   let next = document.getElementById('pulse-next');
@@ -53,22 +57,22 @@ export function updatePulse(d) {
   let m = raw.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
   if (d.timer && !d.timer.active) {
     S.nextSyncTs = null;
-    cap.textContent = 'Planification';
-    next.textContent = 'Timer inactif';
+    cap.textContent = 'Timer Local';
+    next.textContent = 'Inactif';
     next.style.color = 'var(--warn)';
   } else if (!m && S.isSyncing) {
     // Pendant une sync, systemd affiche "n/a" pour le prochain déclenchement
     S.nextSyncTs = null;
-    cap.textContent = 'Prochaine sync';
-    next.textContent = 'après celle-ci';
+    cap.textContent = 'Timer Local';
+    next.textContent = 'En cours';
     next.style.color = '';
   } else if (m) {
     S.nextSyncTs = new Date(m[1] + 'T' + m[2]).getTime();
-    cap.textContent = 'Prochaine sync';
+    cap.textContent = 'Timer Local';
     next.style.color = '';
   } else {
     S.nextSyncTs = null;
-    cap.textContent = 'Prochaine sync';
+    cap.textContent = 'Timer Local';
     next.textContent = raw && raw !== '—' ? raw : '—';
     next.style.color = '';
   }
@@ -84,10 +88,47 @@ export function updatePulse(d) {
   tickPulse();
 }
 
+export function updateCloudPulse() {
+  let seg = document.getElementById('pulse-cloud-seg');
+  let val = document.getElementById('pulse-cloud-val');
+  if (!val) return;
+  if (!S.fullSync) {
+    if (seg) seg.style.display = 'none';
+    return;
+  }
+  if (seg) seg.style.display = '';
+
+  let interval = S.fullSync.interval;
+  let lastSync = S.fullSync.last_sync; // en secondes (unix timestamp)
+
+  if (interval === 'never' || interval === '0') {
+    val.textContent = 'Désactivé';
+    val.style.color = 'var(--muted)';
+  } else {
+    let intervalSec = (parseInt(interval, 10) || 60) * 60;
+    if (lastSync > 0) {
+      let elapsedSec = Math.floor(Date.now() / 1000 - lastSync);
+      let remSec = intervalSec - elapsedSec;
+      if (remSec <= 0) {
+        val.textContent = 'Échu (au prochain timer)';
+        val.style.color = 'var(--warn)';
+      } else {
+        val.textContent = 'dans ' + fmtRemaining(remSec);
+        val.style.color = '';
+      }
+    } else {
+      val.textContent = 'Au prochain timer';
+      val.style.color = '';
+    }
+  }
+}
+
 /* Tick 1 s : compte à rebours + ligne de vie */
 export function tickPulse() {
   let next = document.getElementById('pulse-next');
   let line = document.getElementById('pulse-line');
+
+  updateCloudPulse();
 
   if (S.isSyncing) {
     line.style.transform = '';

@@ -435,6 +435,25 @@ class Monitor:
         _, err, code = self.cmd(["systemctl", "--user", "stop", "--no-block", self.svc])
         return code == 0, err
 
+    def full_sync_info(self):
+        """Retourne les informations du filet de sécurité Cloud (sync complet périodique)."""
+        try:
+            cfg = config.get_settings()
+            interval_str = str(cfg.get("full_sync_interval", "60"))
+            stamp_file = os.path.expanduser("~/.config/rclone/.last-full-sync")
+            last_ts = 0
+            if os.path.exists(stamp_file):
+                with open(stamp_file, "r") as f:
+                    content = f.read().strip()
+                    if content.isdigit():
+                        last_ts = int(content)
+            return {
+                "interval": interval_str,
+                "last_sync": last_ts,
+            }
+        except Exception:
+            return {"interval": "60", "last_sync": 0}
+
     def full(self):
         """Retourne toutes les données pour /api/status."""
         with self.lock:
@@ -454,6 +473,7 @@ class Monitor:
             return {
                 "timer": self.timer(),
                 "service": svc,
+                "full_sync": self.full_sync_info(),
                 "disk": self.disk(),
                 "runs": parsed["runs"],
                 "logs": self.logs(150),

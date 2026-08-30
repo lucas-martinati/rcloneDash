@@ -11,6 +11,8 @@
     // timestamp (ms) de la prochaine sync planifiée
     lastStartTs: 0,
     // timestamp (ms) du dernier déclenchement
+    fullSync: null,
+    // données du filet de sécurité cloud ({ interval, last_sync })
     isSyncing: false,
     livePct: -1,
     // % de transfert connu pendant une sync
@@ -366,27 +368,29 @@
     } else {
       mid.style.display = "none";
     }
+    S.fullSync = d.full_sync || null;
+    updateCloudPulse();
     let cap = document.getElementById("pulse-next-cap");
     let next = document.getElementById("pulse-next");
     let raw = d.timer && d.timer.next_run || "";
     let m = raw.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
     if (d.timer && !d.timer.active) {
       S.nextSyncTs = null;
-      cap.textContent = "Planification";
-      next.textContent = "Timer inactif";
+      cap.textContent = "Timer Local";
+      next.textContent = "Inactif";
       next.style.color = "var(--warn)";
     } else if (!m && S.isSyncing) {
       S.nextSyncTs = null;
-      cap.textContent = "Prochaine sync";
-      next.textContent = "apr\xE8s celle-ci";
+      cap.textContent = "Timer Local";
+      next.textContent = "En cours";
       next.style.color = "";
     } else if (m) {
       S.nextSyncTs = (/* @__PURE__ */ new Date(m[1] + "T" + m[2])).getTime();
-      cap.textContent = "Prochaine sync";
+      cap.textContent = "Timer Local";
       next.style.color = "";
     } else {
       S.nextSyncTs = null;
-      cap.textContent = "Prochaine sync";
+      cap.textContent = "Timer Local";
       next.textContent = raw && raw !== "\u2014" ? raw : "\u2014";
       next.style.color = "";
     }
@@ -395,9 +399,42 @@
     document.getElementById("pulse").classList.toggle("syncing", S.isSyncing);
     tickPulse();
   }
+  function updateCloudPulse() {
+    let seg = document.getElementById("pulse-cloud-seg");
+    let val = document.getElementById("pulse-cloud-val");
+    if (!val) return;
+    if (!S.fullSync) {
+      if (seg) seg.style.display = "none";
+      return;
+    }
+    if (seg) seg.style.display = "";
+    let interval = S.fullSync.interval;
+    let lastSync = S.fullSync.last_sync;
+    if (interval === "never" || interval === "0") {
+      val.textContent = "D\xE9sactiv\xE9";
+      val.style.color = "var(--muted)";
+    } else {
+      let intervalSec = (parseInt(interval, 10) || 60) * 60;
+      if (lastSync > 0) {
+        let elapsedSec = Math.floor(Date.now() / 1e3 - lastSync);
+        let remSec = intervalSec - elapsedSec;
+        if (remSec <= 0) {
+          val.textContent = "\xC9chu (au prochain timer)";
+          val.style.color = "var(--warn)";
+        } else {
+          val.textContent = "dans " + fmtRemaining(remSec);
+          val.style.color = "";
+        }
+      } else {
+        val.textContent = "Au prochain timer";
+        val.style.color = "";
+      }
+    }
+  }
   function tickPulse() {
     let next = document.getElementById("pulse-next");
     let line = document.getElementById("pulse-line");
+    updateCloudPulse();
     if (S.isSyncing) {
       line.style.transform = "";
       if (S.livePct != null && S.livePct > 0) {
