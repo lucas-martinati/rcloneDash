@@ -21,8 +21,9 @@ export async function refresh() {
     updatePulse(d);
     updateAlerts(d);
     updateKPIs(d);
-    // Le bloc live est piloté en temps réel par SSE (live-stream.js) ;
-    // le poll n'y touche plus pour éviter tout scintillement.
+    if (d.live !== undefined) {
+      bus.emit('live:update', d.live);
+    }
     updateRuns(d.runs);
     updateLogs(d.logs);
     updateRecentFiles(d.recent_files);
@@ -77,3 +78,36 @@ export async function cancelSync() {
   }, 3000);
   setTimeout(refresh, 1000);
 }
+
+export async function doResync() {
+  if (
+    !confirm(
+      'Voulez-vous lancer une resynchronisation complète (--resync) ?\n\nCette opération reconstruit la base de comparaison locale et distante en conservant les fichiers les plus récents (--resync-mode newer).'
+    )
+  ) {
+    return;
+  }
+  let bAlert = document.getElementById('btn-alert-resync');
+  if (bAlert) {
+    bAlert.disabled = true;
+    bAlert.textContent = 'En cours…';
+  }
+  try {
+    let r = await fetch('/api/resync', { method: 'POST' });
+    let d = await r.json();
+    if (d.ok) {
+      toast('Resynchronisation (--resync) lancée', 'ok');
+    } else {
+      toast('Impossible de lancer la resynchronisation : ' + (d.error || 'erreur inconnue'), 'err');
+    }
+  } catch {
+    toast('Serveur injoignable — resynchronisation non lancée', 'err');
+  } finally {
+    if (bAlert) {
+      bAlert.disabled = false;
+      bAlert.textContent = 'Resynchroniser';
+    }
+  }
+  setTimeout(refresh, 1500);
+}
+

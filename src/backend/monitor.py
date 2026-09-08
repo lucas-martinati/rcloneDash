@@ -12,6 +12,15 @@ from .parsing import parse_synced_file
 from .log_streamer import LogStreamer
 
 
+RESYNC_TRIGGERS = (
+    "cannot find prior",
+    "must run --resync",
+    "--resync to recover",
+    "path1 and path2 are out of sync",
+    "prior or current is not in sync",
+)
+
+
 class Monitor:
     """Collecte toutes les données de monitoring rclone-bisync."""
 
@@ -333,6 +342,9 @@ class Monitor:
                     last_error = l.strip()
                     cur["error_logs"].append(l.strip())
 
+                if any(term in ll for term in RESYNC_TRIGGERS):
+                    cur["needs_resync"] = True
+
                 # Fin de run : Succeeded (ligne systemd uniquement)
                 if "systemd" in ll and "finished" in ll and self.svc in ll:
                     if cur.get("skipped"):
@@ -368,11 +380,23 @@ class Monitor:
         # Échecs consécutifs (plus récent en premier)
         rev = list(reversed(runs[-15:]))
         consec = 0
+        needs_resync = False
         for r in rev:
             if r["status"] == "failed":
                 consec += 1
+                if r.get("needs_resync") or any(
+                    any(t in err.lower() for t in RESYNC_TRIGGERS)
+                    for err in r.get("error_logs", [])
+                ):
+                    needs_resync = True
             elif r["status"] == "success":
                 break
+
+        # Si le run le plus récent a échoué avec une demande explicite de resync,
+        # on affiche immédiatement l'erreur même dès le 1er échec (consec >= 1).
+        error_msg = ""
+        if consec >= 2 or (consec >= 1 and needs_resync):
+            error_msg = last_error
 
         self._parsed = {
             "runs": rev,
@@ -380,7 +404,8 @@ class Monitor:
             "avg_speed": avg_speed,
             "conflicts_today": conflicts,
             "consecutive_failures": consec,
-            "last_error_msg": last_error if consec >= 2 else "",
+            "needs_resync": needs_resync,
+            "last_error_msg": error_msg,
         }
         self._parsed_time = now
         return self._parsed
@@ -425,6 +450,23 @@ class Monitor:
             force_file = os.path.expanduser("~/.config/rclone/.force-sync")
             os.makedirs(os.path.dirname(force_file), exist_ok=True)
             open(force_file, "w").close()
+        except Exception:
+            pass
+        _, err, code = self.cmd(["systemctl", "--user", "start", "--no-block", self.svc])
+        return code == 0, err
+
+    def resync(self):
+        """Lance une resynchronisation complète avec --resync-mode newer (--no-block)."""
+        try:
+            resync_file = os.path.expanduser("~/.config/rclone/.resync")
+            force_file = os.path.expanduser("~/.config/rclone/.force-sync")
+            os.makedirs(os.path.dirname(resync_file), exist_ok=True)
+            if os.path.exists(force_file):
+                try:
+                    os.remove(force_file)
+                except Exception:
+                    pass
+            open(resync_file, "w").close()
         except Exception:
             pass
         _, err, code = self.cmd(["systemctl", "--user", "start", "--no-block", self.svc])
@@ -486,6 +528,7 @@ class Monitor:
                     "conflicts_today": parsed["conflicts_today"],
                     "success_rate_7d": self.success_rate_7d(),
                     "consecutive_failures": parsed["consecutive_failures"],
+                    "needs_resync": parsed.get("needs_resync", False),
                     "last_error_msg": parsed["last_error_msg"],
                 },
                 "ts": datetime.now().isoformat(),

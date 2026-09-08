@@ -31,11 +31,20 @@ export function updateAlerts(data) {
 
   let ban = document.getElementById('alert-banner');
   let msg = document.getElementById('alert-msg');
+  let btnResync = document.getElementById('btn-alert-resync');
   let kpis = data.kpis;
   let disk = data.disk;
   let live = data.live;
 
-  if (kpis.consecutive_failures >= 2) {
+  let showResyncBtn = false;
+
+  if (kpis.needs_resync) {
+    ban.className = 'alert-banner show-err';
+    msg.textContent =
+      'Erreur critique bisync : listes de synchronisation manquantes ou corrompues. Une resynchronisation (--resync) est requise.';
+    showResyncBtn = true;
+
+  } else if (kpis.consecutive_failures >= 2) {
     ban.className = 'alert-banner show-err';
     msg.textContent =
       kpis.consecutive_failures +
@@ -54,6 +63,10 @@ export function updateAlerts(data) {
     msg.textContent = 'Disque local rempli à ' + disk.pct + " % — libérez de l'espace";
   } else {
     ban.className = 'alert-banner';
+  }
+
+  if (btnResync) {
+    btnResync.style.display = showResyncBtn ? 'inline-flex' : 'none';
   }
 
   let sb = document.getElementById('slow-badge');

@@ -123,6 +123,14 @@
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
         <span class="alert-msg" id="alert-msg"></span>
+        <button class="btn btn-danger" id="btn-alert-resync" style="display:none; padding:4px 10px; font-size:11.5px; height:auto; flex-shrink:0; white-space:nowrap;" onclick="doResync()" title="Reconstruire les index de synchronisation">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:4px;">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          Resynchroniser
+        </button>
       </div>
 
       <!-- KPIs -->
@@ -440,6 +448,30 @@
               <option value="500K">500 Ko/s</option>
             </select>
             <div class="set-field-hint">Plafonne la bande passante utilisée par rclone pour préserver votre connexion.</div>
+          </div>
+        </div>
+
+        <hr class="set-divider">
+
+        <!-- ── Maintenance & Réparation ── -->
+        <div class="set-section">
+          <div class="set-section-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            Maintenance & Réparation
+          </div>
+
+          <div class="set-field">
+            <div class="set-field-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Resynchronisation complète (--resync)
+            </div>
+            <div class="set-field-hint">En cas d'erreur critique de bisync ou de base de synchronisation locale/cloud corrompue, cette action reconstruit les index de listing en comparant le dossier local et Google Drive (en conservant les versions les plus récentes : <code>--resync-mode newer</code>).</div>
+            <div style="margin-top: 10px;">
+              <button class="btn btn-g" id="btn-settings-resync" onclick="closeSettingsModal(); doResync();" title="Lancer une resynchronisation avec --resync-mode newer">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Lancer une resynchronisation (--resync)
+              </button>
+            </div>
           </div>
         </div>
 

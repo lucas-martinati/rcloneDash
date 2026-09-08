@@ -24,6 +24,7 @@ FULL_INTERVAL=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('fu
 RCLONE_CONF="__HOME__/.config/rclone"
 STAMP="$RCLONE_CONF/.last-full-sync"
 FORCE_FILE="$RCLONE_CONF/.force-sync"
+RESYNC_FILE="$RCLONE_CONF/.resync"
 
 # Fenêtre de détection d'un changement local, en minutes.
 # Volontairement un peu plus large que l'intervalle du timer (10 min) pour ne
@@ -31,6 +32,12 @@ FORCE_FILE="$RCLONE_CONF/.force-sync"
 LOCAL_WINDOW=12
 
 run_bisync() {
+    local is_resync="${1:-0}"
+    local extra_args=()
+    if [ "$is_resync" -eq 1 ]; then
+        extra_args+=(--resync --resync-mode newer)
+    fi
+
     mkdir -p "$RCLONE_CONF"
     # Nettoyage préventif des verrous orphelins (processus interrompu ou tué)
     local cache_dir="$HOME/.cache/rclone/bisync"
@@ -55,13 +62,15 @@ run_bisync() {
         --stats 5s \
         --stats-file-name-length 0 \
         --conflict-resolve newer \
-        --resilient
+        --resilient \
+        "${extra_args[@]}"
     local rc=$?
     # On n'horodate le dernier sync complet que si rclone a réussi.
     [ $rc -eq 0 ] && date +%s > "$STAMP"
     return $rc
 }
 
+is_resync=0
 reason=""
 
 # Bornes de la fenêtre de détection locale, au format ISO 8601 (compatible aussi
@@ -77,8 +86,14 @@ reason=""
 WIN_LO=$(date -d "$LOCAL_WINDOW minutes ago" '+%Y-%m-%dT%H:%M:%S')
 WIN_HI=$(date -d "$LOCAL_WINDOW minutes"     '+%Y-%m-%dT%H:%M:%S')
 
+# 0. Réinitialisation forcée (--resync) demandée ?
+if [ "${1:-}" = "--resync" ] || [ -f "$RESYNC_FILE" ]; then
+    rm -f "$RESYNC_FILE" "$FORCE_FILE"
+    is_resync=1
+    reason="réinitialisation forcée (--resync-mode newer)"
+
 # 1. Sync manuel forcé depuis le dashboard ?
-if [ -f "$FORCE_FILE" ]; then
+elif [ -f "$FORCE_FILE" ]; then
     rm -f "$FORCE_FILE"
     reason="déclenchement manuel"
 
@@ -99,7 +114,7 @@ fi
 
 if [ -n "$reason" ]; then
     echo "RcloneDash: lancement du bisync — $reason"
-    run_bisync
+    run_bisync "$is_resync"
     exit $?
 fi
 

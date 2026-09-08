@@ -34,6 +34,11 @@ def api_trigger(m):
     return {"ok": ok, "error": err}
 
 
+def api_resync(m):
+    ok, err = m.resync()
+    return {"ok": ok, "error": err}
+
+
 def api_cancel(m):
     ok, err = m.cancel()
     return {"ok": ok, "error": err}

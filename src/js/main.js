@@ -4,7 +4,7 @@
 import { S } from './state.js';
 import { applyThemeIcon, toggleTheme } from './theme.js';
 import { initDragAndDrop } from './drag-resize.js';
-import { refresh, doSync, cancelSync } from './refresh.js';
+import { refresh, doSync, cancelSync, doResync } from './refresh.js';
 import { initLiveStream } from './live-stream.js';
 import { tickPulse } from './pulse.js';
 import { initFocusTrap } from './focus-trap.js';
@@ -65,6 +65,7 @@ Object.assign(window, {
   // refresh + sync
   doSync,
   cancelSync,
+  doResync,
   refresh,
   // theme
   toggleTheme,

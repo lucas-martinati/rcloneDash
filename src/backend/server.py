@@ -41,6 +41,10 @@ async def api_ws(websocket: WebSocket):
 def api_trigger():
     return services.api_trigger(m)
 
+@app.post("/api/resync")
+def api_resync():
+    return services.api_resync(m)
+
 @app.post("/api/cancel")
 def api_cancel():
     return services.api_cancel(m)
