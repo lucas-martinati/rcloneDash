@@ -47,7 +47,7 @@ class LogStreamer(threading.Thread):
                         self.service,
                         "--output=short-iso",
                         "-n",
-                        "0",
+                        "200",
                     ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -71,23 +71,47 @@ class LogStreamer(threading.Thread):
             ("systemd" in ll and ("starting" in ll or "started" in ll) and self.service + ".service" in ll)
             or ("rclone-bisync-guard" in ll and "lancement du bisync" in ll)
             or ("synching path1" in ll and "with path2" in ll)
+            or ("bisyncing with" in ll)
         ):
-            self._reset()
-            self.is_syncing = True
-            self.phase = "Building listings"
-            self.phase_index = 0
-            self.sync_start = time.time()
+            if not self.is_syncing:
+                self._reset()
+                self.is_syncing = True
+                self.phase = "Listings"
+                self.phase_index = 0
+                self.sync_start = time.time()
             return
 
+        # Si on voit des traces de sync active mais is_syncing n'a pas été détecté
         if not self.is_syncing:
-            return
+            if any(k in ll for k in ["transferred:", "checks:", "transferring:", "copying path", "elapsed time:", "set directory modification time", "copied ("]):
+                self.is_syncing = True
+                self.phase = "Application"
+                self.phase_index = 3
+                if not self.sync_start:
+                    self.sync_start = time.time()
+            else:
+                return
 
-        # Détection de la phase courante
-        for i, ph in enumerate(config.PHASES):
-            if ph.lower() in ll:
-                self.phase = ph
-                self.phase_index = i
-                break
+        # Détection de la phase courante correspondant aux 6 étapes de l'interface
+        if any(k in ll for k in ["updating listings", "updating path"]):
+            self.phase = "Mise à jour"
+            self.phase_index = 4
+        elif any(k in ll for k in ["transferring:", "transferred:", "copying", "copied (", "deleting", "deleted ("]):
+            if self.phase_index < 3:
+                self.phase = "Application"
+                self.phase_index = 3
+        elif any(k in ll for k in ["path2: checking", "path2: matching", "validating listings for path2"]):
+            if self.phase_index < 2:
+                self.phase = "Diffs distants"
+                self.phase_index = 2
+        elif any(k in ll for k in ["path1: checking", "path1: matching", "validating listings for path1"]):
+            if self.phase_index < 1:
+                self.phase = "Diffs locaux"
+                self.phase_index = 1
+        elif any(k in ll for k in ["synching path1", "building listings", "starting transaction limiter", "listing"]):
+            if self.phase_index < 0:
+                self.phase = "Listings"
+                self.phase_index = 0
 
         # Stats de transfert : Transferred: 1.234 MiB / 5.678 MiB, 22%, ...
         m = re.search(
@@ -231,7 +255,7 @@ class LogStreamer(threading.Thread):
     def get_live(self):
         """Retourne l'état live de la sync en cours, ou None."""
         with self.lock:
-            if self.phase_index < 0:
+            if not self.is_syncing and self.phase_index < 0:
                 return None
 
             now = time.time()
