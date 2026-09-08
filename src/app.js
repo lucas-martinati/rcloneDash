@@ -1,3 +1,4 @@
+// Ce fichier est un bundle généré automatiquement depuis src/js/main.js — Ne pas éditer à la main
 (() => {
   // src/js/state.js
   var S = {
@@ -489,10 +490,22 @@
     updateQuota(data.quota);
     let ban = document.getElementById("alert-banner");
     let msg = document.getElementById("alert-msg");
+    let btnResync = document.getElementById("btn-alert-resync");
+    let btnDismiss = document.getElementById("btn-alert-dismiss");
     let kpis = data.kpis;
     let disk = data.disk;
     let live = data.live;
-    if (kpis.consecutive_failures >= 2) {
+    let showResyncBtn = false;
+    let showDismissBtn = false;
+    if (kpis.needs_resync) {
+      ban.className = "alert-banner show-err";
+      msg.textContent = "Erreur critique bisync : listes de synchronisation manquantes ou corrompues. Une resynchronisation (--resync) est requise.";
+      showResyncBtn = true;
+    } else if (kpis.auto_resync_notice) {
+      ban.className = "alert-banner show-warn";
+      msg.textContent = "R\xE9cup\xE9ration automatique effectu\xE9e (--resync) : les index ont \xE9t\xE9 reconstruits suite \xE0 une absence de cache. V\xE9rifiez si des fichiers supprim\xE9s hors-ligne n'ont pas \xE9t\xE9 r\xE9import\xE9s.";
+      showDismissBtn = true;
+    } else if (kpis.consecutive_failures >= 2) {
       ban.className = "alert-banner show-err";
       msg.textContent = kpis.consecutive_failures + " syncs cons\xE9cutives en erreur \u2014 " + (kpis.last_error_msg || "consultez les logs pour le d\xE9tail");
     } else if (live && live.is_syncing && live.duration_s > 300) {
@@ -503,6 +516,12 @@
       msg.textContent = "Disque local rempli \xE0 " + disk.pct + " % \u2014 lib\xE9rez de l'espace";
     } else {
       ban.className = "alert-banner";
+    }
+    if (btnResync) {
+      btnResync.style.display = showResyncBtn ? "inline-flex" : "none";
+    }
+    if (btnDismiss) {
+      btnDismiss.style.display = showDismissBtn ? "inline-flex" : "none";
     }
     let sb = document.getElementById("slow-badge");
     sb.style.display = live && live.is_syncing && live.duration_s > 300 ? "" : "none";
@@ -781,6 +800,9 @@
       updatePulse(d);
       updateAlerts(d);
       updateKPIs(d);
+      if (d.live !== void 0) {
+        bus.emit("live:update", d.live);
+      }
       updateRuns(d.runs);
       updateLogs(d.logs);
       updateRecentFiles(d.recent_files);
@@ -829,6 +851,42 @@
       lbl.textContent = "Arr\xEAter";
     }, 3e3);
     setTimeout(refresh, 1e3);
+  }
+  async function doResync() {
+    if (!confirm(
+      "Voulez-vous lancer une resynchronisation compl\xE8te (--resync) ?\n\nCette op\xE9ration reconstruit la base de comparaison locale et distante en conservant les fichiers les plus r\xE9cents (--resync-mode newer)."
+    )) {
+      return;
+    }
+    let bAlert = document.getElementById("btn-alert-resync");
+    if (bAlert) {
+      bAlert.disabled = true;
+      bAlert.textContent = "En cours\u2026";
+    }
+    try {
+      let r = await fetch("/api/resync", { method: "POST" });
+      let d = await r.json();
+      if (d.ok) {
+        toast("Resynchronisation (--resync) lanc\xE9e", "ok");
+      } else {
+        toast("Impossible de lancer la resynchronisation : " + (d.error || "erreur inconnue"), "err");
+      }
+    } catch {
+      toast("Serveur injoignable \u2014 resynchronisation non lanc\xE9e", "err");
+    } finally {
+      if (bAlert) {
+        bAlert.disabled = false;
+        bAlert.textContent = "Resynchroniser";
+      }
+    }
+    setTimeout(refresh, 1500);
+  }
+  async function dismissNotice() {
+    try {
+      await fetch("/api/dismiss-notice", { method: "POST" });
+    } catch (e) {
+    }
+    refresh();
   }
 
   // src/js/live-stream.js
@@ -2057,6 +2115,8 @@
     // refresh + sync
     doSync,
     cancelSync,
+    doResync,
+    dismissNotice,
     refresh,
     // theme
     toggleTheme,

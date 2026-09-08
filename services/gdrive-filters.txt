@@ -22,6 +22,7 @@
 - .thumbnails/**
 - .cache/**
 - node_modules/**
+- vendor/**
 
 # Fichiers système inutiles
 - **/.DS_Store
