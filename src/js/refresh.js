@@ -111,3 +111,11 @@ export async function doResync() {
   setTimeout(refresh, 1500);
 }
 
+export async function dismissNotice() {
+  try {
+    await fetch('/api/dismiss-notice', { method: 'POST' });
+  } catch (e) {
+    // Ignore error
+  }
+  refresh();
+}

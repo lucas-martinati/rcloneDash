@@ -32,18 +32,24 @@ export function updateAlerts(data) {
   let ban = document.getElementById('alert-banner');
   let msg = document.getElementById('alert-msg');
   let btnResync = document.getElementById('btn-alert-resync');
+  let btnDismiss = document.getElementById('btn-alert-dismiss');
   let kpis = data.kpis;
   let disk = data.disk;
   let live = data.live;
 
   let showResyncBtn = false;
+  let showDismissBtn = false;
 
   if (kpis.needs_resync) {
     ban.className = 'alert-banner show-err';
     msg.textContent =
       'Erreur critique bisync : listes de synchronisation manquantes ou corrompues. Une resynchronisation (--resync) est requise.';
     showResyncBtn = true;
-
+  } else if (kpis.auto_resync_notice) {
+    ban.className = 'alert-banner show-warn';
+    msg.textContent =
+      'Récupération automatique effectuée (--resync) : les index ont été reconstruits suite à une absence de cache. Vérifiez si des fichiers supprimés hors-ligne n\'ont pas été réimportés.';
+    showDismissBtn = true;
   } else if (kpis.consecutive_failures >= 2) {
     ban.className = 'alert-banner show-err';
     msg.textContent =
@@ -67,6 +73,9 @@ export function updateAlerts(data) {
 
   if (btnResync) {
     btnResync.style.display = showResyncBtn ? 'inline-flex' : 'none';
+  }
+  if (btnDismiss) {
+    btnDismiss.style.display = showDismissBtn ? 'inline-flex' : 'none';
   }
 
   let sb = document.getElementById('slow-badge');

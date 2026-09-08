@@ -49,6 +49,10 @@ def api_resync():
 def api_cancel():
     return services.api_cancel(m)
 
+@app.post("/api/dismiss-notice")
+def api_dismiss_notice():
+    return services.api_dismiss_notice()
+
 @app.get("/api/settings")
 def api_settings():
     return services.api_settings()

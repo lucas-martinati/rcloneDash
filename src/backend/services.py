@@ -44,6 +44,16 @@ def api_cancel(m):
     return {"ok": ok, "error": err}
 
 
+def api_dismiss_notice():
+    try:
+        notice_file = os.path.expanduser("~/.config/rclone/.auto-resync-notice")
+        if os.path.exists(notice_file):
+            os.remove(notice_file)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def api_settings():
     try:
         import json

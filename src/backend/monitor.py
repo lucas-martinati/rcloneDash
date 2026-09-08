@@ -529,6 +529,9 @@ class Monitor:
                     "success_rate_7d": self.success_rate_7d(),
                     "consecutive_failures": parsed["consecutive_failures"],
                     "needs_resync": parsed.get("needs_resync", False),
+                    "auto_resync_notice": os.path.exists(
+                        os.path.expanduser("~/.config/rclone/.auto-resync-notice")
+                    ),
                     "last_error_msg": parsed["last_error_msg"],
                 },
                 "ts": datetime.now().isoformat(),

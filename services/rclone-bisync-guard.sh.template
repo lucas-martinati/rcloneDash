@@ -25,6 +25,7 @@ RCLONE_CONF="__HOME__/.config/rclone"
 STAMP="$RCLONE_CONF/.last-full-sync"
 FORCE_FILE="$RCLONE_CONF/.force-sync"
 RESYNC_FILE="$RCLONE_CONF/.resync"
+AUTO_NOTICE_FILE="$RCLONE_CONF/.auto-resync-notice"
 
 # Fenêtre de détection d'un changement local, en minutes.
 # Volontairement un peu plus large que l'intervalle du timer (10 min) pour ne
@@ -33,6 +34,7 @@ LOCAL_WINDOW=12
 
 run_bisync() {
     local is_resync="${1:-0}"
+    local is_auto_resync="${2:-0}"
     local extra_args=()
     if [ "$is_resync" -eq 1 ]; then
         extra_args+=(--resync --resync-mode newer)
@@ -66,11 +68,17 @@ run_bisync() {
         "${extra_args[@]}"
     local rc=$?
     # On n'horodate le dernier sync complet que si rclone a réussi.
-    [ $rc -eq 0 ] && date +%s > "$STAMP"
+    if [ $rc -eq 0 ]; then
+        date +%s > "$STAMP"
+        if [ "$is_auto_resync" -eq 1 ]; then
+            date +%s > "$AUTO_NOTICE_FILE"
+        fi
+    fi
     return $rc
 }
 
 is_resync=0
+is_auto_resync=0
 reason=""
 
 # Bornes de la fenêtre de détection locale, au format ISO 8601 (compatible aussi
@@ -92,17 +100,31 @@ if [ "${1:-}" = "--resync" ] || [ -f "$RESYNC_FILE" ]; then
     is_resync=1
     reason="réinitialisation forcée (--resync-mode newer)"
 
-# 1. Sync manuel forcé depuis le dashboard ?
+# 1. Sécurité anti-blocage : listes de référence préalables absentes du cache
+# (premier lancement, ou invalidées suite à une erreur critique précédente).
+# Un bisync standard échouerait obligatoirement : auto-récupération immédiate.
+elif [ ! -d "$HOME/.cache/rclone/bisync" ] || \
+     [ -z "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "*.path1.lst" -print -quit 2>/dev/null)" ] || \
+     [ -z "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "*.path2.lst" -print -quit 2>/dev/null)" ]; then
+    is_resync=1
+    # Ne notifier d'une récupération automatique que si ce n'est PAS la toute première installation
+    # (i.e. si un sync préalable avait déjà réussi, attesté par la présence de $STAMP).
+    if [ -f "$STAMP" ]; then
+        is_auto_resync=1
+    fi
+    reason="initialisation / auto-récupération (listes de référence absentes -> --resync-mode newer)"
+
+# 2. Sync manuel forcé depuis le dashboard ?
 elif [ -f "$FORCE_FILE" ]; then
     rm -f "$FORCE_FILE"
     reason="déclenchement manuel"
 
-# 2. Un fichier local a-t-il changé dans la fenêtre [maintenant - fenêtre, maintenant] ?
+# 3. Un fichier local a-t-il changé dans la fenêtre [maintenant - fenêtre, maintenant] ?
 elif [ -d "$SYNC_DIR" ] && \
      [ -n "$(find "$SYNC_DIR" -type f -newermt "$WIN_LO" ! -newermt "$WIN_HI" -print -quit 2>/dev/null)" ]; then
     reason="changement local détecté (< ${LOCAL_WINDOW} min)"
 
-# 3. Filet de sécurité Cloud : sync complet périodique (si configuré)
+# 4. Filet de sécurité Cloud : sync complet périodique (si configuré)
 elif [ "$FULL_INTERVAL" != "never" ] && [ "$FULL_INTERVAL" != "0" ] && [ "$FULL_INTERVAL" -gt 0 ] 2>/dev/null; then
     now=$(date +%s)
     last=0
@@ -114,7 +136,7 @@ fi
 
 if [ -n "$reason" ]; then
     echo "RcloneDash: lancement du bisync — $reason"
-    run_bisync "$is_resync"
+    run_bisync "$is_resync" "$is_auto_resync"
     exit $?
 fi
 
