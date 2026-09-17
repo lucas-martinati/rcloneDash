@@ -1,44 +1,121 @@
-# RcloneDash
+# RcloneDash (Rust TUI & Dashboard)
 
-**RcloneDash** est une interface web locale puissante, interactive et élégante pour surveiller vos synchronisations bidirectionnelles (`rclone bisync`), notamment avec Google Drive.
+**RcloneDash** est une interface terminal interactive (TUI) ultra-rapide, élégante et autonome développée en **Rust** (inspirée de `btop++` et `lazygit`), conçue pour surveiller et piloter vos synchronisations bidirectionnelles (`rclone bisync`) en temps réel.
 
-Ce tableau de bord se branche directement sur les journaux de `rclone` (via `journalctl`) pour fournir une visualisation en temps réel des transferts de fichiers, un historique interactif, la gestion de vos règles de filtrage (fichiers ignorés), et l'exploration directe de votre espace de stockage synchronisé en local.
+Le projet conserve également son interface Web historique (située dans le dossier `web/`).
 
-## 🌟 Fonctionnalités
+---
 
-- **Suivi en direct** : Visualisez l'avancement de votre synchronisation Rclone en temps réel (fichiers transférés, ETA, vitesse de transfert en direct, checks locaux/distants, compteur de fichiers X/Y).
-- **Détails par fichier en cours** : Chaque fichier en cours de transfert affiche sa propre barre de progression avec sa taille, sa vitesse instantanée et son ETA individuel. Les fichiers en cours de vérification (checksum) sont également listés.
-- **Tailles des fichiers synchronisés** : Les listes de fichiers (live, historique, fichiers récents) affichent la taille de chaque fichier copié ou modifié.
-- **Historique Interactif** : Lisez le résumé de toutes vos exécutions (fichiers copiés, modifiés, supprimés, erreurs) avec un mini-graphe temporel dynamique (sparkline).
-- **Gestion des Erreurs et Logs détaillés** : Un clic sur une exécution passée déroule la liste précise de tous les fichiers affectés et affiche les logs d'erreurs éventuels de ce run spécifique.
-- **Éditeur de Filtres Intégré** : Lisez, ajoutez et modifiez directement depuis l'interface graphique votre fichier de filtres global `gdrive-filters.txt`.
-- **Navigateur de fichiers local** : Explorez l'arborescence de votre dossier synchronisé en direct. Ouvrez vos fichiers locaux d'un simple clic et excluez rapidement des fichiers pour vos prochains syncs en cliquant sur le bouton "Ignorer".
-- **Thème Sombre & Clair** : S'adapte à vos préférences visuelles en un seul clic.
-- **Synchronisation économe (garde légère)** : Le timer se réveille toutes les 10 min mais ne lance un `rclone bisync` complet **que si c'est utile** : un fichier local a changé récemment, le déclenchement est manuel, ou un sync complet périodique (toutes les heures) est dû pour récupérer d'éventuelles modifs côté cloud. Quand rien n'a changé, la sync est ignorée — moins d'appels API Drive, de bande passante et de CPU.
+## ⚡ RcloneDash TUI (Version Rust)
 
-## 🚀 Installation Automatique
+Construit avec **[Ratatui](https://ratatui.rs/)**, **[Crossterm](https://github.com/crossterm-rs/crossterm)** et **[Tokio](https://tokio.rs/)**, RcloneDash TUI se compile en un **binaire unique autonome (< 3 Mo)** sans dépendance externe, avec une consommation mémoire infime (< 10 Mo de RAM).
 
-Le projet inclut un script d'installation (`install.sh`) qui déplace l'application au bon endroit (`~/.local/share/RcloneDash`) et crée un service `systemd` afin de faire tourner l'interface en tâche de fond automatiquement dès l'allumage du PC. 
-Le script génère et configure également de A à Z le timer de synchronisation globale (`rclone-bisync.service` et `rclone-bisync.timer`) dans `/etc/systemd/system/` pour automatiser vos transferts.
+### 🌟 Fonctionnalités TUI
 
+### 🌟 Fonctionnalités TUI
+
+- **Tableau de bord tout-en-un centralisé (Vue Unique Dashboard)** :
+  - **En-tête dynamique moderne** : statuts du service `rclone-bisync` (actif/en attente/échec), heure et durée de dernière sync, compte à rebours du timer systemd, et boutons interactifs pills (`[ ⟳ Sync ]`, `[ 📁 Fichiers ]`, `[ ⊘ Filtres ]`, `[ ⚙ Options ]`, `[ ✕ Quitter ]`).
+  - **Barre des 7 cartes KPI clés** :
+    1. *Stockage Cloud* (ex: Google Drive).
+    2. *Disque Local* (calcul `statvfs` en direct : Go utilisés, Go libres et totaux).
+    3. *Fichiers suivis* (compte réel des fichiers surveillés).
+    4. *Syncs aujourd'hui* (compteur de réussites et erreurs de la journée).
+    5. *Débit en direct* (vitesse de transfert instantanée rclone).
+    6. *Conflits aujourd'hui* (détection automatique des erreurs dans les logs).
+    7. *Fiabilité 7 jours* (taux de réussite sur la semaine glissante).
+  - **Panneau Milieu Gauche - Historique & Mini-Graphe** :
+    - Mini-graphique en barres Unicode de durée et de statut (` ▂▃▄▅▆▇█`).
+    - Tableau interactif des synchronisations passées avec sélection et détails des fichiers copiés, modifiés, supprimés et durées.
+  - **Panneau Milieu Droit - Journal de bord en direct (Live Logs)** :
+    - Streaming fluide des logs depuis `journalctl` avec coloration syntaxique intelligente.
+    - Défilement automatique intelligent ou pause (`Space` / molette).
+  - **Panneau Inférieur - Fichiers récemment synchronisés** :
+    - Badges colorés de statut (`● Ajouté`, `● Modifié`, `● Supprimé`), chemins relatifs et horodatage.
+- **Menu Principal style btop++ (Overlay Modal)** :
+  - Accessible via `Échap` ou `m` (ou clic sur le bouton `[m]enu`).
+  - Grand bandeau ASCII art, version et 3 gros boutons arrondis (`[o] Options`, `[h] Aide`, `[q] Quitter`).
+- **Menu Paramètres (Overlay Modal)** :
+  - Sélection parmi 6 thèmes modernes (*Tokyo Night, Catppuccin Mocha, Nord, Gruvbox, Dracula, Monokai Pro*).
+  - Réglage de l'intervalle bisync, du filet de sécurité cloud (avec option `Jamais (Local)` pour désactiver le filet cloud), de la limite `bwlimit`, et de la fréquence de rafraîchissement.
+  - Sauvegarde instantanée dans `dash-config.json`.
+- **Simulation Dry-Run (Overlay Modal)** :
+  - Accessible via `d` ou le bouton `[ 🛡 Simuler ]`.
+  - Lance un `rclone bisync --dry-run` en tâche de fond pour prévisualiser les transferts sans modifier aucun fichier.
+- **Explorateur de fichiers & Historique interactif avec support xdg-open** :
+  - Parcourez les fichiers synchronisés ou l'historique complet des runs.
+  - `Entrée` ou clic pour ouvrir le fichier dans l'application par défaut.
+  - `Ctrl+Entrée`, `d` ou `Ctrl+Clic` pour ouvrir le dossier contenant dans le gestionnaire de fichiers système.
+- **Widget de fréquence de rafraîchissement style btop++** :
+  - Affichage `[- 250ms +]` en haut à droite avec boutons interactifs cliquables et raccourcis clavier (`-` pour accélérer, `+` pour ralentir).
+- **Annulation dynamique des synchronisations** :
+  - Le bouton du bandeau devient dynamiquement `[ ⏹ Arrêter ]` en rouge lorsqu'une synchronisation est active.
+  - Raccourci `c` pour annuler immédiatement via `systemctl --user stop rclone-bisync.service`.
+- **Calibration pixel-perfect de la souris** :
+  - Hitboxes dynamiques recalculées au pixel près pour chaque bouton, ligne de tableau, zone de logs et élément modale.
+
+---
+
+### ⌨️ Raccourcis Clavier & Souris
+
+| Raccourci | Action |
+| :--- | :--- |
+| `Clic gauche` | Cliquer sur un bouton, un run d'historique, un fichier ou une option |
+| `Ctrl + Clic` | Ouvrir le dossier parent du fichier dans l'explorateur système |
+| `Molette haut/bas` | Défilement fluide des logs et des listes |
+| `Échap` / `m` | Ouvrir le **Menu Principal** style `btop++` (ou fermer la modale active) |
+| `o` | Ouvrir les **Paramètres** (ou ouvrir le fichier sélectionné) |
+| `d` | Lancer une **Simulation Dry-Run** (ou ouvrir le dossier du fichier sélectionné) |
+| `s` / Clic `[ ⟳ Sync ]` | **Forcer une synchronisation** immédiate |
+| `c` / Clic `[ ⏹ Arrêter ]` | **Interrompre** la synchronisation en cours |
+| `r` | Lancer une **Resynchronisation complète** (`--resync`) avec confirmation |
+| `f` / Clic `[ 📁 Fichiers ]` | Ouvrir l'**Explorateur de fichiers** local |
+| `e` / Clic `[ ⊘ Filtres ]` | Ouvrir la **Gestion des règles d'exclusion** |
+| `t` | **Changer de thème visuel** à la volée (cycle parmi 6 thèmes) |
+| `-` / `+` | **Accélérer** (`-`) ou **ralentir** (`+`) la fréquence de rafraîchissement en ms |
+| `Espace` | Mettre en pause / Reprendre le défilement auto des logs |
+| `Entrée` | Ouvrir les détails du run ou ouvrir le fichier sélectionné |
+| `Ctrl + Entrée` | Ouvrir le **dossier contenant** le fichier sélectionné |
+| `Tab` / `Shift+Tab` | Changer de panneau actif (Historique / Logs / Fichiers récents) |
+| `▲/▼` ou `j/k` | Naviguer dans les lignes du tableau ou des listes |
+| `q` | **Quitter silencieusement** l'application |
+
+---
+
+### 🚀 Compilation et Lancement
+
+#### Prérequis
+- `cargo` et `rustc` (Rust 1.80+) :
+  ```bash
+  sudo apt install cargo rustc
+  # ou via rustup : curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+
+#### Lancer directement en mode développement
 ```bash
-chmod +x install.sh
-./install.sh
+cargo run
 ```
 
-Une fois installé, l'application tourne silencieusement. Rendez-vous sur [http://localhost:8765](http://localhost:8765).
+#### Compiler et installer le binaire release
+```bash
+# Compilation optimisée
+cargo build --release
 
-## 🛠 Lancement Manuel
+# Lancement
+./target/release/rclonedash
 
-Si vous préférez exécuter le tableau de bord à la demande sans l'installer de façon persistante en tâche de fond :
+# Optionnel : installer dans votre PATH utilisateur (~/.local/bin)
+install -m 755 target/release/rclonedash ~/.local/bin/
+```
+
+---
+
+### 🌐 Version Web Historique
+
+La version originale avec tableau de bord web HTML/CSS/JS et backend Python (`rclone-monitor.py`) est conservée dans le dossier `web/`.
+Pour la lancer manuellement :
 
 ```bash
-python3 src/rclone-monitor.py
+python3 web/rclone-monitor.py
 ```
-*Prérequis : Vous devez avoir Python 3 installé sur votre machine (aucune bibliothèque tierce externe n'est nécessaire).*
-
-## ⚙️ Comment ça marche ?
-
-- **Backend** : `rclone-monitor.py` est un serveur HTTP ultra-léger développé en Python natif (`http.server`). Il sert l'interface web, lit vos logs via des commandes Unix (`journalctl`) pour extraire les métriques Rclone, et agit en API pour lire/écrire dans vos fichiers système.
-- **Garde de synchronisation** : `rclone-bisync-guard.sh` (installé dans `~/.local/share/RcloneDash/`) est appelé par `rclone-bisync.service` à chaque réveil du timer. Il décide s'il faut réellement lancer le bisync. Réglages en tête du script : `LOCAL_WINDOW` (fenêtre de détection d'un changement local, 12 min par défaut) et `FULL_INTERVAL` (intervalle max entre deux syncs complets pour le cloud, 60 min). Une sync manuelle depuis le dashboard pose un marqueur `~/.config/rclone/.force-sync` qui force le lancement sans condition. Une resynchronisation complète pose `~/.config/rclone/.resync` pour reconstruire les bases d'indexation (`--resync --resync-mode newer`) en cas d'incident critique ou d'index manquant.
-- **Frontend** : Les fichiers `index.html`, `style.css` et `app.js` génèrent l'interface, dessinée entièrement avec du CSS natif pour un design moderne (micro-animations, fenêtres modales, etc.).
+Puis accédez à [http://localhost:8765](http://localhost:8765).
