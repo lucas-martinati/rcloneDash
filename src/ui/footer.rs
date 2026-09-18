@@ -13,42 +13,34 @@ pub fn render_footer(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Min(60),    // Raccourcis btop++
-            Constraint::Length(28), // Panel actif + Tick rate
+            Constraint::Min(65),    // Raccourcis btop++
+            Constraint::Length(30), // Panel actif + Tick rate
         ])
         .split(area);
 
-    // 1. Barre de raccourcis btop++
+    // 1. Barre de raccourcis btop++ authentique (clé colorée + action en texte clair)
     let mut spans: Vec<Span> = Vec::new();
 
     let items = [
-        ("Esc", "Menu"),
-        ("q", "Quitter"),
-        ("s", "Sync"),
-        ("f", "Fichiers"),
-        ("e", "Filtres"),
-        ("t", "Thème"),
-        ("Tab", "Panel"),
-        ("+/-", "Vitesse"),
-        ("?", "Aide"),
+        ("Esc", "menu", theme.highlight),
+        ("q", "quit", theme.red),
+        ("s", "sync", theme.green),
+        ("d", "dry-run", theme.cyan),
+        ("f", "files", theme.blue),
+        ("e", "filtres", theme.purple),
+        ("o", "options", theme.yellow),
+        ("t", "theme", theme.accent),
+        ("Tab", "panel", theme.highlight),
+        ("+/-", "speed", theme.highlight),
+        ("?", "aide", theme.text_muted),
     ];
 
-    for (i, (key, label)) in items.iter().enumerate() {
+    for (i, (key, label, color)) in items.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::styled(" ", Style::default().bg(theme.footer_bg)));
+            spans.push(Span::styled("  ", Style::default()));
         }
-        // Clé en surbrillance avec badge discret
-        spans.push(Span::styled(
-            format!(" {} ", key),
-            Style::default()
-                .fg(theme.highlight)
-                .bg(theme.border_focus)
-                .add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(
-            format!("{} ", label),
-            Style::default().fg(theme.text_bright).bg(theme.footer_bg),
-        ));
+        spans.push(Span::styled(*key, Style::default().fg(*color).add_modifier(Modifier::BOLD)));
+        spans.push(Span::styled(format!(" {}", label), Style::default().fg(theme.text_bright)));
     }
 
     let p_left = Paragraph::new(Line::from(spans))
@@ -58,19 +50,18 @@ pub fn render_footer(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect)
 
     // 2. Info panel actif et rafraîchissement
     let right_spans = vec![
-        Span::styled("Focus: ", Style::default().fg(theme.text_muted).bg(theme.footer_bg)),
+        Span::styled("Focus: ", Style::default().fg(theme.text_muted)),
         Span::styled(
             format!("{} ", app.focused_panel.label()),
             Style::default()
                 .fg(theme.accent)
-                .bg(theme.footer_bg)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("│ ", Style::default().fg(theme.border).bg(theme.footer_bg)),
-        Span::styled("⚡ ", Style::default().fg(theme.yellow).bg(theme.footer_bg)),
+        Span::styled("│ ", Style::default().fg(theme.border)),
+        Span::styled("⚡ ", Style::default().fg(theme.yellow)),
         Span::styled(
             format!("{}ms ", app.tick_rate_ms_live),
-            Style::default().fg(theme.text_bright).bg(theme.footer_bg),
+            Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
         ),
     ];
 

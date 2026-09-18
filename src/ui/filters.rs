@@ -11,40 +11,63 @@ use crate::config;
 use crate::ui::theme::ThemePalette;
 
 pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
-    let area = centered_rect(75, 70, f.area());
+    let area = centered_rect(80, 72, f.area());
     f.render_widget(Clear, area);
+
+    let filepath = config::filters_file().display().to_string();
+    let total_rules = app.filters.len();
+    let cur_rule = if total_rules > 0 { app.selected_filter_idx + 1 } else { 0 };
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(theme.border_storage))
+        .style(Style::default().bg(theme.card_bg))
+        .title(Line::from(vec![
+            Span::styled("┌⊘ filtres d'exclusion", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(": {}┐", filepath), Style::default().fg(theme.text_muted)),
+            Span::styled("┌éditer: e┐", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("↑/↓ naviguer  e éditer  Esc fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ règle {}/{}┘", cur_rule, total_rules), Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Right),
+        );
+    f.render_widget(outer_block, area);
+
+    let inner_area = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
 
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(60),
-            Constraint::Percentage(40),
+            Constraint::Percentage(62),
+            Constraint::Percentage(38),
         ])
-        .split(Rect {
-            x: area.x + 1,
-            y: area.y + 1,
-            width: area.width.saturating_sub(2),
-            height: area.height.saturating_sub(2),
-        });
+        .split(inner_area);
 
-    let filepath = config::filters_file().display().to_string();
-    let outer_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.purple))
-        .style(Style::default().bg(theme.card_bg))
-        .title(Span::styled(format!(" ⊘ RÈGLES D'EXCLUSION : {} ", filepath), Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)));
-    f.render_widget(outer_block, area);
-
-    render_rules_list(f, app, theme, main_chunks[0]);
+    render_rules_list(f, app, theme, main_chunks[0], hitboxes);
     render_filters_help(f, app, theme, main_chunks[1], hitboxes);
 }
 
-fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let visible_height = area.height as usize;
     if visible_height == 0 {
         return;
     }
+
+    // Hitbox pour toute la zone de liste (pour la molette)
+    hitboxes.push(Hitbox {
+        rect: area,
+        action: HitAction::FilterArea,
+    });
 
     let offset = if app.selected_filter_idx < app.filter_scroll_offset {
         app.selected_filter_idx
@@ -75,11 +98,11 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect)
                 } else if trimmed.starts_with('#') {
                     (theme.text_muted, "[COMMENT]")
                 } else {
-                    (theme.text_bright, "[RULE]   ")
+                    (theme.cyan, "[RULE]   ")
                 };
 
                 let cursor = if is_selected {
-                    Span::styled("▶ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                    Span::styled("▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
                 } else {
                     Span::styled("  ", Style::default())
                 };
@@ -88,19 +111,34 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect)
                     cursor,
                     Span::styled(format!("{:2} │ ", i + 1), Style::default().fg(theme.text_muted)),
                     Span::styled(format!("{} ", prefix), Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                    Span::styled(rule, Style::default().fg(if is_selected { theme.text_bright } else { theme.text_muted })),
+                    Span::styled(
+                        rule,
+                        Style::default()
+                            .fg(if is_selected { theme.text_bright } else { theme.text_muted })
+                            .add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() }),
+                    ),
                 ]);
+
+                // Enregistrer la hitbox de la ligne
+                let row_y = area.y + (i.saturating_sub(offset)) as u16;
+                if row_y < area.y + area.height {
+                    hitboxes.push(Hitbox {
+                        rect: Rect {
+                            x: area.x,
+                            y: row_y,
+                            width: area.width,
+                            height: 1,
+                        },
+                        action: HitAction::FilterRow(i),
+                    });
+                }
 
                 ListItem::new(line)
             })
             .collect()
     };
 
-    let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::NONE),
-    );
-
+    let list = List::new(items).block(Block::default().borders(Borders::NONE));
     f.render_widget(list, area);
 
     if app.filters.len() > visible_height {
@@ -110,35 +148,43 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect)
             .begin_symbol(Some("▲"))
             .end_symbol(Some("▼"))
             .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
+            .thumb_style(Style::default().fg(theme.highlight));
         f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
     }
 }
 
 fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let text = vec![
-        Line::from(Span::styled("Syntaxe des règles :", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled("┌syntaxe des filtres┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
         Line::from(""),
         Line::from(vec![
             Span::styled("  - /mon_dossier/**  ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("Exclut tout", Style::default().fg(theme.text_muted)),
+            Span::styled("Exclut dossier", Style::default().fg(theme.text_muted)),
         ]),
         Line::from(vec![
             Span::styled("  - *.tmp            ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("Exclut les .tmp", Style::default().fg(theme.text_muted)),
+            Span::styled("Exclut extension", Style::default().fg(theme.text_muted)),
         ]),
         Line::from(vec![
             Span::styled("  + *.pdf            ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled("Force inclusion", Style::default().fg(theme.text_muted)),
         ]),
+        Line::from(vec![
+            Span::styled("  # commentaire      ", Style::default().fg(theme.text_muted)),
+            Span::styled("Ligne ignorée", Style::default().fg(theme.text_muted)),
+        ]),
         Line::from(""),
-        Line::from(Span::styled("─".repeat(25), Style::default().fg(theme.border))),
+        Line::from(Span::styled("─".repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))),
         Line::from(""),
-        Line::from(Span::styled("Appuyez sur 'e' pour éditer", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled("dans votre $EDITOR (nano/nvim/vim).", Style::default().fg(theme.text_bright))),
+        Line::from(vec![
+            Span::styled("Appuyez sur ", Style::default().fg(theme.text_bright)),
+            Span::styled("e", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" pour éditer avec votre", Style::default().fg(theme.text_bright)),
+        ]),
+        Line::from(Span::styled("éditeur terminal ($EDITOR : nano, nvim, vim).", Style::default().fg(theme.text_muted))),
         Line::from(""),
-        Line::from(Span::styled("Les règles s'appliquent dès la", Style::default().fg(theme.text_muted))),
-        Line::from(Span::styled("prochaine synchronisation bisync.", Style::default().fg(theme.text_muted))),
+        Line::from(Span::styled("Prise en compte :", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled("Dès la prochaine exécution bisync.", Style::default().fg(theme.text_muted))),
     ];
 
     let close_btn_area = Rect {

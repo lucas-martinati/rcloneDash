@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
@@ -27,17 +27,32 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
         });
 
     let title_path = if app.file_current_rel.is_empty() {
-        format!(" 📁 EXPLORATEUR LOCAL : {} ", app.config.local_dir)
+        app.config.local_dir.clone()
     } else {
-        format!(" 📁 EXPLORATEUR LOCAL : {}/{} ", app.config.local_dir, app.file_current_rel)
+        format!("{}/{}", app.config.local_dir, app.file_current_rel)
     };
+
+    let total_files = app.file_entries.len();
+    let cur_file = if total_files > 0 { app.file_selected_idx + 1 } else { 0 };
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.blue))
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(theme.border_history))
         .style(Style::default().bg(theme.card_bg))
-        .title(Span::styled(title_path, Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)));
+        .title(Line::from(vec![
+            Span::styled("┌📁 explorateur", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(": {}┐", title_path), Style::default().fg(theme.text_muted)),
+            Span::styled("┌ouvrir: ↵┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("↑/↓ naviguer  ↵ ouvrir  d dossier  Esc fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ fichier {}/{}┘", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Right),
+        );
     f.render_widget(outer_block, area);
 
     render_file_table(f, app, theme, main_chunks[0], hitboxes);

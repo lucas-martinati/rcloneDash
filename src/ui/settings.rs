@@ -12,31 +12,49 @@ use crate::ui::theme::ThemePalette;
 pub const SETTINGS_ITEMS_COUNT: usize = 7;
 
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
-    let area = centered_rect(65, 65, f.area());
+    let area = centered_rect(70, 68, f.area());
     f.render_widget(Clear, area);
+
+    let cur_opt = app.settings_selected_idx + 1;
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(theme.border_sys))
+        .style(Style::default().bg(theme.card_bg))
+        .title(Line::from(vec![
+            Span::styled("┌⚙ options", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌sauvegarder: s / ↵", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌fermer: Esc", Style::default().fg(theme.text_muted)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("↑/↓ naviguer  ←/→ modifier  ↵ enregistrer  Esc fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ option {}/{}┘", cur_opt, SETTINGS_ITEMS_COUNT), Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Right),
+        );
+    f.render_widget(outer_block, area);
+
+    let inner = Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    };
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // Marge haute
-            Constraint::Min(10),   // Options
-            Constraint::Length(3), // Boutons action (Sauvegarder / Fermer)
-            Constraint::Length(4), // Aide contextuelle
+            Constraint::Length(8), // Options (7 lignes)
+            Constraint::Length(2), // Boutons action (Sauvegarder / Fermer)
+            Constraint::Min(3),    // Aide contextuelle
         ])
-        .split(Rect {
-            x: area.x + 2,
-            y: area.y + 1,
-            width: area.width.saturating_sub(4),
-            height: area.height.saturating_sub(2),
-        });
-
-    let outer_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.accent))
-        .style(Style::default().bg(theme.card_bg))
-        .title(Span::styled(" ⚙ PARAMÈTRES RCLONEDASH (btop++ style) ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
-    f.render_widget(outer_block, area);
+        .split(inner);
 
     // 1. Liste des options avec hitboxes
     let mut option_lines = Vec::new();
@@ -66,7 +84,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         let is_selected = i == app.settings_selected_idx;
 
         let cursor = if is_selected {
-            Span::styled(" ▶ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+            Span::styled(" ▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
         } else {
             Span::styled("   ", Style::default())
         };
@@ -85,10 +103,10 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
         option_lines.push(Line::from(vec![
             cursor,
-            Span::styled(format!("{:<30}", label), label_style),
-            Span::styled(" :  [◀] ", Style::default().fg(theme.border)),
-            Span::styled(format!("{:<16}", val), val_style),
-            Span::styled(" [▶]", Style::default().fg(theme.border)),
+            Span::styled(format!("{:<28}", label), label_style),
+            Span::styled(" :  [◀] ", Style::default().fg(if is_selected { theme.highlight } else { theme.border })),
+            Span::styled(format!("{:<22}", val), val_style),
+            Span::styled(" [▶]", Style::default().fg(if is_selected { theme.highlight } else { theme.border })),
         ]));
 
         // Enregistrer la hitbox de la ligne
@@ -101,6 +119,19 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 height: 1,
             },
             action: HitAction::SettingOption(i),
+        });
+
+        // Hitboxes pour les boutons fléchés spécifiques [◀] et [▶]
+        let left_arrow_x = chunks[1].x + 3 + 28 + 4;
+        hitboxes.push(Hitbox {
+            rect: Rect { x: left_arrow_x, y: row_y, width: 3, height: 1 },
+            action: HitAction::SettingCycle(i, false),
+        });
+
+        let right_arrow_x = left_arrow_x + 3 + 1 + 22 + 1;
+        hitboxes.push(Hitbox {
+            rect: Rect { x: right_arrow_x, y: row_y, width: 3, height: 1 },
+            action: HitAction::SettingCycle(i, true),
         });
     }
 
@@ -120,31 +151,31 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     hitboxes.push(Hitbox { rect: btn_chunks[1], action: HitAction::CloseModal });
 
     let save_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Enregistrer les paramètres ] ", Style::default().fg(theme.card_bg).bg(theme.accent).add_modifier(Modifier::BOLD)),
+        Span::styled(" [ Enregistrer (s) ] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
     ]))
     .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.accent)));
+    .block(Block::default().borders(Borders::ALL).border_type(BorderType::Plain).border_style(Style::default().fg(theme.border_sys)));
     f.render_widget(save_p, btn_chunks[0]);
 
     let close_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Fermer (Échap) ] ", Style::default().fg(theme.text_bright).bg(theme.card_bg)),
+        Span::styled(" [ Fermer (Échap) ] ", Style::default().fg(theme.text_muted)),
     ]))
     .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)));
+    .block(Block::default().borders(Borders::ALL).border_type(BorderType::Plain).border_style(Style::default().fg(theme.border)));
     f.render_widget(close_p, btn_chunks[1]);
 
     // 3. Aide contextuelle
     let help_text = match app.settings_selected_idx {
-        0 => "Basculez entre les 6 thèmes modernes (Tokyo Night, Catppuccin, Nord, Gruvbox, Dracula, Monokai).",
+        0 => "Basculez entre les 6 thèmes modernes (Tokyo Night, Catppuccin Mocha, Nord Frost, Gruvbox Dark, Dracula, Monokai Pro).",
         1 => "Fréquence de vérification du timer rclone-bisync (10min, 15min, 30min, 1h).",
-        2 => "Délai max avant un sync complet avec le cloud même sans modifs locales.",
+        2 => "Délai max avant une synchronisation complète avec le cloud même sans modifs locales.",
         3 => "Limite de bande passante rclone (bwlimit.env).",
-        4 => "Fréquence de boucle TUI en millisecondes.",
-        _ => "Cliquez sur les flèches ou appuyez sur Entrée pour modifier, Échap pour fermer.",
+        4 => "Fréquence de boucle TUI en millisecondes (défilement et réactivité).",
+        _ => "Cliquez sur [◀] / [▶] ou appuyez sur ← / → pour modifier, Entrée pour enregistrer.",
     };
 
     let p_help = Paragraph::new(vec![
-        Line::from(Span::styled("Aide :", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled("┌aide contextuelle┐", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
         Line::from(Span::styled(help_text, Style::default().fg(theme.text_bright))),
     ])
     .block(Block::default().borders(Borders::TOP).border_style(Style::default().fg(theme.border)));

@@ -88,6 +88,8 @@ pub enum HitAction {
     FileOpen(usize),
     FileParent,
     ToggleLogsAuto,
+    FilterArea,
+    FilterRow(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,6 +144,7 @@ pub struct App {
     pub history_scroll_offset: usize,
     pub history_details_scroll: usize,
     pub filter_scroll_offset: usize,
+    pub filter_viewport_height: usize,
     pub recent_scroll_offset: usize,
 
     // Paramètres
@@ -204,6 +207,7 @@ impl App {
             history_scroll_offset: 0,
             history_details_scroll: 0,
             filter_scroll_offset: 0,
+            filter_viewport_height: 12,
             recent_scroll_offset: 0,
 
             settings_selected_idx: 0,
@@ -602,6 +606,15 @@ impl App {
                                 }
                                 return Action::None;
                             }
+                            HitAction::FilterArea | HitAction::FilterRow(_) => {
+                                if !self.filters.is_empty() {
+                                    let max = self.filters.len().saturating_sub(1);
+                                    self.selected_filter_idx = (self.selected_filter_idx + 2).min(max);
+                                    let vp = self.filter_viewport_height;
+                                    self.ensure_filter_visible(vp);
+                                }
+                                return Action::None;
+                            }
                             _ => {}
                         }
                     }
@@ -655,6 +668,12 @@ impl App {
                                         self.file_scroll_offset = self.file_scroll_offset.saturating_sub(1);
                                     }
                                 }
+                                return Action::None;
+                            }
+                            HitAction::FilterArea | HitAction::FilterRow(_) => {
+                                self.selected_filter_idx = self.selected_filter_idx.saturating_sub(2);
+                                let vp = self.filter_viewport_height;
+                                self.ensure_filter_visible(vp);
                                 return Action::None;
                             }
                             _ => {}
@@ -802,6 +821,17 @@ impl App {
                             }
                             HitAction::ToggleLogsAuto => {
                                 self.auto_scroll = !self.auto_scroll;
+                                return Action::None;
+                            }
+                            HitAction::FilterRow(idx) => {
+                                if idx < self.filters.len() {
+                                    self.selected_filter_idx = idx;
+                                    let vp = self.filter_viewport_height;
+                                    self.ensure_filter_visible(vp);
+                                }
+                                return Action::None;
+                            }
+                            HitAction::FilterArea => {
                                 return Action::None;
                             }
                             _ => {}
@@ -1102,46 +1132,51 @@ impl App {
                     }
                     _ => {}
                 },
-                Modal::Filters => match key.code {
-                    KeyCode::Esc => {
-                        self.modal = Modal::None;
-                    }
-                    KeyCode::Char('e') => {
-                        return Action::OpenEditor;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        if self.selected_filter_idx > 0 {
-                            self.selected_filter_idx -= 1;
+                Modal::Filters => {
+                    let vp = self.filter_viewport_height;
+                    match key.code {
+                        KeyCode::Esc | KeyCode::Char('q') => {
+                            self.modal = Modal::None;
                         }
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        if !self.filters.is_empty() && self.selected_filter_idx < self.filters.len() - 1 {
-                            self.selected_filter_idx += 1;
+                        KeyCode::Char('e') => {
+                            return Action::OpenEditor;
                         }
-                    }
-                    KeyCode::PageUp => {
-                        self.selected_filter_idx = self.selected_filter_idx.saturating_sub(10);
-                        if self.selected_filter_idx < self.filter_scroll_offset {
-                            self.filter_scroll_offset = self.selected_filter_idx;
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if self.selected_filter_idx > 0 {
+                                self.selected_filter_idx -= 1;
+                                self.ensure_filter_visible(vp);
+                            }
                         }
-                    }
-                    KeyCode::PageDown => {
-                        if !self.filters.is_empty() {
-                            let max = self.filters.len() - 1;
-                            self.selected_filter_idx = (self.selected_filter_idx + 10).min(max);
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if !self.filters.is_empty() && self.selected_filter_idx < self.filters.len() - 1 {
+                                self.selected_filter_idx += 1;
+                                self.ensure_filter_visible(vp);
+                            }
                         }
-                    }
-                    KeyCode::Home => {
-                        self.selected_filter_idx = 0;
-                        self.filter_scroll_offset = 0;
-                    }
-                    KeyCode::End => {
-                        if !self.filters.is_empty() {
-                            self.selected_filter_idx = self.filters.len() - 1;
+                        KeyCode::PageUp => {
+                            self.selected_filter_idx = self.selected_filter_idx.saturating_sub(vp.max(5));
+                            self.ensure_filter_visible(vp);
                         }
+                        KeyCode::PageDown => {
+                            if !self.filters.is_empty() {
+                                let max = self.filters.len() - 1;
+                                self.selected_filter_idx = (self.selected_filter_idx + vp.max(5)).min(max);
+                                self.ensure_filter_visible(vp);
+                            }
+                        }
+                        KeyCode::Home => {
+                            self.selected_filter_idx = 0;
+                            self.filter_scroll_offset = 0;
+                        }
+                        KeyCode::End => {
+                            if !self.filters.is_empty() {
+                                self.selected_filter_idx = self.filters.len() - 1;
+                                self.ensure_filter_visible(vp);
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
-                },
+                }
                 Modal::DryRun => match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.modal = Modal::None;
@@ -1698,5 +1733,70 @@ mod tests {
         let n_key = KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE);
         app.handle_key(n_key);
         assert_eq!(app.modal, Modal::None);
+    }
+
+    #[tokio::test]
+    async fn test_filter_modal_keyboard_and_mouse_scroll() {
+        let mut app = App::new();
+        app.filters = (1..=30).map(|i| format!("- /exclude_pattern_{}/**", i)).collect();
+        app.modal = Modal::Filters;
+        app.filter_viewport_height = 10;
+        app.selected_filter_idx = 0;
+        app.filter_scroll_offset = 0;
+
+        // Register a Hitbox for FilterArea
+        app.hitboxes.push(Hitbox {
+            rect: Rect { x: 10, y: 10, width: 40, height: 15 },
+            action: HitAction::FilterArea,
+        });
+
+        // 1. Keyboard Down navigation
+        let down_key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        for _ in 0..12 {
+            app.handle_key(down_key);
+        }
+        assert_eq!(app.selected_filter_idx, 12);
+        assert!(app.filter_scroll_offset > 0, "filter_scroll_offset must have scrolled down");
+
+        // 2. Keyboard PageUp
+        let page_up = KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE);
+        app.handle_key(page_up);
+        assert_eq!(app.selected_filter_idx, 2);
+        assert_eq!(app.filter_scroll_offset, 2);
+
+        // 3. Mouse Wheel ScrollDown over FilterArea
+        let scroll_down = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 15,
+            row: 15,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_mouse(scroll_down);
+        assert_eq!(app.selected_filter_idx, 4);
+
+        // 4. Mouse Wheel ScrollUp over FilterArea
+        let scroll_up = MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 15,
+            row: 15,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_mouse(scroll_up);
+        assert_eq!(app.selected_filter_idx, 2);
+
+        // 5. Left Click on FilterRow
+        app.hitboxes.push(Hitbox {
+            rect: Rect { x: 10, y: 12, width: 40, height: 1 },
+            action: HitAction::FilterRow(20),
+        });
+        let click_row = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 15,
+            row: 12,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_mouse(click_row);
+        assert_eq!(app.selected_filter_idx, 20);
+        assert!(app.filter_scroll_offset >= 11, "filter_scroll_offset must be updated to keep row 20 visible");
     }
 }

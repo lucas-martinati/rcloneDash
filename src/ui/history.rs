@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
@@ -198,13 +198,23 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = app.history_details_scroll.min(max_scroll);
 
-    let title = format!(" 🔍 Détails du Run #{} ({} {}) ", run.id, run.date, run.time);
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.accent))
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(theme.border_history))
         .style(Style::default().bg(theme.card_bg))
-        .title(Span::styled(title, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
+        .title(Line::from(vec![
+            Span::styled("┌🔍 détails run", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(": #{} ({} {})┐", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
+            Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("↑/↓ défiler  ↵ ouvrir  d dossier  Esc fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ ligne {}/{}┘", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Right),
+        );
 
     let inner = block.inner(area);
     f.render_widget(block, area);

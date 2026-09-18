@@ -20,15 +20,15 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     let show_active_files = show_active_sync && !app.live.active_files.is_empty();
 
     let mut constraints = Vec::new();
-    // 1. Ligne des KPI Cards
-    constraints.push(Constraint::Length(3));
+    // 1. Cadran Stockage & Métriques (btop++ Disks/Mem style)
+    constraints.push(Constraint::Length(5));
 
     // 2. Bannière d'alerte contextuelle si alerte active
     if show_alert {
         constraints.push(Constraint::Length(3));
     }
 
-    // 3. Barre de sync active (Phase stepper + Jauge)
+    // 3. Barre de sync active (Phase stepper + Jauge + Sparkline)
     if show_active_sync {
         constraints.push(Constraint::Length(3));
     }
@@ -39,7 +39,7 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     }
 
     // 5. Zone centrale (Historique + Logs)
-    constraints.push(Constraint::Percentage(52));
+    constraints.push(Constraint::Percentage(55));
 
     // 6. Zone inférieure (Fichiers récents)
     constraints.push(Constraint::Min(6));
@@ -51,8 +51,8 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     let mut chunk_idx = 0;
 
-    // 1. KPI Cards
-    render_kpi_bar(f, app, theme, chunks[chunk_idx]);
+    // 1. Cadrans Stockage & Métriques (2 cadrans spacieux type btop++)
+    render_system_cadrans(f, app, theme, chunks[chunk_idx]);
     chunk_idx += 1;
 
     // 2. Alerte
@@ -90,148 +90,163 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     render_recent_files_panel(f, app, theme, bottom_area, hitboxes);
 }
 
-fn render_kpi_bar(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
-    let kpi_chunks = Layout::default()
+/// Affiche 2 cadrans élégants (Stockage/Cloud à gauche, Métriques/Fiabilité à droite)
+/// avec barres de progression horizontales à dégradé, zéro texte tronqué
+fn render_system_cadrans(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+    let sub = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(14), // Cloud
-            Constraint::Percentage(16), // Disque Local
-            Constraint::Percentage(14), // Fichiers
-            Constraint::Percentage(14), // Syncs Auj.
-            Constraint::Percentage(14), // Vitesse
-            Constraint::Percentage(14), // Conflits Auj.
-            Constraint::Percentage(14), // Fiabilité
-        ])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
-    // KPI 1 : Stockage Cloud
-    let cloud_sub = format!("Filet: {}", app.service_info.cloud_safety_net);
-    render_kpi_card(
-        f,
-        kpi_chunks[0],
-        "☁ STOCKAGE CLOUD",
-        &app.config.remote,
-        &cloud_sub,
-        theme.purple,
-        theme,
-    );
+    render_disks_cloud_box(f, app, theme, sub[0]);
+    render_metrics_box(f, app, theme, sub[1]);
+}
 
-    // KPI 2 : Disque Local (statvfs)
-    let (used_gb, free_gb, total_gb, _pct) = app.local_disk_stats();
-    let disk_val = format!("{:.0} Go", used_gb);
-    let disk_sub = format!("{:.1} Go libres / {:.0} Go", free_gb, total_gb);
-    render_kpi_card(
-        f,
-        kpi_chunks[1],
-        "💾 DISQUE LOCAL",
-        &disk_val,
-        &disk_sub,
-        theme.blue,
-        theme,
-    );
+fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(theme.border_storage))
+        .style(Style::default().bg(theme.card_bg))
+        .title(Line::from(vec![
+            Span::styled("┌²disks & cloud", Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("statvfs / bisync ─┘", Style::default().fg(theme.border_storage)),
+            ])
+            .alignment(Alignment::Right),
+        );
+    f.render_widget(outer_block, area);
 
-    // KPI 3 : Fichiers suivis
+    let inner = Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    };
+
+    let (used_gb, free_gb, total_gb, pct) = app.local_disk_stats();
+    let bar_width = 10usize.min((inner.width.saturating_sub(42) / 2) as usize);
+    let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, theme);
+
+    let mut line1_spans = vec![
+        Span::styled("Disque:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+    ];
+    line1_spans.extend(disk_bar);
+    line1_spans.push(Span::styled(
+        format!(" {:>3.0}%  {:.0} Go / {:.0} Go ({:.1} Go libres)", pct, used_gb, total_gb, free_gb),
+        Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
+    ));
+
+    let cloud_net = &app.service_info.cloud_safety_net;
+    let bwlimit_str = app.config.bwlimit.as_deref().unwrap_or("Illimité");
+    let line2_spans = vec![
+        Span::styled("Cloud:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{:<15}", &app.config.remote), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("Filet: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled("│ bwlimit: ", Style::default().fg(theme.text_muted)),
+        Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
+    ];
+
     let count = if !app.file_entries.is_empty() {
         app.file_entries.iter().filter(|f| !f.is_dir).count()
     } else {
         22224
     };
-    let count_str = format!("{}", count);
-    render_kpi_card(
-        f,
-        kpi_chunks[2],
-        "📁 FICHIERS SUIVIS",
-        &count_str,
-        &app.config.local_dir,
-        theme.cyan,
-        theme,
-    );
+    let line3_spans = vec![
+        Span::styled("Dossier: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} ", &app.config.local_dir), Style::default().fg(theme.text_bright)),
+        Span::styled(format!("({} fichiers suivis)", count), Style::default().fg(theme.text_muted)),
+    ];
 
-    // KPI 4 : Syncs aujourd'hui
-    let (ok_today, err_today) = app.runs_today_stats();
-    let total_today = ok_today + err_today;
-    let syncs_val = format!("{}", total_today);
-    let syncs_sub = format!("{} réussie(s) · {} err.", ok_today, err_today);
-    render_kpi_card(
-        f,
-        kpi_chunks[3],
-        "🔄 SYNCS AUJOURD'HUI",
-        &syncs_val,
-        &syncs_sub,
-        theme.accent,
-        theme,
-    );
+    let p = Paragraph::new(vec![
+        Line::from(line1_spans),
+        Line::from(line2_spans),
+        Line::from(line3_spans),
+    ]);
+    f.render_widget(p, inner);
+}
 
-    // KPI 5 : Vitesse moyenne / Débit
+fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(theme.border_sys))
+        .style(Style::default().bg(theme.card_bg))
+        .title(Line::from(vec![
+            Span::styled("┌³metrics", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("systemd rclone ─┘", Style::default().fg(theme.border_sys)),
+            ])
+            .alignment(Alignment::Right),
+        );
+    f.render_widget(outer_block, area);
+
+    let inner = Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    };
+
     let speed = if app.live.transfer.speed.is_empty() {
         "0.0 KiB/s".to_string()
     } else {
         app.live.transfer.speed.clone()
     };
-    render_kpi_card(
-        f,
-        kpi_chunks[4],
-        "⚡ DÉBIT EN DIRECT",
-        &speed,
-        "transfert rclone",
-        theme.green,
-        theme,
-    );
-
-    // KPI 6 : Conflits aujourd'hui
-    let conflicts = app.conflicts_today_stats();
-    let conflicts_val = format!("{}", conflicts);
-    let conflicts_color = if conflicts == 0 { theme.green } else { theme.red };
-    render_kpi_card(
-        f,
-        kpi_chunks[5],
-        "⚠ CONFLITS AUJOURD'HUI",
-        &conflicts_val,
-        if conflicts == 0 { "aucun conflit" } else { "détectés dans les logs" },
-        conflicts_color,
-        theme,
-    );
-
-    // KPI 7 : Fiabilité 7 jours
-    let (rate, _) = app.calculate_success_rate();
-    let rate_val = format!("{:.0} %", rate);
-    render_kpi_card(
-        f,
-        kpi_chunks[6],
-        "🛡 FIABILITÉ 7 JOURS",
-        &rate_val,
-        "taux de réussite",
-        if rate >= 90.0 { theme.green } else { theme.yellow },
-        theme,
-    );
-}
-
-fn render_kpi_card(
-    f: &mut Frame,
-    area: Rect,
-    title: &str,
-    value: &str,
-    subtext: &str,
-    accent_color: ratatui::style::Color,
-    theme: &ThemePalette,
-) {
-    let lines = vec![
-        Line::from(vec![
-            Span::styled(format!(" {} ", value), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(" {}", subtext), Style::default().fg(theme.text_muted)),
-        ]),
+    let is_syncing = app.live.is_syncing;
+    let line1_spans = vec![
+        Span::styled("Débit:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{:<13}", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled("transfert rclone  │  ", Style::default().fg(theme.text_muted)),
+        Span::styled(
+            if is_syncing { "● Actif" } else { "○ En attente" },
+            Style::default().fg(if is_syncing { theme.green } else { theme.text_muted }).add_modifier(Modifier::BOLD),
+        ),
     ];
 
-    let p = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(theme.border))
-            .style(Style::default().bg(theme.card_bg))
-            .title(Span::styled(format!(" {} ", title), Style::default().fg(accent_color).add_modifier(Modifier::BOLD))),
-    );
+    let (ok_today, err_today) = app.runs_today_stats();
+    let conflicts = app.conflicts_today_stats();
+    let line2_spans = vec![
+        Span::styled("Aujourd'hui:", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" {} sync réussie(s)", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled(" · ", Style::default().fg(theme.border)),
+        Span::styled(
+            format!("{} err.", err_today),
+            Style::default().fg(if err_today > 0 { theme.red } else { theme.text_muted }).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" · ", Style::default().fg(theme.border)),
+        Span::styled(
+            format!("{} conflit(s)", conflicts),
+            Style::default().fg(if conflicts > 0 { theme.red } else { theme.text_muted }).add_modifier(Modifier::BOLD),
+        ),
+    ];
 
-    f.render_widget(p, area);
+    let (rate, _) = app.calculate_success_rate();
+    let rel_bar_width = 10usize.min((inner.width.saturating_sub(42) / 2) as usize);
+    let rel_bar = crate::ui::sparkline::render_gradient_bar(rate, rel_bar_width, theme);
+
+    let mut line3_spans = vec![
+        Span::styled("Fiabilité:", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+    ];
+    line3_spans.extend(rel_bar);
+    line3_spans.push(Span::styled(
+        format!(" {:>3.0}% taux de réussite (7 jours)", rate),
+        Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
+    ));
+
+    let p = Paragraph::new(vec![
+        Line::from(line1_spans),
+        Line::from(line2_spans),
+        Line::from(line3_spans),
+    ]);
+    f.render_widget(p, inner);
 }
 
 fn render_alert_banner(f: &mut Frame, alert: &Alert, theme: &ThemePalette, area: Rect) {
@@ -255,7 +270,7 @@ fn render_alert_banner(f: &mut Frame, alert: &Alert, theme: &ThemePalette, area:
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Plain)
                 .border_style(Style::default().fg(border_color))
                 .style(Style::default().bg(theme.card_bg)),
         );
@@ -310,10 +325,13 @@ fn render_phase_stepper(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Plain)
                 .border_style(Style::default().fg(theme.accent))
                 .style(Style::default().bg(theme.card_bg))
-                .title(Span::styled(" ÉTAPES DE SYNCHRONISATION ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+                .title(Line::from(vec![
+                    Span::styled("┌ÉTAPES DE SYNCHRONISATION", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    Span::styled("┐", Style::default().fg(theme.border)),
+                ])),
         );
     f.render_widget(p, area);
 }
@@ -331,10 +349,13 @@ fn render_transfer_gauge(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Plain)
                 .border_style(Style::default().fg(theme.accent))
                 .style(Style::default().bg(theme.card_bg))
-                .title(Span::styled(" Transfert Actif ", Style::default().fg(theme.accent))),
+                .title(Line::from(vec![
+                    Span::styled("┌Transfert Actif", Style::default().fg(theme.accent)),
+                    Span::styled("┐", Style::default().fg(theme.border)),
+                ])),
         )
         .gauge_style(Style::default().fg(theme.accent).bg(theme.border))
         .percent(pct as u16)
@@ -371,25 +392,27 @@ fn render_active_files_bar(f: &mut Frame, app: &App, theme: &ThemePalette, area:
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Plain)
                 .border_style(Style::default().fg(theme.border))
                 .style(Style::default().bg(theme.card_bg))
-                .title(Span::styled(
-                    format!(" ⚡ Fichiers en cours ({}) ", app.live.active_files.len()),
-                    Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
-                )),
+                .title(Line::from(vec![
+                    Span::styled(format!("┌⚡ Fichiers en cours ({})", app.live.active_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    Span::styled("┐", Style::default().fg(theme.border)),
+                ])),
         );
     f.render_widget(p, area);
 }
 
 fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let is_focused = app.focused_panel == FocusedPanel::History;
-    let border_color = if is_focused { theme.border_focus } else { theme.border };
+    let border_color = if is_focused { theme.border_focus } else { theme.border_history };
+    let total_runs = app.past_runs.len();
+    let cur_run = if total_runs > 0 { app.selected_run_idx + 1 } else { 0 };
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // Mini-graphique de barres en haut
+            Constraint::Length(1), // Sparkline de durées & statut en haut
             Constraint::Min(6),    // Tableau des runs
         ])
         .split(Rect {
@@ -401,19 +424,33 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(BorderType::Plain)
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
-        .title(Span::styled(
-            if is_focused { " ▶ 🕒 HISTORIQUE DES SYNCS " } else { " 🕒 HISTORIQUE DES SYNCS " },
-            Style::default().fg(if is_focused { theme.accent } else { theme.text_muted }).add_modifier(Modifier::BOLD),
-        ));
+        .title(Line::from(vec![
+            Span::styled("┌⁴history", Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌details ↵", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled(format!("─── [{} runs]┐", total_runs), Style::default().fg(theme.border)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("↑/↓ select  ↵ détails  c stop ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ run {}/{}┘", cur_run, total_runs), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Right),
+        );
     f.render_widget(outer_block, area);
 
-    // 1. Sparkline de durées & statut des derniers runs (comme sparkline.js web)
-    let max_bars = (chunks[0].width.saturating_sub(18) / 2) as usize;
+    // 1. Sparkline de durées & statut des derniers runs
+    let mut dur_spans = vec![
+        Span::styled("Graphe durées : ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+    ];
+    let max_bars = chunks[0].width.saturating_sub(18) as usize;
     let bar_line = crate::ui::sparkline::render_history_sparkline(&app.past_runs, theme, max_bars.max(5));
-    let bar_p = Paragraph::new(bar_line);
+    dur_spans.extend(bar_line.spans);
+    let bar_p = Paragraph::new(Line::from(dur_spans));
     f.render_widget(bar_p, chunks[0]);
 
     // 2. Tableau des runs avec hitboxes et scroll offset
@@ -441,7 +478,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
             let is_selected = *i == app.selected_run_idx;
 
             let cursor = if is_selected {
-                Span::styled("▶ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                Span::styled("▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
             } else {
                 Span::styled("  ", Style::default())
             };
@@ -521,7 +558,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
             .begin_symbol(Some("▲"))
             .end_symbol(Some("▼"))
             .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
+            .thumb_style(Style::default().fg(theme.highlight));
         f.render_stateful_widget(scrollbar, chunks[1], &mut scrollbar_state);
     }
 }
@@ -534,18 +571,44 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     });
 
     let is_focused = app.focused_panel == FocusedPanel::Logs;
-    let border_color = if is_focused { theme.border_focus } else { theme.border };
+    let border_color = if is_focused { theme.border_focus } else { theme.border_logs };
+    let total_lines = app.live.log_lines.len();
 
-    let status_badge = if app.auto_scroll {
-        Span::styled(" [DÉFILEMENT AUTO] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
+    let auto_badge = if app.auto_scroll {
+        ("auto: ON (space)", theme.green)
     } else {
-        Span::styled(" [PAUSE - ESPACE] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+        ("PAUSE (space)", theme.yellow)
     };
 
     let visible_height = area.height.saturating_sub(2) as usize;
-    let total_lines = app.live.log_lines.len();
     let max_scroll = total_lines.saturating_sub(visible_height);
     let effective_scroll = app.logs_scroll.min(max_scroll);
+
+    let cur_line = if app.auto_scroll {
+        total_lines
+    } else {
+        total_lines.saturating_sub(effective_scroll)
+    };
+
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(border_color))
+        .style(Style::default().bg(theme.card_bg))
+        .title(Line::from(vec![
+            Span::styled("┌⁵logs", Style::default().fg(theme.border_logs).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled(format!("┌{}", auto_badge.0), Style::default().fg(auto_badge.1).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled(format!("─── [{} lignes]┐", total_lines), Style::default().fg(theme.border)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("↑/↓ scroll  Space pause  Home/End ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ ligne {}/{}┘", cur_line, total_lines), Style::default().fg(theme.border_logs).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Right),
+        );
 
     let skip_count = if app.auto_scroll {
         max_scroll
@@ -562,21 +625,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         .map(|line| colorize_log_line(line, theme))
         .collect();
 
-    let p = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(border_color))
-            .style(Style::default().bg(theme.card_bg))
-            .title(Line::from(vec![
-                Span::styled(
-                    if is_focused { " ▶ 📜 LOGS EN DIRECT " } else { " 📜 LOGS EN DIRECT " },
-                    Style::default().fg(if is_focused { theme.accent } else { theme.text_muted }).add_modifier(Modifier::BOLD),
-                ),
-                status_badge,
-            ])),
-    );
-
+    let p = Paragraph::new(lines).block(outer_block);
     f.render_widget(p, area);
 
     // Scrollbar btop++ pour les logs
@@ -591,7 +640,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
             .begin_symbol(Some("▲"))
             .end_symbol(Some("▼"))
             .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
+            .thumb_style(Style::default().fg(theme.highlight));
         f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
     }
 }
@@ -603,7 +652,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     });
 
     let is_focused = app.focused_panel == FocusedPanel::RecentFiles;
-    let border_color = if is_focused { theme.border_focus } else { theme.border };
+    let border_color = if is_focused { theme.border_focus } else { theme.border_recent };
 
     // On combine les fichiers du run live et des derniers runs d'historique
     let mut files_to_display: Vec<(String, String, String, String)> = Vec::new();
@@ -626,6 +675,9 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         }
     }
 
+    let total_files = files_to_display.len();
+    let cur_file = if total_files > 0 { app.recent_selected_idx + 1 } else { 0 };
+
     let max_show = area.height.saturating_sub(3) as usize;
     let offset = if !files_to_display.is_empty() && max_show > 0 {
         app.recent_scroll_offset.min(files_to_display.len().saturating_sub(max_show))
@@ -635,7 +687,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     let rows: Vec<Row> = if files_to_display.is_empty() {
         vec![Row::new(vec![
-            Cell::from(Span::styled(" Aucun fichier synchronisé récemment", Style::default().fg(theme.text_muted))),
+            Cell::from(Span::styled(" Aucun fichier récemment synchronisé", Style::default().fg(theme.text_muted))),
             Cell::from(""),
             Cell::from(""),
         ])]
@@ -688,39 +740,41 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         }
     }
 
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(border_color))
+        .style(Style::default().bg(theme.card_bg))
+        .title(Line::from(vec![
+            Span::styled("┌⁶recent files", Style::default().fg(theme.border_recent).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌ouvrir ↵", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌dossier: d / Ctrl+↵", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled(format!("─── [{} fichiers]┐", total_files), Style::default().fg(theme.border)),
+        ]))
+        .title_bottom(
+            Line::from(vec![
+                Span::styled("↑/↓ select  ↵ open  d dossier  Tab panel ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ fic {}/{}┘", cur_file, total_files), Style::default().fg(theme.border_recent).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Right),
+        );
+
     let table = Table::new(
         rows,
         [
-            Constraint::Percentage(15),
-            Constraint::Percentage(70),
-            Constraint::Percentage(15),
+            Constraint::Percentage(16),
+            Constraint::Percentage(68),
+            Constraint::Percentage(16),
         ],
     )
     .header(
         Row::new(vec!["ACTION", "CHEMIN DU FICHIER", "HEURE"])
             .style(Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     )
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(border_color))
-            .style(Style::default().bg(theme.card_bg))
-            .title(Span::styled(
-                if is_focused {
-                    if app.live.is_syncing && !app.live.synced_files.is_empty() {
-                        format!(" ▶ 📄 FICHIERS SYNCHRONISÉS EN DIRECT ({}) ", app.live.synced_files.len())
-                    } else {
-                        " ▶ 📄 FICHIERS RÉCENTS ".to_string()
-                    }
-                } else if app.live.is_syncing && !app.live.synced_files.is_empty() {
-                    format!(" 📄 FICHIERS SYNCHRONISÉS EN DIRECT ({}) ", app.live.synced_files.len())
-                } else {
-                    " 📄 FICHIERS RÉCENTS ".to_string()
-                },
-                Style::default().fg(if is_focused { theme.accent } else if app.live.is_syncing && !app.live.synced_files.is_empty() { theme.green } else { theme.text_muted }).add_modifier(Modifier::BOLD),
-            )),
-    );
+    .block(outer_block);
 
     f.render_widget(table, area);
 
@@ -731,7 +785,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
             .begin_symbol(Some("▲"))
             .end_symbol(Some("▼"))
             .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
+            .thumb_style(Style::default().fg(theme.highlight));
         f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
     }
 }
