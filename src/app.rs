@@ -65,9 +65,9 @@ impl LogFilter {
     }
     pub fn label(self) -> &'static str {
         match self {
-            LogFilter::All => "Tout",
-            LogFilter::Files => "Fichiers",
-            LogFilter::Problems => "Problèmes",
+            LogFilter::All => "All",
+            LogFilter::Files => "Files",
+            LogFilter::Problems => "Problems",
         }
     }
     #[allow(dead_code)]
@@ -471,7 +471,7 @@ impl App {
                 if let Ok(lines) = rx.try_recv() {
                     self.dry_run_logs = lines;
                     self.dry_run_running = false;
-                    self.set_toast("✔ Simulation Dry-Run terminée !");
+                    self.set_toast("✔ Dry-Run simulation completed!");
                 }
             }
         }
@@ -490,13 +490,13 @@ impl App {
     pub fn start_dry_run(&mut self) {
         self.dry_run_running = true;
         self.dry_run_logs = vec![
-            "Analyse des différences entre le dossier local et Google Drive...".to_string(),
-            "Exécution de : rclone bisync --dry-run -v --tpslimit 8".to_string(),
-            "Cela peut prendre un instant...".to_string(),
+            "Analyzing differences between local folder and Google Drive...".to_string(),
+            "Executing: rclone bisync --dry-run -v --tpslimit 8".to_string(),
+            "This may take a moment...".to_string(),
         ];
         self.dry_run_scroll = 0;
         self.modal = Modal::DryRun;
-        self.set_toast("🛡 Simulation Dry-Run démarrée...");
+        self.set_toast("🛡 Dry-Run simulation started...");
 
         let remote = self.config.remote.clone();
         let local_dir = config::expand_tilde(&self.config.local_dir).to_string_lossy().to_string();
@@ -522,11 +522,11 @@ impl App {
                         }
                     }
                     if lines.is_empty() {
-                        lines.push("Tout est déjà synchronisé (aucun transfert détecté en dry-run).".to_string());
+                        lines.push("Everything is already in sync (no transfers detected in dry-run).".to_string());
                     }
                 }
                 Err(e) => {
-                    lines.push(format!("Erreur d'exécution de rclone : {}", e));
+                    lines.push(format!("Error running rclone: {}", e));
                 }
             }
             let _ = tx.send(lines);
@@ -568,7 +568,7 @@ impl App {
         self.current_theme = self.current_theme.next();
         self.config.theme = Some(self.current_theme);
         let _ = config::save_config(&self.config);
-        self.set_toast(format!("Thème actif : {}", self.current_theme.name()));
+        self.set_toast(format!("Active theme: {}", self.current_theme.name()));
     }
 
     pub fn open_selected_file(&mut self, rel_path: &str) {
@@ -580,20 +580,20 @@ impl App {
             base.join(clean)
         };
         if !full.exists() {
-            self.set_toast("Fichier supprimé (introuvable)");
+            self.set_toast("File deleted (not found)");
             return;
         }
         match fs_tree::open_with_xdg(&base, rel_path) {
-            Ok(_) => self.set_toast(format!("✔ Ouverture : {}", rel_path)),
-            Err(_) => self.set_toast("Fichier supprimé (introuvable)"),
+            Ok(_) => self.set_toast(format!("✔ Opened: {}", rel_path)),
+            Err(_) => self.set_toast("File deleted (not found)"),
         }
     }
 
     pub fn open_selected_folder(&mut self, rel_path: &str) {
         let base = config::expand_tilde(&self.config.local_dir);
         match fs_tree::open_folder_with_xdg(&base, rel_path) {
-            Ok(_) => self.set_toast(format!("📁 Dossier parent ouvert pour {}", rel_path)),
-            Err(e) => self.set_toast(format!("✗ Impossible d'ouvrir dossier : {}", e)),
+            Ok(_) => self.set_toast(format!("📁 Parent folder opened for {}", rel_path)),
+            Err(e) => self.set_toast(format!("✗ Unable to open folder: {}", e)),
         }
     }
 
@@ -717,15 +717,15 @@ impl App {
             .filter(|l| self.log_filter.matches(l))
             .collect();
         if filtered.is_empty() {
-            self.set_toast("ℹ Aucun log à copier.");
+            self.set_toast("ℹ No logs to copy.");
             return;
         }
         let text = filtered.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n");
         let count = filtered.len();
         if crate::clipboard::copy_to_clipboard(&text) {
-            self.set_toast(format!("📋 {} lignes de logs copiées dans le presse-papiers !", count));
+            self.set_toast(format!("📋 {} log lines copied to clipboard!", count));
         } else {
-            self.set_toast("⚠ Échec de copie dans le presse-papiers.");
+            self.set_toast("⚠ Failed to copy to clipboard.");
         }
     }
 
@@ -740,7 +740,7 @@ impl App {
         if let Some(run) = self.past_runs.get(run_idx) {
             if !run.errors.is_empty() {
                 let text = format!(
-                    "Run #{} ({} {}) - {} erreurs détectées :\n{}",
+                    "Run #{} ({} {}) - {} errors detected:\n{}",
                     run.id,
                     run.date,
                     run.time,
@@ -748,13 +748,13 @@ impl App {
                     run.errors.iter().map(|e| format!("• {}", e)).collect::<Vec<_>>().join("\n")
                 );
                 if crate::clipboard::copy_to_clipboard(&text) {
-                    self.set_toast(format!("📋 {} erreur(s) du run #{} copiée(s) !", run.errors.len(), run.id));
+                    self.set_toast(format!("📋 {} error(s) from run #{} copied!", run.errors.len(), run.id));
                 } else {
-                    self.set_toast("⚠ Échec de copie dans le presse-papiers.");
+                    self.set_toast("⚠ Failed to copy to clipboard.");
                 }
             } else {
                 let text = format!(
-                    "Run #{} ({} {}) - Statut : {:?} (Durée : {})\nFichiers copiés : {}\nFichiers modifiés : {}\nFichiers supprimés : {}",
+                    "Run #{} ({} {}) - Status: {:?} (Duration: {})\nFiles copied: {}\nFiles modified: {}\nFiles deleted: {}",
                     run.id,
                     run.date,
                     run.time,
@@ -765,9 +765,9 @@ impl App {
                     run.files_deleted.len()
                 );
                 if crate::clipboard::copy_to_clipboard(&text) {
-                    self.set_toast(format!("📋 Détails du run #{} copiés !", run.id));
+                    self.set_toast(format!("📋 Run #{} details copied!", run.id));
                 } else {
-                    self.set_toast("⚠ Échec de copie dans le presse-papiers.");
+                    self.set_toast("⚠ Failed to copy to clipboard.");
                 }
             }
         }
@@ -778,7 +778,7 @@ impl App {
             let list = self.get_recent_files_list();
             if let Some(path) = list.get(idx) {
                 if crate::clipboard::copy_to_clipboard(path) {
-                    self.set_toast(format!("📋 Chemin copié : {}", path));
+                    self.set_toast(format!("📋 Path copied: {}", path));
                 }
             }
         }
@@ -1091,24 +1091,24 @@ impl App {
                     self.config.local_dir = trimmed;
                     self.reload_files();
                     self.save_current_settings();
-                    self.set_toast(format!("✔ Dossier local mis à jour : {}", self.config.local_dir));
+                    self.set_toast(format!("✔ Local directory updated: {}", self.config.local_dir));
                 } else {
-                    self.set_toast("✔ Dossier local conservé");
+                    self.set_toast("✔ Local directory kept");
                 }
             } else {
-                self.set_toast("ℹ Valeur vide : conservation du dossier précédent");
+                self.set_toast("ℹ Empty value: keeping previous directory");
             }
         } else if self.settings_selected_idx == 6 {
             if !trimmed.is_empty() {
                 if self.config.remote != trimmed {
                     self.config.remote = trimmed;
                     self.save_current_settings();
-                    self.set_toast(format!("✔ Remote distant mis à jour : {}", self.config.remote));
+                    self.set_toast(format!("✔ Remote storage updated: {}", self.config.remote));
                 } else {
-                    self.set_toast("✔ Remote distant conservé");
+                    self.set_toast("✔ Remote storage kept");
                 }
             } else {
-                self.set_toast("ℹ Valeur vide : conservation du remote précédent");
+                self.set_toast("ℹ Empty value: keeping previous remote");
             }
         }
         self.is_editing_setting = false;
@@ -1528,13 +1528,13 @@ impl App {
                                     self.selected_run_idx = Some(idx);
                                     let run = &self.past_runs[idx];
                                     let st = match run.status {
-                                        RunStatus::Success => "✓ Réussie",
-                                        RunStatus::Failed => "✗ Erreur",
-                                        RunStatus::Skipped => "○ Ignorée",
-                                        RunStatus::Running => "⟳ En cours",
+                                        RunStatus::Success => "✓ Success",
+                                        RunStatus::Failed => "✗ Error",
+                                        RunStatus::Skipped => "○ Skipped",
+                                        RunStatus::Running => "⟳ Running",
                                     };
                                     let files_count = run.files_copied.len() + run.files_modified.len() + run.files_deleted.len();
-                                    self.set_toast(format!("{} — {} · {} fichier(s) · {}", run.time, run.duration, files_count, st));
+                                    self.set_toast(format!("{} — {} · {} file(s) · {}", run.time, run.duration, files_count, st));
                                 }
                                 return Action::None;
                             }
@@ -1546,9 +1546,9 @@ impl App {
                             HitAction::ToggleCtrlMode => {
                                 self.ctrl_mode = !self.ctrl_mode;
                                 if self.ctrl_mode {
-                                    self.set_toast("✔ Mode Dossier (Ctrl) ACTIF : dossiers affichés");
+                                    self.set_toast("✔ Folder Mode (Ctrl) ACTIVE: showing folders");
                                 } else {
-                                    self.set_toast("Mode Fichier Standard");
+                                    self.set_toast("Standard File Mode");
                                 }
                                 return Action::None;
                             }
@@ -1579,7 +1579,7 @@ impl App {
                                 if idx < total {
                                     if self.selected_run_idx == Some(idx) {
                                         if self.is_syncing() && idx == 0 {
-                                            self.set_toast("ℹ Synchronisation active - Détails affichés ci-dessus");
+                                            self.set_toast("ℹ Active sync - Details shown above");
                                         } else {
                                             let past_idx = if self.is_syncing() { idx.saturating_sub(1) } else { idx };
                                             if past_idx < self.past_runs.len() {
@@ -1818,12 +1818,12 @@ impl App {
                 match res {
                     Ok(_) => {
                         if self.ctrl_mode {
-                            self.set_toast(format!("✔ Dossier ouvert pour {}", entry.name));
+                            self.set_toast(format!("✔ Folder opened for {}", entry.name));
                         } else {
-                            self.set_toast(format!("✔ Ouverture de {}", entry.name));
+                            self.set_toast(format!("✔ Opening {}", entry.name));
                         }
                     }
-                    Err(e) => self.set_toast(format!("✗ Erreur : {}", e)),
+                    Err(e) => self.set_toast(format!("✗ Error: {}", e)),
                 }
             }
         }
@@ -1852,7 +1852,7 @@ impl App {
                     self.current_theme.prev()
                 };
                 self.config.theme = Some(self.current_theme);
-                self.set_toast(format!("Thème actif : {}", self.current_theme.name()));
+                self.set_toast(format!("Active theme: {}", self.current_theme.name()));
             }
             1 => {
                 let options = ["10min", "15min", "30min", "1h"];
@@ -1867,11 +1867,12 @@ impl App {
                 self.config.full_sync_interval = options[next].to_string();
             }
             3 => {
-                let options = ["Désactivé", "5M", "10M", "20M", "50M"];
-                let cur = self.config.bwlimit.as_deref().unwrap_or("Désactivé");
+                let options = ["Disabled", "5M", "10M", "20M", "50M"];
+                let cur = self.config.bwlimit.as_deref().unwrap_or("Disabled");
+                let cur = if cur == "Désactivé" { "Disabled" } else { cur };
                 let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
                 let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                self.config.bwlimit = if options[next] == "Désactivé" { None } else { Some(options[next].to_string()) };
+                self.config.bwlimit = if options[next] == "Disabled" { None } else { Some(options[next].to_string()) };
             }
             4 => {
                 let options = TICK_RATE_STEPS;
@@ -1895,8 +1896,8 @@ impl App {
 
     pub fn save_current_settings(&mut self) {
         match config::save_config(&self.config) {
-            Ok(_) => self.set_toast("✔ Paramètres enregistrés dans dash-config.json !"),
-            Err(e) => self.set_toast(format!("✗ Erreur de sauvegarde : {}", e)),
+            Ok(_) => self.set_toast("✔ Settings saved to dash-config.json!"),
+            Err(e) => self.set_toast(format!("✗ Save error: {}", e)),
         }
     }
 
@@ -1906,9 +1907,9 @@ impl App {
         if is_ctrl_x(&key) {
             self.ctrl_mode = !self.ctrl_mode;
             if self.ctrl_mode {
-                self.set_toast("📁 Mode dossier actif (chemins des dossiers affichés)");
+                self.set_toast("📁 Folder mode active (folder paths shown)");
             } else {
-                self.set_toast("📄 Mode fichier actif (chemins des fichiers affichés)");
+                self.set_toast("📄 File mode active (file paths shown)");
             }
             return Action::None;
         }
@@ -1983,8 +1984,8 @@ impl App {
                     KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
                         self.modal = Modal::None;
                         match systemd::trigger_sync() {
-                            Ok(_) => self.set_toast("✔ Synchronisation forcée initiée..."),
-                            Err(e) => self.set_toast(format!("✗ Erreur : {}", e)),
+                            Ok(_) => self.set_toast("✔ Forced sync initiated..."),
+                            Err(e) => self.set_toast(format!("✗ Error: {}", e)),
                         }
                     }
                     KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
@@ -2005,8 +2006,8 @@ impl App {
                     KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
                         self.modal = Modal::None;
                         match systemd::trigger_resync() {
-                            Ok(_) => self.set_toast("✔ Resynchronisation complète initiée (--resync) !"),
-                            Err(e) => self.set_toast(format!("✗ Erreur : {}", e)),
+                            Ok(_) => self.set_toast("✔ Full resynchronization initiated (--resync)!"),
+                            Err(e) => self.set_toast(format!("✗ Error: {}", e)),
                         }
                     }
                     KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
@@ -2018,8 +2019,8 @@ impl App {
                     KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
                         self.modal = Modal::None;
                         match systemd::cancel_sync() {
-                            Ok(_) => self.set_toast("✔ Arrêt de la synchronisation en cours !"),
-                            Err(e) => self.set_toast(format!("✗ Erreur : {}", e)),
+                            Ok(_) => self.set_toast("✔ Active synchronization aborted!"),
+                            Err(e) => self.set_toast(format!("✗ Error: {}", e)),
                         }
                     }
                     KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
@@ -2035,10 +2036,10 @@ impl App {
                             let base = config::expand_tilde(&self.config.local_dir);
                             match fs_tree::delete_entry(&base, &rel_clone) {
                                 Ok(_) => {
-                                    self.set_toast(format!("✔ {} supprimé", rel_clone));
+                                    self.set_toast(format!("✔ {} deleted", rel_clone));
                                     self.reload_files();
                                 }
-                                Err(e) => self.set_toast(format!("✗ Erreur : {}", e)),
+                                Err(e) => self.set_toast(format!("✗ Error: {}", e)),
                             }
                         }
                         KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
@@ -2215,11 +2216,11 @@ impl App {
                             if !entry.name.starts_with("..") {
                                 match fs_tree::add_exclude_rule(&entry.rel_path, entry.is_dir) {
                                     Ok(_) => {
-                                        self.set_toast(format!("✔ Exclusion ajoutée : {}", entry.name));
+                                        self.set_toast(format!("✔ Exclusion added: {}", entry.name));
                                         self.filters = config::read_filters();
                                         self.reload_files();
                                     }
-                                    Err(e) => self.set_toast(format!("✗ Erreur : {}", e)),
+                                    Err(e) => self.set_toast(format!("✗ Error: {}", e)),
                                 }
                             }
                         }
@@ -2380,9 +2381,9 @@ impl App {
                             if files_len > 0 {
                                 self.ctrl_mode = !self.ctrl_mode;
                                 if self.ctrl_mode {
-                                    self.set_toast("📁 Mode dossier actif (chemins des dossiers affichés)");
+                                    self.set_toast("📁 Folder mode active (folder paths shown)");
                                 } else {
-                                    self.set_toast("📄 Mode fichier actif (chemins des fichiers affichés)");
+                                    self.set_toast("📄 File mode active (file paths shown)");
                                 }
                             }
                         }
@@ -2412,7 +2413,7 @@ impl App {
                         let total = self.total_history_runs();
                         if total > 0 {
                             if self.is_syncing() && self.selected_run_idx == Some(0) {
-                                self.set_toast("ℹ Synchronisation active - Détails affichés ci-dessus");
+                                self.set_toast("ℹ Active sync - Details shown above");
                             } else if let Some(sel) = self.selected_run_idx {
                                 let past_idx = if self.is_syncing() { sel.saturating_sub(1) } else { sel };
                                 if past_idx < self.past_runs.len() {
@@ -2492,9 +2493,9 @@ impl App {
             KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.ctrl_mode = !self.ctrl_mode;
                 if self.ctrl_mode {
-                    self.set_toast("📁 Mode dossier actif (chemins des dossiers affichés)");
+                    self.set_toast("📁 Folder mode active (folder paths shown)");
                 } else {
-                    self.set_toast("📄 Mode fichier actif (chemins des fichiers affichés)");
+                    self.set_toast("📄 File mode active (file paths shown)");
                 }
                 return Action::None;
             }
@@ -2522,7 +2523,7 @@ impl App {
                 if self.service_info.state == ServiceState::Active || self.live.is_syncing {
                     self.modal = Modal::ConfirmCancel;
                 } else {
-                    self.set_toast("Aucune synchronisation en cours à annuler.");
+                    self.set_toast("No active synchronization to cancel.");
                 }
                 return Action::None;
             }
@@ -2536,7 +2537,7 @@ impl App {
                             let past_idx = if self.is_syncing() { sel.saturating_sub(1) } else { sel };
                             self.copy_history_errors(past_idx);
                         } else {
-                            self.set_toast("ℹ Aucun run sélectionné dans l'historique.");
+                            self.set_toast("ℹ No run selected in history.");
                         }
                     }
                     FocusedPanel::RecentFiles => {
@@ -3705,7 +3706,7 @@ mod tests {
         app.copy_logs_to_clipboard();
         assert!(app.toast.is_some());
         let (msg, _) = app.toast.as_ref().unwrap();
-        assert!(msg.contains("2 lignes de logs copiées"));
+        assert!(msg.contains("2 log lines copied"));
 
         // 2. Copie des erreurs d'un run
         app.past_runs = vec![crate::monitor::history::PastRun {
@@ -3727,7 +3728,7 @@ mod tests {
 
         app.copy_history_errors(0);
         let (msg, _) = app.toast.as_ref().unwrap();
-        assert!(msg.contains("2 erreur(s) du run #42"));
+        assert!(msg.contains("2 error(s) from run #42"));
 
         // 3. Raccourci y / c dans Modal::HistoryDetails
         app.modal = Modal::HistoryDetails(0);
@@ -3737,7 +3738,7 @@ mod tests {
         ));
         assert_eq!(action, Action::None);
         let (msg, _) = app.toast.as_ref().unwrap();
-        assert!(msg.contains("2 erreur(s) du run #42"));
+        assert!(msg.contains("2 error(s) from run #42"));
 
         let action_c = app.handle_key(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Char('c'),
@@ -3755,7 +3756,7 @@ mod tests {
         ));
         assert_eq!(action_dash_y, Action::None);
         let (msg, _) = app.toast.as_ref().unwrap();
-        assert!(msg.contains("lignes de logs copiées"));
+        assert!(msg.contains("log lines copied"));
     }
 
     #[tokio::test]
@@ -3908,7 +3909,7 @@ mod tests {
             crossterm::event::KeyModifiers::NONE,
         ));
         let (msg, _) = app.toast.as_ref().unwrap();
-        assert!(msg.contains("Dossier parent") || msg.contains("Impossible") || msg.contains("Ouverture"));
+        assert!(msg.contains("Parent folder") || msg.contains("Unable") || msg.contains("Opened"));
     }
 
     #[tokio::test]

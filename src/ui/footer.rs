@@ -34,7 +34,7 @@ pub fn render_footer(
         sync_or_cancel_item,
         CmdItem { prefix: "", key: "d", suffix: "ry-run", action: HitAction::ButtonDryRun },
         CmdItem { prefix: "", key: "b", suffix: "rowse", action: HitAction::ButtonFiles },
-        CmdItem { prefix: "filtr", key: "e", suffix: "s", action: HitAction::ButtonFilters },
+        CmdItem { prefix: "filt", key: "e", suffix: "rs", action: HitAction::ButtonFilters },
         CmdItem { prefix: "cop", key: "y", suffix: "", action: HitAction::ButtonCopy },
         CmdItem { prefix: "", key: "Tab", suffix: " panel", action: HitAction::ButtonPanel },
     ];

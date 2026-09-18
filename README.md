@@ -10,12 +10,34 @@ Le projet conserve également son interface Web historique (située dans le doss
 
 Construit avec **[Ratatui](https://ratatui.rs/)**, **[Crossterm](https://github.com/crossterm-rs/crossterm)** et **[Tokio](https://tokio.rs/)**, RcloneDash TUI se compile en un **binaire unique autonome (< 3 Mo)** sans dépendance externe, avec une consommation mémoire infime (< 10 Mo de RAM).
 
-### 🌟 Fonctionnalités TUI
+---
+
+## 📸 Screenshots & Interface Showcase
+
+<!-- Place your screenshots in assets/screenshots/ with the corresponding filenames -->
+
+| Main Dashboard | Interactive Options & Settings |
+| :---: | :---: |
+| ![Main Dashboard](assets/screenshots/dashboard.png) | ![Settings](assets/screenshots/settings.png) |
+
+| Live Synchronization & Stepper | History Details & Error/Diff Inspection |
+| :---: | :---: |
+| ![Live Sync](assets/screenshots/live_sync.png) | ![History Details](assets/screenshots/history_details.png) |
+
+| Built-in File Explorer | Exclusion Filters Editor |
+| :---: | :---: |
+| ![File Explorer](assets/screenshots/files.png) | ![Filters](assets/screenshots/filters.png) |
+
+| btop++ 3D Menu | Dry-Run Simulation Modal |
+| :---: | :---: |
+| ![Main Menu](assets/screenshots/menu.png) | ![Dry Run](assets/screenshots/dry_run.png) |
+
+---
 
 ### 🌟 Fonctionnalités TUI
 
 - **Tableau de bord tout-en-un centralisé (Vue Unique Dashboard)** :
-  - **En-tête dynamique moderne** : statuts du service `rclone-bisync` (actif/en attente/échec), heure et durée de dernière sync, compte à rebours du timer systemd, et boutons interactifs pills (`[ ⟳ Sync ]`, `[ 📁 Fichiers ]`, `[ ⊘ Filtres ]`, `[ ⚙ Options ]`, `[ ✕ Quitter ]`).
+  - **En-tête dynamique moderne** : statuts du service `rclone-bisync` (actif/en attente/échec), heure et durée de dernière sync, compte à rebours du timer systemd, et boutons interactifs pills (`[ ⟳ Sync ]`, `[ 📁 Files ]`, `[ ⊘ Filters ]`, `[ ⚙ Options ]`, `[ ✕ Quit ]`).
   - **Barre des 7 cartes KPI clés** :
     1. *Stockage Cloud* (ex: Google Drive).
     2. *Disque Local* (calcul `statvfs` en direct : Go utilisés, Go libres et totaux).

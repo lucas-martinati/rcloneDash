@@ -28,7 +28,7 @@ pub fn render_history(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
 fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
     let items: Vec<ListItem> = if app.past_runs.is_empty() {
         vec![ListItem::new(Line::from(vec![
-            Span::styled(" Aucune exécution enregistrée dans journalctl", Style::default().fg(theme.text_muted)),
+            Span::styled(" No runs recorded in journalctl", Style::default().fg(theme.text_muted)),
         ]))]
     } else {
         app.past_runs
@@ -80,7 +80,7 @@ fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
                 .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(theme.border))
                 .style(Style::default().bg(theme.card_bg))
-                .title(Span::styled(" Historique des synchronisations ", Style::default().fg(theme.accent))),
+                .title(Span::styled(" Synchronization History ", Style::default().fg(theme.accent))),
         );
 
     f.render_widget(list, area);
@@ -107,14 +107,14 @@ pub fn render_history_details_modal(f: &mut Frame, app: &App, run_idx: usize, th
 
 pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     if app.past_runs.is_empty() || run_idx >= app.past_runs.len() {
-        let p = Paragraph::new("Aucune information disponible.")
+        let p = Paragraph::new("No information available.")
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(theme.border))
                     .style(Style::default().bg(theme.card_bg))
-                    .title(" Détails du Run "),
+                    .title(" Run Details "),
             );
         f.render_widget(p, area);
         return;
@@ -125,23 +125,23 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
 
     // En-tête du run
     all_lines.push((Line::from(vec![
-        Span::styled(" Synchronisation #", Style::default().fg(theme.text_muted)),
+        Span::styled(" Synchronization #", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", run.id), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-        Span::styled(" du ", Style::default().fg(theme.text_muted)),
-        Span::styled(format!("{} à {} ", run.date, run.time), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-        Span::styled("│ Durée : ", Style::default().fg(theme.text_muted)),
+        Span::styled(" on ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} at {} ", run.date, run.time), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+        Span::styled("│ Duration: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", run.duration), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ]), None));
 
     let (status_str, status_color) = match run.status {
-        RunStatus::Success => ("✔ RÉUSSIE", theme.green),
-        RunStatus::Failed => ("✗ EN ERREUR", theme.red),
-        RunStatus::Skipped => ("⊘ IGNORÉE (Aucun changement)", theme.text_muted),
-        RunStatus::Running => ("▶ EN COURS", theme.cyan),
+        RunStatus::Success => ("✔ SUCCESS", theme.green),
+        RunStatus::Failed => ("✗ FAILED", theme.red),
+        RunStatus::Skipped => ("⊘ SKIPPED (No changes)", theme.text_muted),
+        RunStatus::Running => ("▶ RUNNING", theme.cyan),
     };
 
     all_lines.push((Line::from(vec![
-        Span::styled(" Statut : ", Style::default().fg(theme.text_muted)),
+        Span::styled(" Status: ", Style::default().fg(theme.text_muted)),
         Span::styled(status_str, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
     ]), None));
 
@@ -150,7 +150,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     // Erreurs
     if !run.errors.is_empty() {
         all_lines.push((Line::from(vec![
-            Span::styled(format!(" 🚨 ERREURS DÉTECTÉES ({}) :", run.errors.len()), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(" 🚨 DETECTED ERRORS ({}):", run.errors.len()), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         ]), None));
 
         let max_err_width = (area.width.saturating_sub(6) as usize).max(30);
@@ -179,16 +179,16 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let affected_files = run.all_affected_files();
     if !affected_files.is_empty() {
         all_lines.push((Line::from(vec![
-            Span::styled(format!(" 📁 FICHIERS AFFECTÉS ({}) :", affected_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(" 📁 AFFECTED FILES ({}):", affected_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         ]), None));
 
         for (idx, (action, path)) in affected_files.iter().enumerate() {
             let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::HistoryDetails(run_idx));
             let is_selected = !is_dragging && idx == app.history_selected_file_idx;
             let (badge_icon, badge_color) = match *action {
-                "new" => ("[+] Copié", theme.green),
-                "deleted" => ("[-] Suppr", theme.red),
-                _ => ("[~] Modif", theme.yellow),
+                "new" => ("[+] Copied", theme.green),
+                "deleted" => ("[-] Deleted", theme.red),
+                _ => ("[~] Modified", theme.yellow),
             };
 
             let prefix = if is_selected { " ▶ " } else { "   " };
@@ -210,7 +210,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 let highlight_bg = Color::Rgb(90, 32, 32);
                 all_lines.push((Line::from(vec![
                     Span::styled(prefix, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!(" {:<9} ", badge_icon), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" {:<11} ", badge_icon), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                     Span::styled(display_text, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                 ]), Some(idx)));
             } else {
@@ -221,14 +221,14 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 };
                 all_lines.push((Line::from(vec![
                     Span::styled(prefix, Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!(" {:<9} ", badge_icon), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" {:<11} ", badge_icon), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
                     Span::styled(display_text, path_style),
                 ]), Some(idx)));
             }
         }
     } else if run.errors.is_empty() {
         all_lines.push((Line::from(Span::styled(
-            "   Aucun fichier n'a été modifié durant ce cycle de synchronisation.",
+            "   No files were modified during this synchronization cycle.",
             Style::default().fg(theme.text_muted),
         )), None));
     }
@@ -244,9 +244,9 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         .border_style(Style::default().fg(theme.border_history))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌🔍 détails run", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+            Span::styled("┌🔍 run details", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
             Span::styled(format!(": #{} ({} {})┐", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
-            Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
+            Span::styled("┌close: Esc, q┐", Style::default().fg(theme.text_muted)),
         ]))
         .title_bottom(
             Line::from(vec![
@@ -301,36 +301,36 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         // Uniquement des erreurs : seul le bouton de copie + défilement + fermer
         Line::from(vec![
             Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("Copier erreurs  │  ", Style::default().fg(theme.text_bright)),
+            Span::styled("Copy errors  │  ", Style::default().fg(theme.text_bright)),
             Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("Scroll  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Fermer", Style::default().fg(theme.text_muted)),
+            Span::styled("Close", Style::default().fg(theme.text_muted)),
         ])
     } else if has_files {
         // Des éléments présents : mêmes règles que le dashboard
-        let copy_label = if has_errors { "Copier erreurs" } else { "Copier détails" };
-        let mode_label = if app.ctrl_mode { "Mode fichier" } else { "Mode dossier" };
+        let copy_label = if has_errors { "Copy errors" } else { "Copy details" };
+        let mode_label = if app.ctrl_mode { "File mode" } else { "Folder mode" };
         Line::from(vec![
             Span::styled("[Enter] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Ouvrir  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("Open  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[Ctrl+X] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{}  │  ", mode_label), Style::default().fg(theme.text_muted)),
             Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{}  │  ", copy_label), Style::default().fg(theme.text_bright)),
             Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("Scroll  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Fermer", Style::default().fg(theme.text_muted)),
+            Span::styled("Close", Style::default().fg(theme.text_muted)),
         ])
     } else {
         // Rien : boutons grisés et inutilisables
         Line::from(vec![
-            Span::styled("[Enter] Ouvrir  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[Ctrl+X] Mode dossier  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[y / c] Copier  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[Enter] Open  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[Ctrl+X] Folder mode  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[y / c] Copy  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Fermer", Style::default().fg(theme.text_muted)),
+            Span::styled("Close", Style::default().fg(theme.text_muted)),
         ])
     };
     let footer_p = Paragraph::new(footer_line).alignment(ratatui::layout::Alignment::Center);
@@ -350,13 +350,13 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let footer_w = layout[1].width;
     let footer_y = layout[1].y;
     if has_files {
-        let copy_label = if has_errors { "Copier erreurs" } else { "Copier détails" };
-        let mode_label = if app.ctrl_mode { "Mode fichier" } else { "Mode dossier" };
-        let s_open = "[Enter] Ouvrir  │  ";
+        let copy_label = if has_errors { "Copy errors" } else { "Copy details" };
+        let mode_label = if app.ctrl_mode { "File mode" } else { "Folder mode" };
+        let s_open = "[Enter] Open  │  ";
         let s_mode = format!("[Ctrl+X] {}  │  ", mode_label);
         let s_copy = format!("[y / c] {}  │  ", copy_label);
-        let s_scroll = "[↑↓] Défiler  │  ";
-        let s_close = "[Esc, q] Fermer";
+        let s_scroll = "[↑↓] Scroll  │  ";
+        let s_close = "[Esc, q] Close";
         let total_chars = (s_open.chars().count() + s_mode.chars().count() + s_copy.chars().count() + s_scroll.chars().count() + s_close.chars().count()) as u16;
         let start_x = layout[1].x + footer_w.saturating_sub(total_chars) / 2;
 

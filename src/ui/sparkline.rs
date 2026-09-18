@@ -160,15 +160,15 @@ pub fn render_history_graph_multiline(
 
     // --- Line 0: Header with stats and selection info ---
     let mut header_spans = Vec::new();
-    header_spans.push(Span::styled("⏱ DURÉES ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
+    header_spans.push(Span::styled("⏱ DURATION ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
 
     if let Some(sel) = selected_idx {
         if let Some(r) = past_runs.get(sel) {
             let status_span = match r.status {
                 RunStatus::Success => Span::styled("● OK", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-                RunStatus::Failed => Span::styled("● ÉCHEC", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                RunStatus::Skipped => Span::styled("● IGNORÉ", Style::default().fg(theme.text_muted)),
-                RunStatus::Running => Span::styled("● EN COURS", Style::default().fg(theme.highlight)),
+                RunStatus::Failed => Span::styled("● FAILED", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                RunStatus::Skipped => Span::styled("● SKIPPED", Style::default().fg(theme.text_muted)),
+                RunStatus::Running => Span::styled("● RUNNING", Style::default().fg(theme.highlight)),
             };
             header_spans.push(Span::styled(format!("Run #{} : {} (", sel + 1, r.duration), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
             header_spans.push(status_span);

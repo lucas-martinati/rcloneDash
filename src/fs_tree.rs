@@ -51,7 +51,7 @@ pub fn list_directory(base: &Path, rel: &str, filters: &[String]) -> Result<Vec<
     // Entrée pour remonter dans le dossier parent si on est dans un sous-dossier
     if !rel.is_empty() {
         entries.push(FileEntry {
-            name: ".. (Dossier parent)".to_string(),
+            name: ".. (Parent folder)".to_string(),
             rel_path: "..".to_string(),
             is_dir: true,
             size: 0,
@@ -246,7 +246,7 @@ pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
         base.join(clean)
     };
     if !full.exists() {
-        return Err("Fichier supprimé ou introuvable".to_string());
+        return Err("File deleted or not found".to_string());
     }
     spawn_open_cmd(&full)
 }

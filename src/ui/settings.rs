@@ -65,32 +65,32 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     let (mid_cmd, save_cmd) = if app.is_editing_setting {
         (
-            Span::styled("Esc annuler", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("↵ valider", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("Esc cancel", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ confirm", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         )
     } else if app.settings_selected_idx == 8 {
         (
-            Span::styled("↵ ouvrir", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Span::styled("↵ journal complet", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ open", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ full log", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
         )
     } else if app.settings_selected_idx == 7 {
         (
-            Span::styled("↵ lancer", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Span::styled("↵ resynchroniser", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ launch", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ resync", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         )
     } else if app.settings_selected_idx == 5 || app.settings_selected_idx == 6 {
         (
-            Span::styled("← éditer →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Span::styled("↵ modifier", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("← edit →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ modify", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
         )
     } else {
         (
-            Span::styled("← modifier →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Span::styled("↵ enregistrer", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("← change →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ save", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         )
     };
 
-    // En-tête btop++ uniforme : ┐options┌ à gauche, ┐Esc fermer┌ à droite
+    // En-tête btop++ uniforme : ┐options┌ à gauche, ┐Esc close┌ à droite
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -105,7 +105,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             Line::from(vec![
                 Span::styled("┐", Style::default().fg(theme.red)),
                 Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" fermer", Style::default().fg(theme.text_bright)),
+                Span::styled(" close", Style::default().fg(theme.text_bright)),
                 Span::styled("┌", Style::default().fg(theme.red)),
             ])
             .alignment(Alignment::Right),
@@ -176,26 +176,26 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     // Données des réglages
     let full_sync_display = match app.config.full_sync_interval.as_str() {
-        "60" => "1h (Recommandé)".to_string(),
+        "60" => "1h (Recommended)".to_string(),
         "120" => "2h".to_string(),
         "240" => "4h".to_string(),
         "360" => "6h".to_string(),
         "720" => "12h".to_string(),
-        "1440" => "24h (1 jour)".to_string(),
-        "never" => "Jamais (Local)".to_string(),
+        "1440" => "24h (1 day)".to_string(),
+        "never" => "Never (Local)".to_string(),
         other => other.to_string(),
     };
 
     let settings = [
         ("Color theme", app.current_theme.name().to_string()),
-        ("Intervalle timer bisync", app.config.timer_interval.clone()),
-        ("Filet de sécurité Cloud", full_sync_display),
-        ("Limite bande passante", app.config.bwlimit.as_deref().unwrap_or("Désactivé").to_string()),
-        ("Fréquence UI", format!("{} ms", app.tick_rate_ms_live)),
-        ("Dossier local", app.config.local_dir.clone()),
-        ("Remote distant", app.config.remote.clone()),
-        ("Resynchronisation complète", "Lancer (--resync)".to_string()),
-        ("Journal complet rclone", "Ouvrir les logs (↵)".to_string()),
+        ("Bisync timer interval", app.config.timer_interval.clone()),
+        ("Cloud safety net", full_sync_display),
+        ("Bandwidth limit", app.config.bwlimit.as_deref().unwrap_or("Disabled").to_string()),
+        ("UI Loop frequency", format!("{} ms", app.tick_rate_ms_live)),
+        ("Local directory", app.config.local_dir.clone()),
+        ("Remote storage", app.config.remote.clone()),
+        ("Full resynchronization", "Run (--resync)".to_string()),
+        ("Full rclone log journal", "Open logs (↵)".to_string()),
     ];
 
     // Rendu de la colonne gauche
@@ -290,56 +290,56 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let (desc_title, desc_body): (&str, String) = match app.settings_selected_idx {
         0 => (
             "Color theme.",
-            "Définit le jeu de couleurs appliqué à l'ensemble du tableau de bord.\n\nPrend en charge 6 thèmes soignés pour une lisibilité optimale :\n• Tokyo Night\n• Catppuccin Mocha\n• Nord Frost\n• Gruvbox Dark\n• Dracula\n• Monokai Pro\n\nChaque thème adapte dynamiquement les bordures, textes et graphiques à dégradé btop++.".to_string(),
+            "Sets the color theme applied across the entire dashboard.\n\nSupports 6 curated themes for optimal readability:\n• Tokyo Night\n• Catppuccin Mocha\n• Nord Frost\n• Gruvbox Dark\n• Dracula\n• Monokai Pro\n\nEach theme dynamically adapts borders, text, and btop++ gradient charts.".to_string(),
         ),
         1 => (
-            "Intervalle timer bisync.",
-            "Fréquence de vérification et de synchronisation automatique par systemd.\n\nConfigure la fréquence à laquelle rclone-bisync.timer se réveille pour inspecter les modifications.\n\nValeurs disponibles : 10m, 15m, 30m, 1h, 2h, 4h.\nRecommandé : 15m pour un équilibre idéal entre rapidité et consommation processeur.".to_string(),
+            "Bisync timer interval.",
+            "Frequency of automatic checks and synchronization managed by systemd.\n\nConfigures how often rclone-bisync.timer wakes up to inspect changes.\n\nAvailable values: 10m, 15m, 30m, 1h, 2h, 4h.\nRecommended: 15m for an ideal balance between responsiveness and CPU usage.".to_string(),
         ),
         2 => (
-            "Filet de sécurité Cloud.",
-            "Délai maximal avant d'exécuter une synchronisation bidirectionnelle complète.\n\nMême si aucune modification locale n'a été détectée, ce filet garantit la récupération de tous les fichiers créés ou modifiés depuis un autre poste ou sur le cloud.\n\nOption 'Jamais' disponible pour une synchronisation déclenchée uniquement lors de modifications locales.".to_string(),
+            "Cloud safety net.",
+            "Maximum time elapsed before running a full bidirectional sync.\n\nEven if no local changes were detected, this safety net ensures files created or updated remotely from another computer or the web interface are retrieved.\n\n'Never' option is available if you only want sync triggered upon local changes.".to_string(),
         ),
         3 => (
-            "Limite de bande passante (bwlimit).",
-            "Vitesse maximale autorisée pour les transferts rclone.\n\nPermet de préserver votre connexion Internet en limitant le débit réseau utilisé par rclone.\n\nParamètre enregistré dans bwlimit.env et injecté dans le service systemd.\nValeur 'Désactivé' pour exploiter 100% de la bande passante.".to_string(),
+            "Bandwidth limit (bwlimit).",
+            "Maximum allowed transfer speed for rclone.\n\nPreserves your internet connection by limiting network bandwidth used by rclone.\n\nSetting stored in bwlimit.env and injected into the systemd service.\nValue 'Disabled' uses 100% of available bandwidth.".to_string(),
         ),
         4 => (
-            "Fréquence de boucle UI (tick rate).",
+            "UI Loop frequency (tick rate).",
             format!(
-                "Vitesse de rafraîchissement du moteur d'affichage TUI en millisecondes.\n\nContrôle la fluidité du défilement des logs, du calcul des métriques et des micro-animations.\n\nDirectement synchronisé avec les touches [{}] et [{}] ou clics sur le widget de fréquence.",
+                "Refresh rate of the TUI display engine in milliseconds.\n\nControls smoothness of log scrolling, metrics calculation, and micro-animations.\n\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.",
                 k_dec, k_inc
             ),
         ),
         5 => (
-            "Dossier local surveillé.",
+            "Monitored local directory.",
             format!(
-                "Chemin vers le répertoire local racine synchronisé avec le stockage cloud.\n\nContient vos données réelles répliquées par bisync.\nConsultez l'explorateur de fichiers (touche [{}]) pour explorer son arborescence.\n\nAppuyez sur [{}] pour éditer le chemin, puis [{}] pour valider ou [{}] pour annuler.",
+                "Path to the root local directory synchronized with cloud storage.\n\nContains your local data replicated by bisync.\nOpen the file explorer ([{}]) to inspect its tree structure.\n\nPress [{}] to edit the path, then [{}] to confirm or [{}] to cancel.",
                 k_files, k_enter, k_enter, k_esc
             ),
         ),
         6 => (
-            "Remote cloud distant.",
+            "Remote cloud storage.",
             format!(
-                "Identifiant du stockage distant configuré dans ~/.config/rclone/rclone.conf.\n\nUtilisé pour les requêtes de quota, de listing distant et de synchronisation bidirectionnelle.\n\nAppuyez sur [{}] pour éditer l'identifiant, puis [{}] pour valider ou [{}] pour annuler.",
+                "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nUsed for cloud quota inquiries, remote listings, and bidirectional synchronization.\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.",
                 k_enter, k_enter, k_esc
             ),
         ),
         7 => (
-            "Resynchronisation complète (--resync).",
+            "Full resynchronization (--resync).",
             format!(
-                "En cas d'erreur critique de bisync ou de base de synchronisation locale/cloud corrompue, cette action reconstruit les index de listing en comparant le dossier local et Google Drive (en conservant les versions les plus récentes : --resync-mode newer).\n\nAppuyez sur [{}] pour ouvrir le dialogue de confirmation.",
+                "In case of critical bisync errors or corrupted sync listings, this action rebuilds listing databases by comparing the local directory and Google Drive (keeping the newest files: --resync-mode newer).\n\nPress [{}] to open the confirmation dialog.",
                 k_enter
             ),
         ),
         8 => (
-            "Journal des logs complet (rclone-bisync).",
+            "Full rclone log journal (rclone-bisync).",
             format!(
-                "Ouvre l'intégralité du journal de bord rclone-bisync (généré par systemd/journalctl) dans votre visualiseur externe (less ou éditeur configuré).\n\nPermet de naviguer dans l'historique complet, d'effectuer des recherches de texte et d'inspecter les moindres détails des transferts passés.\n\nAppuyez sur [{}] pour ouvrir le fichier de logs.",
+                "Opens the complete rclone-bisync systemd journal log in your external viewer (less or configured editor).\n\nAllows navigating the full history, searching text, and inspecting detailed file transfers.\n\nPress [{}] to open the log file.",
                 k_enter
             ),
         ),
-        _ => ("Description.", "Sélectionnez un paramètre pour afficher son aide détaillée.".to_string()),
+        _ => ("Description.", "Select a setting to view its detailed documentation.".to_string()),
     };
 
     let desc_inner = Rect {

@@ -46,10 +46,10 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
     };
 
     let title_line = Line::from(vec![
-        Span::styled("┌📁 explorateur", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+        Span::styled("┌📁 file explorer", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
         Span::styled(format!(": {}┐", title_path), Style::default().fg(theme.text_muted)),
-        Span::styled("┌ouvrir: ↵┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
+        Span::styled("┌open: ↵┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("┌close: Esc, q┐", Style::default().fg(theme.text_muted)),
     ]);
 
     let outer_block = Block::default()
@@ -63,17 +63,17 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
                 Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
                 Span::styled("/", Style::default().fg(theme.text_muted)),
                 Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-                Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
+                Span::styled(" navigate  ", Style::default().fg(theme.text_muted)),
                 Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" parent  ", Style::default().fg(theme.text_muted)),
                 Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled("/", Style::default().fg(theme.text_muted)),
                 Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" entrer  ", Style::default().fg(theme.text_muted)),
+                Span::styled(" enter  ", Style::default().fg(theme.text_muted)),
                 Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
+                Span::styled(" folder  ", Style::default().fg(theme.text_muted)),
                 Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(" close ", Style::default().fg(theme.text_muted)),
                 Span::styled(format!("─ {}/{} ─", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
@@ -91,7 +91,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let rows: Vec<Row> = if app.file_entries.is_empty() {
         vec![Row::new(vec![
-            Cell::from(Span::styled(" Dossier vide", Style::default().fg(theme.text_muted))),
+            Cell::from(Span::styled(" Empty folder", Style::default().fg(theme.text_muted))),
             Cell::from(""),
             Cell::from(""),
             Cell::from(""),
@@ -114,7 +114,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                 let (type_badge, name_color) = if entry.is_dir {
                     (Span::styled("[DIR] ", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)), theme.blue)
                 } else {
-                    (Span::styled("[FIC] ", Style::default().fg(theme.text_muted)), theme.text_bright)
+                    (Span::styled("[FILE] ", Style::default().fg(theme.text_muted)), theme.text_bright)
                 };
 
                 let display_name = if app.ctrl_mode && !entry.is_dir {
@@ -131,14 +131,14 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                 };
 
                 let (status_badge, status_color) = if entry.ignored {
-                    ("[IGNORÉ]", theme.red)
+                    ("[IGNORED]", theme.red)
                 } else {
                     ("[SYNC]", theme.green)
                 };
 
                 if is_selected {
                     let highlight_bg = Color::Rgb(90, 32, 32);
-                    let type_str = if entry.is_dir { "[DIR] " } else { "[FIC] " };
+                    let type_str = if entry.is_dir { "[DIR] " } else { "[FILE] " };
                     Row::new(vec![
                         Cell::from(Line::from(vec![
                             cursor,
@@ -194,7 +194,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         ],
     )
     .header(
-        Row::new(vec!["Nom du fichier / dossier", "Taille", "Modifié", "Statut"])
+        Row::new(vec!["File / Folder Name", "Size", "Modified", "Status"])
             .style(Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     );
 
@@ -217,28 +217,28 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
 
     if let Some(entry) = app.file_entries.get(app.file_selected_idx) {
         lines.push(Line::from(vec![
-            Span::styled("Élément sélectionné :", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("Selected item:", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Nom : ", Style::default().fg(theme.text_muted)),
+            Span::styled("Name: ", Style::default().fg(theme.text_muted)),
             Span::styled(&entry.name, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Type : ", Style::default().fg(theme.text_muted)),
-            Span::styled(if entry.is_dir { "Dossier" } else { "Fichier" }, Style::default().fg(theme.cyan)),
+            Span::styled("Type: ", Style::default().fg(theme.text_muted)),
+            Span::styled(if entry.is_dir { "Folder" } else { "File" }, Style::default().fg(theme.cyan)),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Taille : ", Style::default().fg(theme.text_muted)),
+            Span::styled("Size: ", Style::default().fg(theme.text_muted)),
             Span::styled(entry.size_formatted(), Style::default().fg(theme.text_bright)),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Modifié : ", Style::default().fg(theme.text_muted)),
+            Span::styled("Modified: ", Style::default().fg(theme.text_muted)),
             Span::styled(&entry.mtime, Style::default().fg(theme.text_muted)),
         ]));
         lines.push(Line::from(vec![
-            Span::styled("Filtre bisync : ", Style::default().fg(theme.text_muted)),
+            Span::styled("Bisync filter: ", Style::default().fg(theme.text_muted)),
             Span::styled(
-                if entry.ignored { "Exclu" } else { "Inclus" },
+                if entry.ignored { "Excluded" } else { "Included" },
                 Style::default().fg(if entry.ignored { theme.red } else { theme.green }),
             ),
         ]));
@@ -246,31 +246,31 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
 
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
-        Span::styled("Actions rapides :", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+        Span::styled("Quick actions:", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [→ / Entrée] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-        Span::styled("Entrer / Ouvrir", Style::default().fg(theme.text_bright)),
+        Span::styled(" [→ / Enter] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled("Enter / Open", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![
         Span::styled(" [← / Backspace] ", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-        Span::styled("Dossier parent", Style::default().fg(theme.text_bright)),
+        Span::styled("Parent folder", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![
         Span::styled(" [d] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-        Span::styled("Ouvrir dans l'OS (xdg-open)", Style::default().fg(theme.text_bright)),
+        Span::styled("Open in OS (xdg-open)", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![
         Span::styled(" [x] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-        Span::styled("Ajouter règle d'exclusion", Style::default().fg(theme.purple)),
+        Span::styled("Add exclusion rule", Style::default().fg(theme.purple)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [Suppr] ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("Supprimer localement", Style::default().fg(theme.red)),
+        Span::styled(" [Delete] ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("Delete locally", Style::default().fg(theme.red)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [Échap / q] ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled("Fermer fenêtre", Style::default().fg(theme.text_muted)),
+        Span::styled(" [Esc / q] ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Close window", Style::default().fg(theme.text_muted)),
     ]));
 
     // Bouton de fermeture en bas
@@ -293,7 +293,7 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
     f.render_widget(p, area);
 
     let close_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Fermer (Échap / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
+        Span::styled(" [ Close (Esc / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
     ])).alignment(ratatui::layout::Alignment::Center);
     f.render_widget(close_p, close_btn_area);
 }

@@ -13,9 +13,9 @@ use crate::ui::theme::ThemePalette;
 
 pub fn render_logs(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
     let title_badge = if app.auto_scroll {
-        Span::styled(" [DÉFILEMENT AUTO: ACTIVÉ] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
+        Span::styled(" [AUTO-SCROLL: ON] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
     } else {
-        Span::styled(" [EN PAUSE - ESPACE POUR REPRENDRE] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+        Span::styled(" [PAUSED - SPACE TO RESUME] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
     };
 
     let total_lines = app.live.log_lines.len();
@@ -44,7 +44,7 @@ pub fn render_logs(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
             .border_style(Style::default().fg(theme.border))
             .style(Style::default().bg(theme.card_bg))
             .title(Line::from(vec![
-                Span::styled(" Logs en direct (journalctl -f) ", Style::default().fg(theme.accent)),
+                Span::styled(" Live Logs (journalctl -f) ", Style::default().fg(theme.accent)),
                 title_badge,
             ])),
     );

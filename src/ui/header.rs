@@ -93,9 +93,9 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         (dot, "SYNC ACTIVE", theme.green)
     } else {
         match app.service_info.state {
-            ServiceState::Idle => ("●", "EN ATTENTE", theme.cyan),
-            ServiceState::Failed => ("●", "ÉCHEC", theme.red),
-            _ => ("●", "INCONNU", theme.text_muted),
+            ServiceState::Idle => ("●", "IDLE", theme.cyan),
+            ServiceState::Failed => ("●", "FAILED", theme.red),
+            _ => ("●", "UNKNOWN", theme.text_muted),
         }
     };
 
@@ -129,10 +129,10 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         line2_spans.push(Span::styled("│ ", Style::default().fg(theme.border)));
     }
 
-    line2_spans.push(Span::styled("Dernière: ", Style::default().fg(theme.text_muted)));
+    line2_spans.push(Span::styled("Last: ", Style::default().fg(theme.text_muted)));
     line2_spans.push(Span::styled(format!("{} ", last_sync_str), Style::default().fg(theme.text_bright)));
     line2_spans.push(Span::styled("│ ", Style::default().fg(theme.border)));
-    line2_spans.push(Span::styled("Prochaine: ", Style::default().fg(theme.text_muted)));
+    line2_spans.push(Span::styled("Next: ", Style::default().fg(theme.text_muted)));
     line2_spans.push(Span::styled(format!("{} ", next_sync_str), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
 
     let line2_p = Paragraph::new(Line::from(line2_spans));

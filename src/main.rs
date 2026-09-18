@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                     app.filters = config::read_filters();
                                     app.reload_files();
-                                    app.set_toast("✔ Fichier gdrive-filters.txt rechargé !");
+                                    app.set_toast("✔ gdrive-filters.txt reloaded!");
                                 } else if action == app::Action::OpenFullLogs {
                                     open_full_logs(&mut terminal, &mut app)?;
                                 }
@@ -183,6 +183,6 @@ fn open_full_logs(
     )?;
     terminal.clear()?;
 
-    app.set_toast("✔ Consultation des logs terminée");
+    app.set_toast("✔ Full logs viewer closed");
     Ok(())
 }

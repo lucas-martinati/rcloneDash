@@ -34,21 +34,21 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
         .border_style(Style::default().fg(theme.border_storage))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌⊘ filtres d'exclusion", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
+            Span::styled("┌⊘ exclusion filters", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
             Span::styled(format!(": {}┐", filepath), Style::default().fg(theme.text_muted)),
-            Span::styled("┌éditer: e┐", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
+            Span::styled("┌edit: e┐", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("┌close: Esc, q┐", Style::default().fg(theme.text_muted)),
         ]))
         .title_bottom(
             Line::from(vec![
                 Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
                 Span::styled("/", Style::default().fg(theme.text_muted)),
                 Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-                Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
+                Span::styled(" navigate  ", Style::default().fg(theme.text_muted)),
                 Span::styled("e", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" éditer  ", Style::default().fg(theme.text_muted)),
+                Span::styled(" edit  ", Style::default().fg(theme.text_muted)),
                 Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(" close ", Style::default().fg(theme.text_muted)),
                 Span::styled(format!("─ {}/{} ", cur_rule, total_rules), Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
@@ -96,7 +96,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let items: Vec<ListItem> = if app.filters.is_empty() {
         vec![ListItem::new(Line::from(vec![
-            Span::styled(" Aucun fichier gdrive-filters.txt trouvé ou fichier vide.", Style::default().fg(theme.text_muted)),
+            Span::styled(" No gdrive-filters.txt found or file is empty.", Style::default().fg(theme.text_muted)),
         ]))]
     } else {
         app.filters
@@ -184,36 +184,36 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
 fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let text = vec![
-        Line::from(Span::styled("┌syntaxe des filtres┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled("┌filter syntax┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  - /mon_dossier/**  ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("Exclut dossier", Style::default().fg(theme.text_muted)),
+            Span::styled("  - /my_folder/**    ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled("Exclude folder", Style::default().fg(theme.text_muted)),
         ]),
         Line::from(vec![
             Span::styled("  - *.tmp            ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("Exclut extension", Style::default().fg(theme.text_muted)),
+            Span::styled("Exclude extension", Style::default().fg(theme.text_muted)),
         ]),
         Line::from(vec![
             Span::styled("  + *.pdf            ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled("Force inclusion", Style::default().fg(theme.text_muted)),
         ]),
         Line::from(vec![
-            Span::styled("  # commentaire      ", Style::default().fg(theme.text_muted)),
-            Span::styled("Ligne ignorée", Style::default().fg(theme.text_muted)),
+            Span::styled("  # comment          ", Style::default().fg(theme.text_muted)),
+            Span::styled("Ignored line", Style::default().fg(theme.text_muted)),
         ]),
         Line::from(""),
         Line::from(Span::styled("─".repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))),
         Line::from(""),
         Line::from(vec![
-            Span::styled("Appuyez sur ", Style::default().fg(theme.text_bright)),
+            Span::styled("Press ", Style::default().fg(theme.text_bright)),
             Span::styled("e", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-            Span::styled(" pour éditer avec votre", Style::default().fg(theme.text_bright)),
+            Span::styled(" to edit with your", Style::default().fg(theme.text_bright)),
         ]),
-        Line::from(Span::styled("éditeur terminal ($EDITOR : nano, nvim, vim).", Style::default().fg(theme.text_muted))),
+        Line::from(Span::styled("terminal editor ($EDITOR: nano, nvim, vim).", Style::default().fg(theme.text_muted))),
         Line::from(""),
-        Line::from(Span::styled("Prise en compte :", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled("Dès la prochaine exécution bisync.", Style::default().fg(theme.text_muted))),
+        Line::from(Span::styled("Applied:", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled("On the next bisync run.", Style::default().fg(theme.text_muted))),
     ];
 
     let close_btn_area = Rect {
@@ -235,7 +235,7 @@ fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Re
     f.render_widget(p, area);
 
     let close_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Fermer (Échap / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
+        Span::styled(" [ Close (Esc / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
     ])).alignment(Alignment::Center);
     f.render_widget(close_p, close_btn_area);
 }

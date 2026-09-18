@@ -40,15 +40,15 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             f.render_widget(Clear, area);
 
             let text = vec![
-                Line::from(Span::styled("LANCER LA SYNCHRONISATION MAINTENANT ?", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+                Line::from(Span::styled("TRIGGER SYNCHRONIZATION NOW?", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
                 Line::from(""),
-                Line::from("Cette action déclenche immédiatement le service rclone-bisync"),
-                Line::from("pour synchroniser tous les changements locaux et distants."),
+                Line::from("This action immediately triggers the rclone-bisync service"),
+                Line::from("to synchronize all local and remote changes."),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(" [O / Entrée] Confirmer ", Style::default().fg(theme.card_bg).bg(theme.green).add_modifier(Modifier::BOLD)),
+                    Span::styled(" [Y / Enter] Confirm ", Style::default().fg(theme.card_bg).bg(theme.green).add_modifier(Modifier::BOLD)),
                     Span::styled("    ", Style::default()),
-                    Span::styled(" [N / Échap] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+                    Span::styled(" [N / Esc] Cancel ", Style::default().fg(theme.text_bright).bg(theme.border)),
                 ]),
             ];
 
@@ -60,7 +60,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                         .border_type(BorderType::Rounded)
                         .border_style(Style::default().fg(theme.accent))
                         .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Synchronisation ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+                        .title(Span::styled(" Synchronization ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
                 );
             f.render_widget(p, area);
         }
@@ -69,15 +69,15 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             f.render_widget(Clear, area);
 
             let text = vec![
-                Line::from(Span::styled("LANCER UNE SIMULATION DRY-RUN ?", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+                Line::from(Span::styled("RUN DRY-RUN SIMULATION?", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
                 Line::from(""),
-                Line::from("Exécute une vérification à blanc (--dry-run)."),
-                Line::from("Aucun fichier ne sera copié, modifié ou supprimé."),
+                Line::from("Runs a check in dry-run mode (--dry-run)."),
+                Line::from("No files will be copied, modified, or deleted."),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(" [O / Entrée] Démarrer ", Style::default().fg(theme.card_bg).bg(theme.yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(" [Y / Enter] Start ", Style::default().fg(theme.card_bg).bg(theme.yellow).add_modifier(Modifier::BOLD)),
                     Span::styled("    ", Style::default()),
-                    Span::styled(" [N / Échap] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+                    Span::styled(" [N / Esc] Cancel ", Style::default().fg(theme.text_bright).bg(theme.border)),
                 ]),
             ];
 
@@ -89,7 +89,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                         .border_type(BorderType::Rounded)
                         .border_style(Style::default().fg(theme.yellow))
                         .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Simulation Dry-Run ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+                        .title(Span::styled(" Dry-Run Simulation ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
                 );
             f.render_widget(p, area);
         }
@@ -98,17 +98,17 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             f.render_widget(Clear, area);
 
             let text = vec![
-                Line::from(Span::styled("ATTENTION : RESYNCHRONISATION COMPLÈTE", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+                Line::from(Span::styled("WARNING: FULL RESYNCHRONIZATION", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
                 Line::from(""),
-                Line::from("Cette opération va reconstruire les index locaux et distants"),
-                Line::from("avec l'option --resync pour résoudre un conflit ou une incohérence."),
+                Line::from("This operation will rebuild local and remote listings"),
+                Line::from("with the --resync flag to resolve a conflict or inconsistency."),
                 Line::from(""),
-                Line::from(Span::styled("Voulez-vous lancer la commande maintenant ?", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD))),
+                Line::from(Span::styled("Do you want to run this command now?", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD))),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(" [O] Oui / Confirmer ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(" [Y] Yes / Confirm ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled("    ", Style::default()),
-                    Span::styled(" [N] Non / Annuler (Échap) ", Style::default().fg(theme.text_bright).bg(theme.border)),
+                    Span::styled(" [N] No / Cancel (Esc) ", Style::default().fg(theme.text_bright).bg(theme.border)),
                 ]),
             ];
 
@@ -120,7 +120,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                         .border_type(BorderType::Rounded)
                         .border_style(Style::default().fg(theme.yellow))
                         .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Confirmation requise ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+                        .title(Span::styled(" Confirmation required ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
                 );
             f.render_widget(p, area);
         }
@@ -129,14 +129,14 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             f.render_widget(Clear, area);
 
             let text = vec![
-                Line::from(Span::styled("INTERROMPRE LA SYNCHRONISATION ?", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
+                Line::from(Span::styled("ABORT SYNCHRONIZATION?", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
                 Line::from(""),
-                Line::from("Le processus rclone-bisync en cours sera immédiatement arrêté."),
+                Line::from("The active rclone-bisync process will be terminated immediately."),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(" [O] Oui, arrêter ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(" [Y] Yes, abort ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled("    ", Style::default()),
-                    Span::styled(" [N] Continuer (Échap) ", Style::default().fg(theme.text_bright).bg(theme.border)),
+                    Span::styled(" [N] Continue (Esc) ", Style::default().fg(theme.text_bright).bg(theme.border)),
                 ]),
             ];
 
@@ -148,7 +148,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                         .border_type(BorderType::Rounded)
                         .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Arrêt forcé ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
+                        .title(Span::styled(" Force Stop ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
                 );
             f.render_widget(p, area);
         }
@@ -157,14 +157,14 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             f.render_widget(Clear, area);
 
             let text = vec![
-                Line::from(Span::styled("SUPPRIMER CE FICHIER LOCALEMENT ?", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
+                Line::from(Span::styled("DELETE THIS LOCAL FILE?", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
                 Line::from(""),
                 Line::from(Span::styled(rel_path.as_str(), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(" [O] Supprimer ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(" [Y] Delete ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled("    ", Style::default()),
-                    Span::styled(" [N] Annuler (Échap) ", Style::default().fg(theme.text_bright).bg(theme.border)),
+                    Span::styled(" [N] Cancel (Esc) ", Style::default().fg(theme.text_bright).bg(theme.border)),
                 ]),
             ];
 
@@ -176,7 +176,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                         .border_type(BorderType::Rounded)
                         .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Suppression ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
+                        .title(Span::styled(" Deletion ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
                 );
             f.render_widget(p, area);
         }
@@ -273,7 +273,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                             Line::from(vec![
                                 Span::styled("┐", Style::default().fg(theme.red)),
                                 Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                                Span::styled(" fermer", Style::default().fg(theme.text_bright)),
+                                Span::styled(" close", Style::default().fg(theme.text_bright)),
                                 Span::styled("┌", Style::default().fg(theme.red)),
                             ])
                             .alignment(Alignment::Right),
@@ -347,9 +347,9 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
     f.render_widget(Clear, area);
 
     let status_str = if app.dry_run_running {
-        "⏳ Simulation en cours (rclone bisync --dry-run)..."
+        "⏳ Simulation in progress (rclone bisync --dry-run)..."
     } else {
-        "✔ Simulation terminée"
+        "✔ Simulation completed"
     };
 
     let total_lines = app.dry_run_logs.len();
@@ -358,7 +358,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
     let scroll = app.dry_run_scroll.min(max_scroll);
 
     let lines: Vec<Line> = if app.dry_run_logs.is_empty() {
-        vec![Line::from(Span::styled("Initialisation de la simulation dry-run...", Style::default().fg(theme.text_muted)))]
+        vec![Line::from(Span::styled("Initializing dry-run simulation...", Style::default().fg(theme.text_muted)))]
     } else {
         app.dry_run_logs
             .iter()
@@ -373,7 +373,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.cyan))
         .style(Style::default().bg(theme.card_bg))
-        .title(Span::styled(format!(" 🛡 Simulation Dry-Run │ {} ", status_str), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(format!(" 🛡 Dry-Run Simulation │ {} ", status_str), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -399,11 +399,11 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
 
     let footer_line = Line::from(vec![
         Span::styled("[r] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Relancer  │  ", Style::default().fg(theme.text_muted)),
+        Span::styled("Rerun  │  ", Style::default().fg(theme.text_muted)),
         Span::styled("[↑↓/PgUp/PgDn] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
+        Span::styled("Scroll  │  ", Style::default().fg(theme.text_muted)),
         Span::styled("[Esc / q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Fermer", Style::default().fg(theme.text_muted)),
+        Span::styled("Close", Style::default().fg(theme.text_muted)),
     ]);
     let footer_p = Paragraph::new(footer_line).alignment(Alignment::Center);
     f.render_widget(footer_p, chunks[1]);

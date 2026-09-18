@@ -358,15 +358,15 @@ fn parse_diff_file(line: &str) -> Option<(bool, ModifiedFileDetail)> {
     let is_local = line.contains("- Path2");
     let ll = line.to_lowercase();
     let action = if ll.contains("file is new") {
-        "nouveau".to_string()
+        "new".to_string()
     } else if ll.contains("modified") {
-        "modifié".to_string()
+        "modified".to_string()
     } else if ll.contains("deleted") {
-        "supprimé".to_string()
+        "deleted".to_string()
     } else if ll.contains("queue copy") {
-        "copié".to_string()
+        "copied".to_string()
     } else {
-        "modifié".to_string()
+        "modified".to_string()
     };
 
     let pos = line.rfind(" - ")?;

@@ -121,11 +121,11 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
     let (used_gb, free_gb, total_gb, pct) = app.local_disk_stats();
     let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, theme);
     let mut line1_spans = vec![
-        Span::styled("Disque:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Disk:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
     line1_spans.extend(disk_bar);
     line1_spans.push(Span::styled(
-        format!(" {:>3.0}%  {:.1} Go / {:.1} Go ({:.1} Go libres)", pct, used_gb, total_gb, free_gb),
+        format!(" {:>3.0}%  {:.1} GB / {:.1} GB ({:.1} GB free)", pct, used_gb, total_gb, free_gb),
         Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
     ));
 
@@ -141,37 +141,37 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
         let cloud_bar = crate::ui::sparkline::render_gradient_bar(q_pct, bar_width, theme);
         line2_spans.extend(cloud_bar);
         let used_str = if used_mb >= 1024.0 {
-            format!("{:.1} Go", used_mb / 1024.0)
+            format!("{:.1} GB", used_mb / 1024.0)
         } else {
-            format!("{:.1} Mo", used_mb)
+            format!("{:.1} MB", used_mb)
         };
         line2_spans.push(Span::styled(
-            format!(" {:>3.0}%  {} / {:.2} To ({:.2} To libres)", q_pct, used_str, total_tb, free_tb),
+            format!(" {:>3.0}%  {} / {:.2} TB ({:.2} TB free)", q_pct, used_str, total_tb, free_tb),
             Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
         ));
     } else {
         line2_spans.push(Span::styled(format!("{:<15}", &app.config.remote), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
-        line2_spans.push(Span::styled("· synchronisation quota...", Style::default().fg(theme.text_muted)));
+        line2_spans.push(Span::styled("· syncing quota...", Style::default().fg(theme.text_muted)));
     }
 
-    // 3. Dossier local & compteur de fichiers suivis (débloqué de 0)
+    // 3. Dossier local & compteur de fichiers suivis
     let count = app.get_tracked_files_count();
     let count_str = if count > 0 {
-        format!("{} fichiers suivis", count)
+        format!("{} tracked files", count)
     } else {
-        "analyse...".to_string()
+        "analyzing...".to_string()
     };
     let line3_spans = vec![
-        Span::styled("Dossier: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Folder:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{} ", &app.config.local_dir), Style::default().fg(theme.text_bright)),
         Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
     ];
 
     // 4. Filet Cloud & bwlimit
     let cloud_net = &app.service_info.cloud_safety_net;
-    let bwlimit_str = app.config.bwlimit.as_deref().unwrap_or("Illimité");
+    let bwlimit_str = app.config.bwlimit.as_deref().unwrap_or("Unlimited");
     let line4_spans = vec![
-        Span::styled("Filet:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Safety:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         Span::styled(" │ bwlimit: ", Style::default().fg(theme.text_muted)),
         Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
@@ -186,10 +186,10 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
         lines.push(Line::from(line4_spans));
     } else {
         let line3_compact = vec![
-            Span::styled("Dossier: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled("Folder:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{} ", &app.config.local_dir), Style::default().fg(theme.text_bright)),
             Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
-            Span::styled(" │ Filet: ", Style::default().fg(theme.text_muted)),
+            Span::styled(" │ Safety: ", Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled("│ bw: ", Style::default().fg(theme.text_muted)),
             Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
@@ -260,9 +260,9 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         ("●", "SYNC ACTIVE", theme.green)
     } else {
         match app.service_info.state {
-            crate::systemd::ServiceState::Idle => ("●", "EN ATTENTE", theme.cyan),
-            crate::systemd::ServiceState::Failed => ("●", "ÉCHEC", theme.red),
-            _ => ("●", "INCONNU", theme.text_muted),
+            crate::systemd::ServiceState::Idle => ("●", "IDLE", theme.cyan),
+            crate::systemd::ServiceState::Failed => ("●", "FAILED", theme.red),
+            _ => ("●", "UNKNOWN", theme.text_muted),
         }
     };
     let last_sync_str = app.past_runs.first()
@@ -281,11 +281,11 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     };
 
     let line1_spans = vec![
-        Span::styled("Statut:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Status:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{} {} ", status_dot, status_label), Style::default().fg(status_col).add_modifier(Modifier::BOLD)),
-        Span::styled("│ Dernière: ", Style::default().fg(theme.text_muted)),
+        Span::styled("│ Last: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", last_sync_str), Style::default().fg(theme.text_bright)),
-        Span::styled("│ Prochaine: ", Style::default().fg(theme.text_muted)),
+        Span::styled("│ Next: ", Style::default().fg(theme.text_muted)),
         Span::styled(next_sync_str, Style::default().fg(theme.text_bright)),
     ];
 
@@ -297,10 +297,10 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     } else {
         "0 B/s".to_string()
     };
-    let speed_label = if is_active { "instantané" } else { "dernier transfert" };
+    let speed_label = if is_active { "live" } else { "last transfer" };
 
     let line2_spans = vec![
-        Span::styled("Débit:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Speed:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{:<13}", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         Span::styled(format!("({})", speed_label), Style::default().fg(theme.text_muted)),
     ];
@@ -309,8 +309,8 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     let (ok_today, err_today) = app.runs_today_stats();
     let conflicts = app.conflicts_today_stats();
     let line3_spans = vec![
-        Span::styled("Aujourd'hui:", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(" {} sync réussie(s)", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled("Today:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" {} successful sync(s)", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         Span::styled(" · ", Style::default().fg(theme.border)),
         Span::styled(
             format!("{} err.", err_today),
@@ -318,7 +318,7 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         ),
         Span::styled(" · ", Style::default().fg(theme.border)),
         Span::styled(
-            format!("{} conflit(s)", conflicts),
+            format!("{} conflict(s)", conflicts),
             Style::default().fg(if conflicts > 0 { theme.red } else { theme.text_muted }).add_modifier(Modifier::BOLD),
         ),
     ];
@@ -329,11 +329,11 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     let rel_bar = crate::ui::sparkline::render_gradient_bar(rate, bar_width, theme);
 
     let mut line4_spans = vec![
-        Span::styled("Fiabilité:", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Reliability: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
     line4_spans.extend(rel_bar.clone());
     line4_spans.push(Span::styled(
-        format!(" {:>3.0}% taux de réussite (7 jours)", rate),
+        format!(" {:>3.0}% success rate (7 days)", rate),
         Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
     ));
 
@@ -344,13 +344,13 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         lines.push(Line::from(line4_spans));
     } else {
         let mut line2_compact = vec![
-            Span::styled("Débit: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled("Speed: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{:<8} ", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("│ Fiab: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled("│ Rel: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         ];
         line2_compact.extend(rel_bar);
         line2_compact.push(Span::styled(
-            format!(" {:>3.0}% (7j)", rate),
+            format!(" {:>3.0}% (7d)", rate),
             Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
         ));
         lines.push(Line::from(line2_compact));
@@ -363,8 +363,8 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
 
 fn render_alert_banner(f: &mut Frame, alert: &Alert, theme: &ThemePalette, area: Rect) {
     let (border_color, icon) = match alert.level {
-        AlertLevel::Error => (theme.red, " 🚨 ALERTE CRITIQUE : "),
-        AlertLevel::Warning => (theme.yellow, " ⚠️ AVERTISSEMENT : "),
+        AlertLevel::Error => (theme.red, " 🚨 CRITICAL ALERT: "),
+        AlertLevel::Warning => (theme.yellow, " ⚠️ WARNING: "),
     };
 
     let mut spans = vec![
@@ -399,7 +399,7 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
 
     let title_line = Line::from(vec![
         Span::styled("┐", Style::default().fg(theme.accent)),
-        Span::styled("synchronisation en cours", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+        Span::styled("synchronization in progress", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         Span::styled("┌", Style::default().fg(theme.accent)),
     ]);
 
@@ -426,11 +426,11 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
     // 1. Phase stepper
     let phases = [
         "Listings",
-        "Diffs locaux",
-        "Diffs distants",
-        "Application",
-        "Mise à jour",
-        "Terminé",
+        "Local Diffs",
+        "Remote Diffs",
+        "Applying",
+        "Updating",
+        "Done",
     ];
     let mut stepper_spans = Vec::new();
     for (i, name) in phases.iter().enumerate() {
@@ -456,23 +456,23 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
     let files = format!("{} / {}", app.live.transfer.files_done, app.live.transfer.files_total);
 
     let mut kpi_spans = vec![
-        Span::styled("Transféré: ", Style::default().fg(theme.text_muted)),
+        Span::styled("Transferred: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", done), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
         Span::styled("│ Total: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", total), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-        Span::styled("│ Progr.: ", Style::default().fg(theme.text_muted)),
+        Span::styled("│ Progress: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", pct_str), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-        Span::styled("│ Vitesse: ", Style::default().fg(theme.text_muted)),
+        Span::styled("│ Speed: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled("│ Vérifs: ", Style::default().fg(theme.text_muted)),
+        Span::styled("│ Checks: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", checks), Style::default().fg(theme.text_bright)),
-        Span::styled("│ Fichiers: ", Style::default().fg(theme.text_muted)),
+        Span::styled("│ Files: ", Style::default().fg(theme.text_muted)),
         Span::styled(files, Style::default().fg(theme.text_bright)),
     ];
 
     // Fichier actif en cours de transfert (intégré dans les KPIs)
     if let Some((_key, af)) = app.live.active_files.iter().next() {
-        kpi_spans.push(Span::styled("│ Actif: ", Style::default().fg(theme.text_muted)));
+        kpi_spans.push(Span::styled("│ Active: ", Style::default().fg(theme.text_muted)));
         kpi_spans.push(Span::styled(format!("{} ({}%)", af.name, af.pct), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
     }
 
@@ -503,16 +503,16 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
 
         // Colonne gauche : Changements locaux (Path2)
         let mut loc_lines = vec![
-            Line::from(Span::styled("Changements locaux (Path2) :", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled("Local changes (Path2):", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
         ];
         if app.live.changes_local_details.is_empty() && app.live.changes_local.is_empty() {
-            loc_lines.push(Line::from(Span::styled("  Aucun changement", Style::default().fg(theme.text_muted))));
+            loc_lines.push(Line::from(Span::styled("  No changes", Style::default().fg(theme.text_muted))));
         } else if !app.live.changes_local_details.is_empty() {
             for d in app.live.changes_local_details.iter().take(2) {
                 let (badge_text, badge_color) = match d.action.to_lowercase().as_str() {
-                    "new" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Ajouté", theme.green),
-                    "deleted" | "supprimé" | "supprime" => ("● Supprimé", theme.red),
-                    _ => ("● Modifié", theme.yellow),
+                    "new" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Added", theme.green),
+                    "deleted" | "supprimé" | "supprime" => ("● Deleted", theme.red),
+                    _ => ("● Modified", theme.yellow),
                 };
                 loc_lines.push(Line::from(vec![
                     Span::styled(format!("  • {} ", d.path), Style::default().fg(theme.text_bright)),
@@ -520,30 +520,30 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
                 ]));
             }
             if app.live.changes_local_details.len() > 2 {
-                loc_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_local_details.len() - 2), Style::default().fg(theme.text_muted))));
+                loc_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_local_details.len() - 2), Style::default().fg(theme.text_muted))));
             }
         } else {
             for f in app.live.changes_local.iter().take(2) {
                 loc_lines.push(Line::from(Span::styled(format!("  • {}", f), Style::default().fg(theme.text_bright))));
             }
             if app.live.changes_local.len() > 2 {
-                loc_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_local.len() - 2), Style::default().fg(theme.text_muted))));
+                loc_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_local.len() - 2), Style::default().fg(theme.text_muted))));
             }
         }
         f.render_widget(Paragraph::new(loc_lines), h_chunks[0]);
 
         // Colonne droite : Changements distants (Path1)
         let mut rem_lines = vec![
-            Line::from(Span::styled("Changements distants (Path1) :", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled("Remote changes (Path1):", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
         ];
         if app.live.changes_remote_details.is_empty() && app.live.changes_remote.is_empty() {
-            rem_lines.push(Line::from(Span::styled("  Aucun changement", Style::default().fg(theme.text_muted))));
+            rem_lines.push(Line::from(Span::styled("  No changes", Style::default().fg(theme.text_muted))));
         } else if !app.live.changes_remote_details.is_empty() {
             for d in app.live.changes_remote_details.iter().take(2) {
                 let (badge_text, badge_color) = match d.action.to_lowercase().as_str() {
-                    "new" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Ajouté", theme.green),
-                    "deleted" | "supprimé" | "supprime" => ("● Supprimé", theme.red),
-                    _ => ("● Modifié", theme.yellow),
+                    "new" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Added", theme.green),
+                    "deleted" | "supprimé" | "supprime" => ("● Deleted", theme.red),
+                    _ => ("● Modified", theme.yellow),
                 };
                 rem_lines.push(Line::from(vec![
                     Span::styled(format!("  • {} ", d.path), Style::default().fg(theme.text_bright)),
@@ -551,14 +551,14 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
                 ]));
             }
             if app.live.changes_remote_details.len() > 2 {
-                rem_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_remote_details.len() - 2), Style::default().fg(theme.text_muted))));
+                rem_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_remote_details.len() - 2), Style::default().fg(theme.text_muted))));
             }
         } else {
             for f in app.live.changes_remote.iter().take(2) {
                 rem_lines.push(Line::from(Span::styled(format!("  • {}", f), Style::default().fg(theme.text_bright))));
             }
             if app.live.changes_remote.len() > 2 {
-                rem_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_remote.len() - 2), Style::default().fg(theme.text_muted))));
+                rem_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_remote.len() - 2), Style::default().fg(theme.text_muted))));
             }
         }
         f.render_widget(Paragraph::new(rem_lines), h_chunks[1]);
@@ -615,7 +615,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         Span::styled(" select ", Style::default().fg(Color::White)),
         Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled("└┘", Style::default().fg(border_color)),
-        Span::styled("détails ", Style::default().fg(det_col)),
+        Span::styled("details ", Style::default().fg(det_col)),
         Span::styled("↵", Style::default().fg(key_col).add_modifier(Modifier::BOLD)),
         Span::styled("└", Style::default().fg(border_color)),
     ]);
@@ -712,7 +712,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         if is_syncing && item_idx == 0 {
             // Ligne de la synchronisation en cours
             let elapsed = if app.live.transfer.elapsed.is_empty() { "0s" } else { &app.live.transfer.elapsed };
-            let time_str = "En cours";
+            let time_str = "In progress";
             let pct_val = app.live.overall_progress_pct();
             let status_str = format!("● {}%", pct_val);
             let copied_count = app.live.synced_files.iter().filter(|f| f.action == "new" || f.action == "copied").count() + app.live.transfer.files_done as usize;
@@ -750,14 +750,14 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
             let past_idx = if is_syncing { item_idx - 1 } else { item_idx };
             if let Some(run) = app.past_runs.get(past_idx) {
                 let (status_badge, status_color) = match run.status {
-                    RunStatus::Success => ("✔ Réussie", theme.green),
-                    RunStatus::Failed => ("✗ Erreur", theme.red),
-                    RunStatus::Skipped => ("⊘ Ignorée", theme.text_muted),
-                    RunStatus::Running => ("▶ En cours", theme.cyan),
+                    RunStatus::Success => ("✔ Success", theme.green),
+                    RunStatus::Failed => ("✗ Error", theme.red),
+                    RunStatus::Skipped => ("⊘ Skipped", theme.text_muted),
+                    RunStatus::Running => ("▶ Running", theme.cyan),
                 };
 
                 let time_short = if run.date == chrono::Local::now().format("%Y-%m-%d").to_string() {
-                    format!("Auj. {}", run.time)
+                    format!("Today {}", run.time)
                 } else {
                     format!("{} {}", run.date, run.time)
                 };
@@ -820,7 +820,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         ],
     )
     .header(
-        Row::new(vec!["DÉMARRAGE", "STATUT", "COPIÉS", "MODIF.", "SUPPR.", "DURÉE", "ERR."])
+        Row::new(vec!["START", "STATUS", "COPIED", "MODIF.", "DELETED", "DURATION", "ERR."])
             .style(Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     );
 
@@ -859,9 +859,9 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     if all_wrapped.is_empty() {
         let msg = match app.log_filter {
-            crate::app::LogFilter::All => " Les logs sont vides pour le moment.",
-            crate::app::LogFilter::Files => " Aucun transfert de fichier dans les logs récents.",
-            crate::app::LogFilter::Problems => " Aucun problème (erreur/avertissement) détecté.",
+            crate::app::LogFilter::All => " No logs available at the moment.",
+            crate::app::LogFilter::Files => " No file transfers in recent logs.",
+            crate::app::LogFilter::Problems => " No issues (errors/warnings) detected.",
         };
         all_wrapped.push(Line::from(vec![Span::styled(msg, Style::default().fg(theme.text_muted))]));
     }
@@ -921,7 +921,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     title_spans.push(Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     cur_hit_x += 1;
 
-    // Filter label: e.g. " Tout " / " Fichiers " / " Problèmes "
+    // Filter label: e.g. " All " / " Files " / " Problems "
     let filter_text = format!(" {} ", app.log_filter.label());
     let label_len = filter_text.chars().count() as u16;
     hitboxes.push(Hitbox {
@@ -1054,7 +1054,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     let rows: Vec<Row> = if files_to_display.is_empty() {
         vec![Row::new(vec![
-            Cell::from(Span::styled(" Aucun fichier récemment synchronisé", Style::default().fg(theme.text_muted))),
+            Cell::from(Span::styled(" No recently synchronized files", Style::default().fg(theme.text_muted))),
             Cell::from(""),
             Cell::from(""),
             Cell::from(""),
@@ -1069,9 +1069,9 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
                 let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::RecentFiles);
                 let is_selected = !is_dragging && app.recent_selected_idx == Some(real_idx);
                 let (badge_text, badge_color) = match action.as_str() {
-                    "new" => ("● Ajouté", theme.green),
-                    "deleted" => ("● Supprimé", theme.red),
-                    _ => ("● Modifié", theme.yellow),
+                    "new" => ("● Added", theme.green),
+                    "deleted" => ("● Deleted", theme.red),
+                    _ => ("● Modified", theme.yellow),
                 };
 
                 let file_path = std::path::Path::new(path);
@@ -1199,9 +1199,9 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     top_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
     top_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     let (dossier_text, dossier_color) = if app.ctrl_mode {
-        (" dossier [ON]", theme.yellow)
+        (" folder [ON]", theme.yellow)
     } else {
-        (" dossier", theme.text_bright)
+        (" folder", theme.text_bright)
     };
     top_spans.push(Span::styled(dossier_text, Style::default().fg(dossier_color).add_modifier(Modifier::BOLD)));
     top_spans.push(Span::styled("┌", Style::default().fg(border_color)));
@@ -1235,7 +1235,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         });
     }
 
-    let header_title = if app.ctrl_mode { "DOSSIER PARENT (MODE CTRL ACTIF)" } else { "CHEMIN DU FICHIER" };
+    let header_title = if app.ctrl_mode { "PARENT FOLDER (CTRL MODE ACTIVE)" } else { "FILE PATH" };
     let table = Table::new(
         rows,
         [
@@ -1246,7 +1246,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         ],
     )
     .header(
-        Row::new(vec!["ACTION", header_title, "TAILLE", "HEURE"])
+        Row::new(vec!["ACTION", header_title, "SIZE", "TIME"])
             .style(Style::default().fg(if app.ctrl_mode { theme.yellow } else { theme.text_muted }).add_modifier(Modifier::BOLD)),
     )
     .block(outer_block);

@@ -96,19 +96,19 @@ pub fn get_service_info() -> ServiceInfo {
                             info.timer_next = next_dt.format("%H:%M:%S").to_string();
                             info.timer_left = format!("{}m {:02}s", mins, secs);
                         } else if info.state == ServiceState::Active {
-                            info.timer_next = "En cours".to_string();
-                            info.timer_left = format!("après sync ({})", cfg_interval);
+                            info.timer_next = "In progress".to_string();
+                            info.timer_left = format!("after sync ({})", cfg_interval);
                         } else {
                             info.timer_next = next_dt.format("%H:%M:%S").to_string();
                             info.timer_left = "imminent".to_string();
                         }
                     } else {
                         info.timer_next = format!("~{}", cfg_interval);
-                        info.timer_left = format!("dans ~{}", cfg_interval);
+                        info.timer_left = format!("in ~{}", cfg_interval);
                     }
                 } else {
                     info.timer_next = format!("~{}", cfg_interval);
-                    info.timer_left = format!("dans ~{}", cfg_interval);
+                    info.timer_left = format!("in ~{}", cfg_interval);
                 }
             } else {
                 // Date/Heure programmée présente dans parts
@@ -134,15 +134,15 @@ pub fn get_service_info() -> ServiceInfo {
                 }
             }
         } else {
-            info.timer_left = "Désactivé".to_string();
-            info.timer_next = "Désactivé".to_string();
+            info.timer_left = "Disabled".to_string();
+            info.timer_next = "Disabled".to_string();
         }
     }
 
     // 3. Filet de sécurité Cloud (sync complet périodique)
     let cfg = config::load_config();
     if cfg.full_sync_interval == "never" {
-        info.cloud_safety_net = "Désactivé".to_string();
+        info.cloud_safety_net = "Disabled".to_string();
     } else {
         let stamp_path = config::last_full_sync_marker();
         if stamp_path.exists() {
@@ -155,15 +155,15 @@ pub fn get_service_info() -> ServiceInfo {
                     let diff_min = if now >= ts { (now - ts) / 60 } else { 0 };
                     let full_interval: u64 = cfg.full_sync_interval.parse().unwrap_or(60);
                     if diff_min >= full_interval {
-                        info.cloud_safety_net = "Sync complet dû".to_string();
+                        info.cloud_safety_net = "Full sync due".to_string();
                     } else {
                         let left = full_interval - diff_min;
-                        info.cloud_safety_net = format!("dans {} min", left);
+                        info.cloud_safety_net = format!("in {} min", left);
                     }
                 }
             }
         } else {
-            info.cloud_safety_net = "Au prochain run".to_string();
+            info.cloud_safety_net = "On next run".to_string();
         }
     }
 
