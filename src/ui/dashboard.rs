@@ -896,10 +896,18 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     let cur_file = if let Some(sel) = app.recent_selected_idx { sel + 1 } else { 0 };
 
     let max_show = area.height.saturating_sub(3) as usize;
-    let offset = if !files_to_display.is_empty() && max_show > 0 {
-        app.recent_scroll_offset.min(files_to_display.len().saturating_sub(max_show))
-    } else {
-        0
+    let max_offset = files_to_display.len().saturating_sub(max_show);
+    let offset = match app.recent_selected_idx {
+        Some(sel) => {
+            if sel < app.recent_scroll_offset {
+                sel
+            } else if max_show > 0 && sel >= app.recent_scroll_offset + max_show {
+                sel.saturating_sub(max_show) + 1
+            } else {
+                app.recent_scroll_offset.min(max_offset)
+            }
+        }
+        None => app.recent_scroll_offset.min(max_offset),
     };
 
     let highlight_bg = ratatui::style::Color::Rgb(90, 32, 32);

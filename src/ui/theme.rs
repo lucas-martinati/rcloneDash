@@ -70,7 +70,7 @@ impl ThemeChoice {
                 red: Color::Rgb(247, 118, 142),          // Coral / Red
                 purple: Color::Rgb(187, 154, 247),       // Lavender
                 border: Color::Rgb(70, 75, 95),          // Subtle Slate Grey
-                border_focus: Color::Rgb(125, 207, 255),
+                border_focus: Color::Rgb(224, 175, 104), // Warm Amber / Gold
                 border_sys: Color::Rgb(115, 218, 202),   // Cyan / Teal
                 border_storage: Color::Rgb(187, 154, 247), // Lavender
                 border_history: Color::Rgb(122, 162, 247), // Tokyo Blue
@@ -95,7 +95,7 @@ impl ThemeChoice {
                 red: Color::Rgb(243, 139, 168),          // Red
                 purple: Color::Rgb(203, 166, 247),       // Mauve
                 border: Color::Rgb(75, 78, 100),         // Surface1
-                border_focus: Color::Rgb(137, 180, 250),
+                border_focus: Color::Rgb(249, 226, 175), // Catppuccin Yellow / Gold
                 border_sys: Color::Rgb(148, 226, 213),
                 border_storage: Color::Rgb(203, 166, 247),
                 border_history: Color::Rgb(137, 180, 250),
@@ -120,7 +120,7 @@ impl ThemeChoice {
                 red: Color::Rgb(191, 97, 106),           // Aurora Red
                 purple: Color::Rgb(180, 142, 173),       // Aurora Purple
                 border: Color::Rgb(76, 86, 106),         // Polar Night 3
-                border_focus: Color::Rgb(136, 192, 208),
+                border_focus: Color::Rgb(235, 203, 139), // Aurora Yellow / Amber
                 border_sys: Color::Rgb(143, 188, 187),
                 border_storage: Color::Rgb(180, 142, 173),
                 border_history: Color::Rgb(129, 161, 193),
@@ -145,7 +145,7 @@ impl ThemeChoice {
                 red: Color::Rgb(251, 73, 52),            // Red
                 purple: Color::Rgb(211, 134, 155),       // Purple
                 border: Color::Rgb(80, 73, 69),          // Dark 2 subtle grey
-                border_focus: Color::Rgb(250, 189, 47),
+                border_focus: Color::Rgb(250, 189, 47),  // Gruvbox Bright Yellow / Gold
                 border_sys: Color::Rgb(142, 192, 124),   // Aqua
                 border_storage: Color::Rgb(211, 134, 155),// Purple
                 border_history: Color::Rgb(131, 165, 152),// Blue
@@ -170,10 +170,10 @@ impl ThemeChoice {
                 red: Color::Rgb(255, 85, 85),            // Red
                 purple: Color::Rgb(255, 121, 198),       // Pink
                 border: Color::Rgb(80, 85, 110),         // Current Line grey
-                border_focus: Color::Rgb(189, 147, 249),
+                border_focus: Color::Rgb(241, 250, 140), // Dracula Yellow
                 border_sys: Color::Rgb(139, 233, 253),
                 border_storage: Color::Rgb(255, 121, 198),
-                border_history: Color::Rgb(189, 147, 249),
+                border_history: Color::Rgb(139, 233, 253),// Cyan
                 border_logs: Color::Rgb(255, 85, 85),
                 border_recent: Color::Rgb(80, 250, 123),
                 card_bg: Color::Reset,
@@ -195,7 +195,7 @@ impl ThemeChoice {
                 red: Color::Rgb(255, 97, 136),           // Red
                 purple: Color::Rgb(171, 157, 242),       // Purple
                 border: Color::Rgb(75, 72, 82),
-                border_focus: Color::Rgb(169, 220, 103),
+                border_focus: Color::Rgb(255, 216, 102), // Monokai Pro Yellow / Gold
                 border_sys: Color::Rgb(120, 220, 232),
                 border_storage: Color::Rgb(171, 157, 242),
                 border_history: Color::Rgb(120, 220, 232),

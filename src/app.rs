@@ -170,6 +170,8 @@ pub struct App {
 
     // Paramètres
     pub settings_selected_idx: usize,
+    pub is_editing_setting: bool,
+    pub setting_edit_buffer: String,
 
     // Simulation Dry-Run
     pub dry_run_running: bool,
@@ -257,6 +259,8 @@ impl App {
             logs_viewport_height: 10,
 
             settings_selected_idx: 0,
+            is_editing_setting: false,
+            setting_edit_buffer: String::new(),
 
             dry_run_running: false,
             dry_run_logs: Vec::new(),
@@ -744,12 +748,12 @@ impl App {
 
     /// Ensure recent files scroll offset keeps selected file visible
     pub fn ensure_recent_visible(&mut self, viewport_height: usize) {
-        if viewport_height == 0 { return; }
+        let vp = viewport_height.max(1);
         if let Some(idx) = self.recent_selected_idx {
             if idx < self.recent_scroll_offset {
                 self.recent_scroll_offset = idx;
-            } else if idx >= self.recent_scroll_offset + viewport_height {
-                self.recent_scroll_offset = idx - viewport_height + 1;
+            } else if idx >= self.recent_scroll_offset + vp {
+                self.recent_scroll_offset = idx + 1 - vp;
             }
         }
     }
@@ -773,11 +777,12 @@ impl App {
                     idx = (self.recent_scroll_offset + vp).saturating_sub(1);
                 }
 
-                if self.recent_scroll_offset < max_offset {
-                    self.recent_scroll_offset += 1;
-                    self.recent_selected_idx = Some((idx + 1).min(total - 1));
-                } else if idx < total - 1 {
-                    self.recent_selected_idx = Some(idx + 1);
+                if idx < total - 1 {
+                    idx += 1;
+                    self.recent_selected_idx = Some(idx);
+                    if idx >= self.recent_scroll_offset + vp {
+                        self.recent_scroll_offset = (idx + 1).saturating_sub(vp).min(max_offset);
+                    }
                 }
             }
         }
@@ -803,11 +808,12 @@ impl App {
                     idx = (self.recent_scroll_offset + vp).saturating_sub(1);
                 }
 
-                if self.recent_scroll_offset > 0 {
-                    self.recent_scroll_offset -= 1;
-                    self.recent_selected_idx = Some(idx.saturating_sub(1));
-                } else if idx > 0 {
-                    self.recent_selected_idx = Some(idx - 1);
+                if idx > 0 {
+                    idx -= 1;
+                    self.recent_selected_idx = Some(idx);
+                    if idx < self.recent_scroll_offset {
+                        self.recent_scroll_offset = idx;
+                    }
                 }
             }
         }
@@ -917,7 +923,7 @@ impl App {
                             }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
-                                let vp = self.recent_viewport_height.max(3);
+                                let vp = self.recent_viewport_height.max(1);
                                 self.scroll_recent_down(vp);
                                 handled = true;
                                 break;
@@ -994,7 +1000,7 @@ impl App {
                             }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
-                                let vp = self.recent_viewport_height.max(3);
+                                let vp = self.recent_viewport_height.max(1);
                                 self.scroll_recent_up(vp);
                                 handled = true;
                                 break;
@@ -1195,6 +1201,13 @@ impl App {
                                 self.settings_selected_idx = idx;
                                 if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
+                                } else if idx == 5 || idx == 6 {
+                                    self.is_editing_setting = true;
+                                    self.setting_edit_buffer = if idx == 5 {
+                                        self.config.local_dir.clone()
+                                    } else {
+                                        self.config.remote.clone()
+                                    };
                                 } else {
                                     self.cycle_setting(true);
                                 }
@@ -1204,6 +1217,13 @@ impl App {
                                 self.settings_selected_idx = idx;
                                 if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
+                                } else if idx == 5 || idx == 6 {
+                                    self.is_editing_setting = true;
+                                    self.setting_edit_buffer = if idx == 5 {
+                                        self.config.local_dir.clone()
+                                    } else {
+                                        self.config.remote.clone()
+                                    };
                                 } else {
                                     self.cycle_setting(forward);
                                 }
@@ -1405,6 +1425,12 @@ impl App {
 
         // 1. Modales prioritaires
         if self.modal != Modal::None {
+            // Touche universelle 'q' pour fermer n'importe quelle modale (sauf Menu où 'q' quitte l'application)
+            if key.code == KeyCode::Char('q') && self.modal != Modal::Menu && !self.is_editing_setting {
+                self.modal = Modal::None;
+                return Action::None;
+            }
+
             match &self.modal {
                 Modal::Menu => match key.code {
                     KeyCode::Esc => {
@@ -1501,43 +1527,110 @@ impl App {
                         _ => {}
                     }
                 }
-                Modal::Settings => match key.code {
-                    KeyCode::Esc => {
-                        self.modal = Modal::None;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        if self.settings_selected_idx > 0 {
-                            self.settings_selected_idx -= 1;
+                Modal::Settings => {
+                    if self.is_editing_setting {
+                        match key.code {
+                            KeyCode::Esc => {
+                                self.is_editing_setting = false;
+                            }
+                            KeyCode::Enter => {
+                                let trimmed = self.setting_edit_buffer.trim().to_string();
+                                if self.settings_selected_idx == 5 {
+                                    if !trimmed.is_empty() {
+                                        self.config.local_dir = trimmed;
+                                        self.reload_files();
+                                        self.save_current_settings();
+                                        self.set_toast(format!("✔ Dossier local mis à jour : {}", self.config.local_dir));
+                                    }
+                                } else if self.settings_selected_idx == 6 {
+                                    if !trimmed.is_empty() {
+                                        self.config.remote = trimmed;
+                                        self.save_current_settings();
+                                        self.set_toast(format!("✔ Remote distant mis à jour : {}", self.config.remote));
+                                    }
+                                }
+                                self.is_editing_setting = false;
+                            }
+                            KeyCode::Backspace => {
+                                self.setting_edit_buffer.pop();
+                            }
+                            KeyCode::Char(c) => {
+                                self.setting_edit_buffer.push(c);
+                            }
+                            _ => {}
                         }
+                        return Action::None;
                     }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        if self.settings_selected_idx < SETTINGS_ITEMS_COUNT - 1 {
-                            self.settings_selected_idx += 1;
+
+                    match key.code {
+                        KeyCode::Esc => {
+                            self.modal = Modal::None;
                         }
-                    }
-                    KeyCode::Enter => {
-                        if self.settings_selected_idx == 7 {
-                            self.modal = Modal::ConfirmResync;
-                        } else {
-                            self.save_current_settings();
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if self.settings_selected_idx > 0 {
+                                self.settings_selected_idx -= 1;
+                            }
                         }
-                    }
-                    KeyCode::Right | KeyCode::Char('l') => {
-                        if self.settings_selected_idx == 7 {
-                            self.modal = Modal::ConfirmResync;
-                        } else {
-                            self.cycle_setting(true);
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if self.settings_selected_idx < SETTINGS_ITEMS_COUNT - 1 {
+                                self.settings_selected_idx += 1;
+                            }
                         }
-                    }
-                    KeyCode::Left | KeyCode::Char('h') => {
-                        if self.settings_selected_idx == 7 {
-                            self.modal = Modal::ConfirmResync;
-                        } else {
-                            self.cycle_setting(false);
+                        KeyCode::Enter => {
+                            if self.settings_selected_idx == 7 {
+                                self.modal = Modal::ConfirmResync;
+                            } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
+                                self.is_editing_setting = true;
+                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
+                                    self.config.local_dir.clone()
+                                } else {
+                                    self.config.remote.clone()
+                                };
+                            } else {
+                                self.save_current_settings();
+                            }
                         }
+                        KeyCode::Char('e') => {
+                            if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
+                                self.is_editing_setting = true;
+                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
+                                    self.config.local_dir.clone()
+                                } else {
+                                    self.config.remote.clone()
+                                };
+                            }
+                        }
+                        KeyCode::Right | KeyCode::Char('l') => {
+                            if self.settings_selected_idx == 7 {
+                                self.modal = Modal::ConfirmResync;
+                            } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
+                                self.is_editing_setting = true;
+                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
+                                    self.config.local_dir.clone()
+                                } else {
+                                    self.config.remote.clone()
+                                };
+                            } else {
+                                self.cycle_setting(true);
+                            }
+                        }
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            if self.settings_selected_idx == 7 {
+                                self.modal = Modal::ConfirmResync;
+                            } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
+                                self.is_editing_setting = true;
+                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
+                                    self.config.local_dir.clone()
+                                } else {
+                                    self.config.remote.clone()
+                                };
+                            } else {
+                                self.cycle_setting(false);
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
-                },
+                }
                 Modal::Files => match key.code {
                     KeyCode::Esc => {
                         self.modal = Modal::None;
@@ -1925,7 +2018,7 @@ impl App {
                         self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
                     }
                     FocusedPanel::RecentFiles => {
-                        let vp = self.recent_viewport_height.max(3);
+                        let vp = self.recent_viewport_height.max(1);
                         self.scroll_recent_up(vp);
                     }
                 }
@@ -1945,7 +2038,7 @@ impl App {
                         }
                     }
                     FocusedPanel::RecentFiles => {
-                        let vp = self.recent_viewport_height.max(3);
+                        let vp = self.recent_viewport_height.max(1);
                         self.scroll_recent_down(vp);
                     }
                 }
@@ -1967,7 +2060,7 @@ impl App {
                     FocusedPanel::RecentFiles => {
                         if let Some(idx) = self.recent_selected_idx {
                             self.recent_selected_idx = Some(idx.saturating_sub(10));
-                            let vp = self.recent_viewport_height.max(3);
+                            let vp = self.recent_viewport_height.max(1);
                             self.ensure_recent_visible(vp);
                         }
                     }
@@ -1995,7 +2088,7 @@ impl App {
                         if total > 0 {
                             let cur = self.recent_selected_idx.unwrap_or(0);
                             self.recent_selected_idx = Some((cur + 10).min(total - 1));
-                            let vp = self.recent_viewport_height.max(3);
+                            let vp = self.recent_viewport_height.max(1);
                             self.ensure_recent_visible(vp);
                         }
                     }
@@ -2040,7 +2133,7 @@ impl App {
                         let total = self.get_recent_files_list().len();
                         if total > 0 {
                             self.recent_selected_idx = Some(total - 1);
-                            let vp = self.recent_viewport_height.max(3);
+                            let vp = self.recent_viewport_height.max(1);
                             self.ensure_recent_visible(vp);
                         }
                     }
@@ -2755,6 +2848,198 @@ mod tests {
             normalize_display_path("From zero to hero.pdf"),
             "from zero to hero.pdf"
         );
+    }
+
+    #[tokio::test]
+    async fn test_universal_q_closes_modals() {
+        let mut app = App::new();
+
+        // 1. Files modal se ferme avec 'q'
+        app.modal = Modal::Files;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        // 2. Filters modal se ferme avec 'q'
+        app.modal = Modal::Filters;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        // 3. Settings modal se ferme avec 'q'
+        app.modal = Modal::Settings;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        // 4. Help modal se ferme avec 'q'
+        app.modal = Modal::Help;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        // 5. Confirm modals se ferment avec 'q'
+        app.modal = Modal::ConfirmSync;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        app.modal = Modal::ConfirmResync;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        app.modal = Modal::ConfirmCancel;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        // 6. Menu btop : 'q' quitte l'application
+        app.modal = Modal::Menu;
+        app.running = true;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert!(!app.running, "Dans le Menu, 'q' doit quitter l'application");
+
+        // 7. Modal::None : 'q' quitte l'application
+        app.modal = Modal::None;
+        app.running = true;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert!(!app.running, "Sur le Dashboard, 'q' doit quitter l'application");
+    }
+
+    #[tokio::test]
+    async fn test_settings_interactive_string_edit() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        app.settings_selected_idx = 5; // Local directory
+        app.config.local_dir = "/home/user/drive".to_string();
+
+        // Appui sur Entrée pour entrer en mode édition
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.is_editing_setting);
+        assert_eq!(app.setting_edit_buffer, "/home/user/drive");
+
+        // Saisie de caractères : "/sub"
+        for c in "/sub".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+        }
+        assert_eq!(app.setting_edit_buffer, "/home/user/drive/sub");
+
+        // Backspace
+        app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.setting_edit_buffer, "/home/user/drive/su");
+
+        // Annulation avec Échap : la configuration ne doit pas changer
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!app.is_editing_setting);
+        assert_eq!(app.config.local_dir, "/home/user/drive");
+
+        // Entrée en édition avec 'e', modification et validation avec Entrée
+        app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+        assert!(app.is_editing_setting);
+        app.setting_edit_buffer = "/home/new/path".to_string();
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!app.is_editing_setting);
+        assert_eq!(app.config.local_dir, "/home/new/path");
+
+        // Test sur le remote (option 6)
+        app.settings_selected_idx = 6;
+        app.config.remote = "gdrive:backup".to_string();
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)); // Flèche droite active aussi l'édition
+        assert!(app.is_editing_setting);
+        assert_eq!(app.setting_edit_buffer, "gdrive:backup");
+        app.setting_edit_buffer = "myremote:data".to_string();
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.config.remote, "myremote:data");
+    }
+
+    #[test]
+    fn test_keybinding_registry() {
+        use crate::ui::keys::{KeyAction, KeybindingRegistry};
+        use crate::ui::theme::ThemeChoice;
+
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Files), "b");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Filters), "e");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::QuickSync), "s");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Resync), "r");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Quit), "q");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::CloseModal), "Échap / q");
+
+        let theme = ThemeChoice::TokyoNight.palette();
+        let badge = KeybindingRegistry::format_key_badge("Ctrl+X", &theme);
+        assert_eq!(badge.len(), 3);
+        assert_eq!(badge[0].content, " [");
+        assert_eq!(badge[1].content, " Ctrl+X ");
+        assert_eq!(badge[2].content, "] ");
+    }
+
+    #[tokio::test]
+    async fn test_recent_files_scroll_with_small_viewport() {
+        let mut app = App::new();
+        // Remplir 10 fichiers récents via past_runs
+        app.past_runs = vec![crate::monitor::history::PastRun {
+            id: 1,
+            date: "2026-09-18".into(),
+            time: "12:00:00".into(),
+            duration: "5s".into(),
+            status: crate::monitor::history::RunStatus::Success,
+            files_copied: (0..10).map(|i| format!("file_{}.txt", i)).collect(),
+            files_modified: vec![],
+            files_deleted: vec![],
+            synced_files: vec![],
+            errors: vec![],
+            summary: "OK".into(),
+        }];
+
+        // Simuler un conteneur rétréci par la synchronisation en cours (viewport de 2 lignes)
+        let vp = 2;
+        app.recent_viewport_height = vp;
+        app.focused_panel = FocusedPanel::RecentFiles;
+
+        // Premier appui sur Flèche Bas : sélectionne l'élément 0
+        app.scroll_recent_down(vp);
+        assert_eq!(app.recent_selected_idx, Some(0));
+        assert_eq!(app.recent_scroll_offset, 0);
+
+        // Défiler vers le bas à travers tous les éléments
+        for expected_idx in 1..10 {
+            app.scroll_recent_down(vp);
+            assert_eq!(app.recent_selected_idx, Some(expected_idx));
+
+            let sel = app.recent_selected_idx.unwrap();
+            // L'élément sélectionné ne doit JAMAIS dépasser la fenêtre visible
+            assert!(
+                sel >= app.recent_scroll_offset,
+                "L'élément sélectionné ({}) ne doit pas être inférieur à l'offset ({})",
+                sel,
+                app.recent_scroll_offset
+            );
+            assert!(
+                sel < app.recent_scroll_offset + vp,
+                "L'élément sélectionné ({}) ne doit pas dépasser le conteneur (offset {} + vp {})",
+                sel,
+                app.recent_scroll_offset,
+                vp
+            );
+        }
+
+        // Vérifier que le tout dernier élément (index 9) est bien atteint et visible
+        assert_eq!(app.recent_selected_idx, Some(9));
+        assert_eq!(app.recent_scroll_offset, 8); // Affiche les éléments 8 et 9 dans le conteneur de 2 lignes
+
+        // Défiler vers le haut
+        for expected_idx in (0..9).rev() {
+            app.scroll_recent_up(vp);
+            assert_eq!(app.recent_selected_idx, Some(expected_idx));
+
+            let sel = app.recent_selected_idx.unwrap();
+            assert!(
+                sel >= app.recent_scroll_offset,
+                "En remontant, l'élément sélectionné ({}) doit rester >= offset ({})",
+                sel,
+                app.recent_scroll_offset
+            );
+            assert!(
+                sel < app.recent_scroll_offset + vp,
+                "En remontant, l'élément sélectionné ({}) doit rester < offset {} + vp {}",
+                sel,
+                app.recent_scroll_offset,
+                vp
+            );
+        }
     }
 }
 

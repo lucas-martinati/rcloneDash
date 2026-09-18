@@ -219,7 +219,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         .title(Line::from(vec![
             Span::styled("┌🔍 détails run", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
             Span::styled(format!(": #{} ({} {})┐", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
-            Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
+            Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
         ]))
         .title_bottom(
             Line::from(vec![
@@ -231,7 +231,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
                 Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" mode dossier  ", Style::default().fg(theme.text_muted)),
-                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
                 Span::styled(format!("─ {}/{} ─", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])

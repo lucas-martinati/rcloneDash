@@ -37,7 +37,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
             Span::styled("┌⊘ filtres d'exclusion", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
             Span::styled(format!(": {}┐", filepath), Style::default().fg(theme.text_muted)),
             Span::styled("┌éditer: e┐", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
+            Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
         ]))
         .title_bottom(
             Line::from(vec![
@@ -47,7 +47,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
                 Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
                 Span::styled("e", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" éditer  ", Style::default().fg(theme.text_muted)),
-                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
                 Span::styled(format!("─ {}/{} ", cur_rule, total_rules), Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
             ])
@@ -225,7 +225,7 @@ fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Re
     f.render_widget(p, area);
 
     let close_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Fermer (Échap) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
+        Span::styled(" [ Fermer (Échap / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
     ])).alignment(Alignment::Center);
     f.render_widget(close_p, close_btn_area);
 }

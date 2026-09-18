@@ -49,7 +49,7 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
         Span::styled("┌📁 explorateur", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
         Span::styled(format!(": {}┐", title_path), Style::default().fg(theme.text_muted)),
         Span::styled("┌ouvrir: ↵┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
+        Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
     ]);
 
     let outer_block = Block::default()
@@ -72,7 +72,7 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
                 Span::styled(" entrer  ", Style::default().fg(theme.text_muted)),
                 Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
-                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
                 Span::styled(format!("─ {}/{} ─", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
@@ -266,7 +266,7 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
         Span::styled("Supprimer localement", Style::default().fg(theme.red)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [Échap] ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(" [Échap / q] ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled("Fermer fenêtre", Style::default().fg(theme.text_muted)),
     ]));
 
@@ -290,7 +290,7 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
     f.render_widget(p, area);
 
     let close_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Fermer (Échap) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
+        Span::styled(" [ Fermer (Échap / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
     ])).alignment(ratatui::layout::Alignment::Center);
     f.render_widget(close_p, close_btn_area);
 }

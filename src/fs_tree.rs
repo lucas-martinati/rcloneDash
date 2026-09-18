@@ -65,8 +65,8 @@ pub fn list_directory(base: &Path, rel: &str, filters: &[String]) -> Result<Vec<
         let entry = entry_res?;
         let file_name = entry.file_name().to_string_lossy().to_string();
 
-        // Ignorer fichiers cachés système (.git, etc.)
-        if file_name.starts_with('.') && file_name != ".nomedia" {
+        // Ignorer seulement . et ..
+        if file_name == "." || file_name == ".." {
             continue;
         }
 
@@ -384,6 +384,25 @@ mod tests {
             ignored: false,
         };
         assert_eq!(e_file.size_formatted(), "15.0 Mo");
+    }
+
+    #[test]
+    fn test_list_directory_includes_hidden_files() {
+        let temp_dir = std::env::temp_dir().join("rclonedash_test_hidden");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        std::fs::write(temp_dir.join(".env"), "SECRET=123").unwrap();
+        std::fs::create_dir_all(temp_dir.join(".hidden_folder")).unwrap();
+        std::fs::write(temp_dir.join("visible.txt"), "hello").unwrap();
+
+        let entries = list_directory(&temp_dir, "", &[]).unwrap();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+
+        assert!(names.contains(&".env"), "Les fichiers cachés doivent être inclus");
+        assert!(names.contains(&".hidden_folder"), "Les dossiers cachés doivent être inclus");
+        assert!(names.contains(&"visible.txt"), "Les fichiers normaux doivent être inclus");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
 

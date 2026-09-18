@@ -241,11 +241,13 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             let help_items = [
                 ("Mouse 1", "Clicks buttons and selects in lists/panels."),
                 ("Mouse scroll", "Scrolls any scrollable list/logs under cursor."),
-                ("Esc, m", "Toggles main menu / Closes modal."),
+                ("Esc, m", "Toggles main menu / Closes active modal."),
+                ("q", "Closes active modal / In dashboard: quits app."),
                 ("o", "Shows options / settings panel."),
                 ("F1, ?, h", "Shows this help window."),
                 ("s", "Triggers bisync synchronization (confirmation)."),
                 ("d", "Runs bisync dry-run simulation (confirmation)."),
+                ("r", "Full resync (--resync) repair mode (confirmation)."),
                 ("c", "Cancels active synchronization run."),
                 ("b, p", "Opens file browser modal (explorer)."),
                 ("f, /", "In Recent files: search filter."),
@@ -256,7 +258,8 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ("Spacebar", "Pauses / resumes logs auto-scroll."),
                 ("+ , -", "Speeds up / slows down UI tick rate interval."),
                 ("Tab, Shift+Tab", "Cycles active dashboard panel focus."),
-                ("q, ctrl + c", "Quits the program."),
+                ("t", "Cycles color theme."),
+                ("ctrl + c", "Force terminates the program."),
             ];
 
             let mut lines = Vec::new();
@@ -294,7 +297,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                         .title(
                             Line::from(vec![
                                 Span::styled("┐", Style::default().fg(theme.red)),
-                                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                                 Span::styled(" fermer", Style::default().fg(theme.text_bright)),
                                 Span::styled("┌", Style::default().fg(theme.red)),
                             ])
@@ -398,7 +401,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         Span::styled("Relancer  │  ", Style::default().fg(theme.text_muted)),
         Span::styled("[↑↓/PgUp/PgDn] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
         Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("[Esc] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+        Span::styled("[Esc / q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
         Span::styled("Fermer", Style::default().fg(theme.text_muted)),
     ]);
     let footer_p = Paragraph::new(footer_line).alignment(Alignment::Center);
