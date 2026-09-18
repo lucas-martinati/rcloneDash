@@ -1887,6 +1887,10 @@ impl App {
             }
             _ => {}
         }
+
+        if self.settings_selected_idx <= 4 {
+            self.save_current_settings();
+        }
     }
 
     pub fn save_current_settings(&mut self) {

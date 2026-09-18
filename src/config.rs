@@ -114,8 +114,38 @@ pub fn save_config(cfg: &AppConfig) -> Result<(), String> {
 
     if let Some(bw) = &cfg.bwlimit {
         save_bwlimit(bw)?;
+    } else {
+        let _ = save_bwlimit("");
     }
+
+    #[cfg(not(test))]
+    {
+        update_systemd_timer_interval(&cfg.timer_interval);
+    }
+
     Ok(())
+}
+
+#[allow(dead_code)]
+pub fn update_systemd_timer_interval(interval: &str) {
+    if let Some(home) = dirs_home() {
+        let timer_path = home.join(".config/systemd/user/rclone-bisync.timer");
+        if timer_path.exists() {
+            if let Ok(content) = fs::read_to_string(&timer_path) {
+                let re = regex::Regex::new(r"(?m)^(OnUnitActiveSec|OnUnitInactiveSec)=.*$").unwrap();
+                let updated = re.replace_all(&content, format!("OnUnitInactiveSec={}", interval));
+                if updated != content {
+                    let _ = fs::write(&timer_path, updated.as_bytes());
+                    let _ = std::process::Command::new("systemctl")
+                        .args(["--user", "daemon-reload"])
+                        .output();
+                    let _ = std::process::Command::new("systemctl")
+                        .args(["--user", "restart", "rclone-bisync.timer"])
+                        .output();
+                }
+            }
+        }
+    }
 }
 
 pub fn read_bwlimit() -> Option<String> {
