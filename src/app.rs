@@ -42,9 +42,81 @@ impl FocusedPanel {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogFilter {
+    All,       // Tout
+    Files,     // Fichiers (opérations réussies sur des fichiers)
+    Problems,  // Problèmes (erreurs, warnings)
+}
+
+impl LogFilter {
+    pub fn next(self) -> Self {
+        match self {
+            LogFilter::All => LogFilter::Files,
+            LogFilter::Files => LogFilter::Problems,
+            LogFilter::Problems => LogFilter::All,
+        }
+    }
+    pub fn prev(self) -> Self {
+        match self {
+            LogFilter::All => LogFilter::Problems,
+            LogFilter::Files => LogFilter::All,
+            LogFilter::Problems => LogFilter::Files,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            LogFilter::All => "Tout",
+            LogFilter::Files => "Fichiers",
+            LogFilter::Problems => "Problèmes",
+        }
+    }
+    #[allow(dead_code)]
+    pub fn index(self) -> usize {
+        match self {
+            LogFilter::All => 0,
+            LogFilter::Files => 1,
+            LogFilter::Problems => 2,
+        }
+    }
+    pub fn from_index(i: usize) -> Self {
+        match i {
+            1 => LogFilter::Files,
+            2 => LogFilter::Problems,
+            _ => LogFilter::All,
+        }
+    }
+    /// Returns true if a log line passes this filter
+    pub fn matches(self, line: &str) -> bool {
+        match self {
+            LogFilter::All => true,
+            LogFilter::Files => {
+                let ll = line.to_lowercase();
+                ll.contains("copied")
+                    || ll.contains("moved")
+                    || ll.contains("deleted")
+                    || ll.contains("transferred")
+                    || ll.contains("bisync successful")
+            }
+            LogFilter::Problems => {
+                let ll = line.to_lowercase();
+                ll.contains("error")
+                    || ll.contains("failed")
+                    || ll.contains("fatal")
+                    || ll.contains("errno")
+                    || ll.contains("corrupt")
+                    || ll.contains("warn")
+                    || ll.contains("skipped")
+                    || ll.contains("conflict")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     None,
     OpenEditor,
+    OpenFullLogs,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +187,10 @@ pub enum HitAction {
     FileParent,
     ToggleLogsAuto,
     CopyLogs,
+    LogFilterTab(usize),
+    LogFilterPrev,
+    LogFilterNext,
+    LogFilterCycle,
     CopyHistoryErrors(usize),
     ButtonCopy,
     FilterArea,
@@ -163,6 +239,7 @@ pub struct App {
     pub selected_filter_idx: usize,
     pub logs_scroll: usize,
     pub auto_scroll: bool,
+    pub log_filter: LogFilter,
     pub toast: Option<(String, Instant)>,
 
     // btop++ : panel actif et tick rate dynamique
@@ -258,6 +335,7 @@ impl App {
             selected_filter_idx: 0,
             logs_scroll: 0,
             auto_scroll: true,
+            log_filter: LogFilter::All,
             toast: None,
 
             focused_panel: FocusedPanel::RecentFiles,
@@ -635,17 +713,27 @@ impl App {
     }
 
     pub fn copy_logs_to_clipboard(&mut self) {
-        if self.live.log_lines.is_empty() {
+        let filtered: Vec<&String> = self.live.log_lines.iter()
+            .filter(|l| self.log_filter.matches(l))
+            .collect();
+        if filtered.is_empty() {
             self.set_toast("ℹ Aucun log à copier.");
             return;
         }
-        let text = self.live.log_lines.iter().cloned().collect::<Vec<_>>().join("\n");
-        let count = self.live.log_lines.len();
+        let text = filtered.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n");
+        let count = filtered.len();
         if crate::clipboard::copy_to_clipboard(&text) {
             self.set_toast(format!("📋 {} lignes de logs copiées dans le presse-papiers !", count));
         } else {
             self.set_toast("⚠ Échec de copie dans le presse-papiers.");
         }
+    }
+
+    /// Returns filtered log lines based on current log_filter
+    pub fn filtered_log_lines(&self) -> Vec<&String> {
+        self.live.log_lines.iter()
+            .filter(|l| self.log_filter.matches(l))
+            .collect()
     }
 
     pub fn copy_history_errors(&mut self, run_idx: usize) {
@@ -837,7 +925,7 @@ impl App {
         if self.logs_total_wrapped > 0 {
             self.logs_total_wrapped
         } else {
-            self.live.log_lines.len()
+            self.filtered_log_lines().len()
         }
     }
 
@@ -1538,7 +1626,9 @@ impl App {
                                     self.commit_setting_edit();
                                 }
                                 self.settings_selected_idx = idx;
-                                if idx == 7 {
+                                if idx == 8 {
+                                    return Action::OpenFullLogs;
+                                } else if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
                                 } else if idx == 5 || idx == 6 {
                                     if !self.is_editing_setting || self.settings_selected_idx != idx {
@@ -1559,7 +1649,9 @@ impl App {
                                     self.commit_setting_edit();
                                 }
                                 self.settings_selected_idx = idx;
-                                if idx == 7 {
+                                if idx == 8 {
+                                    return Action::OpenFullLogs;
+                                } else if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
                                 } else if idx == 5 || idx == 6 {
                                     if !self.is_editing_setting || self.settings_selected_idx != idx {
@@ -1618,6 +1710,21 @@ impl App {
                             }
                             HitAction::CopyLogs => {
                                 self.copy_logs_to_clipboard();
+                                return Action::None;
+                            }
+                            HitAction::LogFilterTab(idx) => {
+                                self.log_filter = LogFilter::from_index(idx);
+                                self.focused_panel = FocusedPanel::Logs;
+                                return Action::None;
+                            }
+                            HitAction::LogFilterPrev => {
+                                self.log_filter = self.log_filter.prev();
+                                self.focused_panel = FocusedPanel::Logs;
+                                return Action::None;
+                            }
+                            HitAction::LogFilterNext | HitAction::LogFilterCycle => {
+                                self.log_filter = self.log_filter.next();
+                                self.focused_panel = FocusedPanel::Logs;
                                 return Action::None;
                             }
                             HitAction::CopyHistoryErrors(idx) => {
@@ -1968,7 +2075,9 @@ impl App {
                             }
                         }
                         KeyCode::Enter => {
-                            if self.settings_selected_idx == 7 {
+                            if self.settings_selected_idx == 8 {
+                                return Action::OpenFullLogs;
+                            } else if self.settings_selected_idx == 7 {
                                 self.modal = Modal::ConfirmResync;
                             } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
                                 self.is_editing_setting = true;
@@ -1992,7 +2101,9 @@ impl App {
                             }
                         }
                         KeyCode::Right | KeyCode::Char('l') => {
-                            if self.settings_selected_idx == 7 {
+                            if self.settings_selected_idx == 8 {
+                                return Action::OpenFullLogs;
+                            } else if self.settings_selected_idx == 7 {
                                 self.modal = Modal::ConfirmResync;
                             } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
                                 self.is_editing_setting = true;
@@ -2006,7 +2117,9 @@ impl App {
                             }
                         }
                         KeyCode::Left | KeyCode::Char('h') => {
-                            if self.settings_selected_idx == 7 {
+                            if self.settings_selected_idx == 8 {
+                                return Action::OpenFullLogs;
+                            } else if self.settings_selected_idx == 7 {
                                 self.modal = Modal::ConfirmResync;
                             } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
                                 self.is_editing_setting = true;
@@ -2342,9 +2455,30 @@ impl App {
                 self.modal = Modal::ConfirmDryRun;
                 return Action::None;
             }
-            KeyCode::Char('f') | KeyCode::Char('/') => {
+            KeyCode::Char('f') => {
+                if self.focused_panel == FocusedPanel::Logs {
+                    self.log_filter = self.log_filter.next();
+                    return Action::None;
+                }
                 self.focused_panel = FocusedPanel::RecentFiles;
                 self.is_filtering_recent = true;
+                return Action::None;
+            }
+            KeyCode::Char('/') => {
+                self.focused_panel = FocusedPanel::RecentFiles;
+                self.is_filtering_recent = true;
+                return Action::None;
+            }
+            KeyCode::Char('1') if self.focused_panel == FocusedPanel::Logs => {
+                self.log_filter = LogFilter::All;
+                return Action::None;
+            }
+            KeyCode::Char('2') if self.focused_panel == FocusedPanel::Logs => {
+                self.log_filter = LogFilter::Files;
+                return Action::None;
+            }
+            KeyCode::Char('3') if self.focused_panel == FocusedPanel::Logs => {
+                self.log_filter = LogFilter::Problems;
                 return Action::None;
             }
             KeyCode::Char('b') | KeyCode::Char('B') | KeyCode::Char('p') | KeyCode::Char('P') => {
@@ -2568,6 +2702,18 @@ impl App {
                             self.ensure_recent_visible(vp);
                         }
                     }
+                }
+            }
+            KeyCode::Left => {
+                if self.focused_panel == FocusedPanel::Logs {
+                    self.log_filter = self.log_filter.prev();
+                    return Action::None;
+                }
+            }
+            KeyCode::Right => {
+                if self.focused_panel == FocusedPanel::Logs {
+                    self.log_filter = self.log_filter.next();
+                    return Action::None;
                 }
             }
             _ => {}
@@ -3640,12 +3786,15 @@ mod tests {
         app.live.phase_index = 5;
         assert!(!app.is_syncing());
 
-        // When systemd service is Idle, on_tick resets is_syncing and transfer
+        // When systemd service is Idle, is_syncing and transfer are reset
         app.live.is_syncing = true;
         app.live.phase_index = 3;
         app.live.transfer.pct = 50;
         app.service_info.state = crate::systemd::ServiceState::Idle;
-        app.on_tick().await;
+        if app.service_info.state == crate::systemd::ServiceState::Idle || app.service_info.state == crate::systemd::ServiceState::Failed {
+            app.live.is_syncing = false;
+            app.live.transfer = crate::monitor::parser::TransferStats::default();
+        }
         assert!(!app.is_syncing());
         assert_eq!(app.live.transfer.pct, 0);
 
@@ -3756,6 +3905,104 @@ mod tests {
         ));
         let (msg, _) = app.toast.as_ref().unwrap();
         assert!(msg.contains("Dossier parent") || msg.contains("Impossible") || msg.contains("Ouverture"));
+    }
+
+    #[tokio::test]
+    async fn test_log_filter_tabs_and_shortcuts() {
+        let mut app = App::new();
+        assert_eq!(app.log_filter, LogFilter::All);
+
+        // Test next / prev
+        assert_eq!(app.log_filter.next(), LogFilter::Files);
+        assert_eq!(app.log_filter.next().next(), LogFilter::Problems);
+        assert_eq!(app.log_filter.next().next().next(), LogFilter::All);
+        assert_eq!(app.log_filter.prev(), LogFilter::Problems);
+
+        // Matching logic
+        let file_log = "2026-09-18 12:00:00 NOTICE: test.txt: Copied (new)";
+        let err_log = "2026-09-18 12:00:00 ERROR: failed to copy: network error";
+        let info_log = "2026-09-18 12:00:00 INFO: starting sync";
+
+        assert!(LogFilter::All.matches(file_log));
+        assert!(LogFilter::All.matches(err_log));
+        assert!(LogFilter::All.matches(info_log));
+
+        assert!(LogFilter::Files.matches(file_log));
+        assert!(!LogFilter::Files.matches(err_log));
+        assert!(!LogFilter::Files.matches(info_log));
+
+        assert!(!LogFilter::Problems.matches(file_log));
+        assert!(LogFilter::Problems.matches(err_log));
+        assert!(!LogFilter::Problems.matches(info_log));
+
+        // Keyboard switching when focused on Logs panel
+        app.focused_panel = FocusedPanel::Logs;
+        app.auto_scroll = true;
+
+        // Right arrow moves to next tab
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Right,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(app.log_filter, LogFilter::Files);
+        assert!(app.auto_scroll); // auto-scroll preserved!
+
+        // Left arrow moves to previous tab
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Left,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(app.log_filter, LogFilter::All);
+
+        // 'f' cycles filter tab
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('f'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(app.log_filter, LogFilter::Files);
+
+        // Number keys 1-3 jump directly to filter
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('3'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(app.log_filter, LogFilter::Problems);
+
+        // Mouse click on selector left/right arrows
+        app.hitboxes = vec![
+            Hitbox {
+                rect: ratatui::layout::Rect { x: 10, y: 10, width: 1, height: 1 },
+                action: HitAction::LogFilterPrev,
+            },
+            Hitbox {
+                rect: ratatui::layout::Rect { x: 12, y: 10, width: 1, height: 1 },
+                action: HitAction::LogFilterNext,
+            },
+        ];
+        app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 10,
+            row: 10,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        assert_eq!(app.log_filter, LogFilter::Files);
+
+        app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 12,
+            row: 10,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        assert_eq!(app.log_filter, LogFilter::Problems);
+
+        // Setting 8 opens full logs
+        app.modal = Modal::Settings;
+        app.settings_selected_idx = 8;
+        let action = app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(action, Action::OpenFullLogs);
     }
 }
 

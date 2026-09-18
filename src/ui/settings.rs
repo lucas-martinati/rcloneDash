@@ -9,13 +9,13 @@ use ratatui::{
 use crate::app::{App, HitAction, Hitbox};
 use crate::ui::theme::ThemePalette;
 
-pub const SETTINGS_ITEMS_COUNT: usize = 8;
+pub const SETTINGS_ITEMS_COUNT: usize = 9;
 
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let screen = f.area();
     let is_wide = screen.width >= 88;
     let logo_h: u16 = if is_wide { 6 } else { 5 };
-    let show_logo = screen.height >= 30;
+    let show_logo = screen.height >= 32;
     let box_w = if screen.width >= 96 {
         88.min(screen.width.saturating_sub(4))
     } else if screen.width >= 86 {
@@ -24,9 +24,9 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         76.min(screen.width.saturating_sub(2))
     };
     let box_h = if show_logo {
-        21.min(screen.height.saturating_sub(logo_h + 3))
+        23.min(screen.height.saturating_sub(logo_h + 3))
     } else {
-        21.min(screen.height.saturating_sub(2))
+        23.min(screen.height.saturating_sub(2))
     };
 
     let total_h = if show_logo { logo_h + 1 + box_h } else { box_h };
@@ -67,6 +67,11 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         (
             Span::styled("Esc annuler", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("↵ valider", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        )
+    } else if app.settings_selected_idx == 8 {
+        (
+            Span::styled("↵ ouvrir", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ journal complet", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
         )
     } else if app.settings_selected_idx == 7 {
         (
@@ -190,6 +195,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         ("Dossier local", app.config.local_dir.clone()),
         ("Remote distant", app.config.remote.clone()),
         ("Resynchronisation complète", "Lancer (--resync)".to_string()),
+        ("Journal complet rclone", "Ouvrir les logs (↵)".to_string()),
     ];
 
     // Rendu de la colonne gauche
@@ -239,7 +245,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 Line::from(vec![
                     Span::styled(format!("[{}]", edit_centered), Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
                 ])
-            } else if i == 7 {
+            } else if i == 7 || i == 8 {
                 let val_centered = format!("{:^width$}", val, width = inner_w);
                 Line::from(vec![
                     Span::styled(format!("↵ {} ↵", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
@@ -323,6 +329,13 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             "Resynchronisation complète (--resync).",
             format!(
                 "En cas d'erreur critique de bisync ou de base de synchronisation locale/cloud corrompue, cette action reconstruit les index de listing en comparant le dossier local et Google Drive (en conservant les versions les plus récentes : --resync-mode newer).\n\nAppuyez sur [{}] pour ouvrir le dialogue de confirmation.",
+                k_enter
+            ),
+        ),
+        8 => (
+            "Journal des logs complet (rclone-bisync).",
+            format!(
+                "Ouvre l'intégralité du journal de bord rclone-bisync (généré par systemd/journalctl) dans votre visualiseur externe (less ou éditeur configuré).\n\nPermet de naviguer dans l'historique complet, d'effectuer des recherches de texte et d'inspecter les moindres détails des transferts passés.\n\nAppuyez sur [{}] pour ouvrir le fichier de logs.",
                 k_enter
             ),
         ),

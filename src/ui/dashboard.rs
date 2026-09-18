@@ -850,9 +850,22 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let max_text_width = (area.width.saturating_sub(3) as usize).max(20);
     let mut all_wrapped: Vec<Line> = Vec::new();
+
     for line in &app.live.log_lines {
-        all_wrapped.extend(wrap_and_colorize_log_line(line, max_text_width, theme));
+        if app.log_filter.matches(line) {
+            all_wrapped.extend(wrap_and_colorize_log_line(line, max_text_width, theme));
+        }
     }
+
+    if all_wrapped.is_empty() {
+        let msg = match app.log_filter {
+            crate::app::LogFilter::All => " Les logs sont vides pour le moment.",
+            crate::app::LogFilter::Files => " Aucun transfert de fichier dans les logs récents.",
+            crate::app::LogFilter::Problems => " Aucun problème (erreur/avertissement) détecté.",
+        };
+        all_wrapped.push(Line::from(vec![Span::styled(msg, Style::default().fg(theme.text_muted))]));
+    }
+
     let total_lines = all_wrapped.len();
 
     let visible_height = area.height.saturating_sub(2) as usize;
@@ -886,27 +899,93 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         Span::styled(format!("─ {}/{} ─", cur_line, total_lines), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
 
+    let mut title_spans: Vec<Span> = Vec::new();
+    title_spans.push(Span::styled("┐", Style::default().fg(border_color)));
+    title_spans.push(Span::styled("logs", Style::default().fg(border_color).add_modifier(Modifier::BOLD)));
+    title_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
+
+    // area.x + 1 is start of block title inside border.
+    // "┐" (1) + "logs" (4) + "┌┐" (2) = 7 chars, so selector starts at area.x + 1 + 7 = area.x + 8
+    let mut cur_hit_x = area.x + 8;
+
+    // Left arrow button: ←
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: cur_hit_x,
+            y: area.y,
+            width: 1,
+            height: 1,
+        },
+        action: HitAction::LogFilterPrev,
+    });
+    title_spans.push(Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    cur_hit_x += 1;
+
+    // Filter label: e.g. " Tout " / " Fichiers " / " Problèmes "
+    let filter_text = format!(" {} ", app.log_filter.label());
+    let label_len = filter_text.chars().count() as u16;
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: cur_hit_x,
+            y: area.y,
+            width: label_len,
+            height: 1,
+        },
+        action: HitAction::LogFilterCycle,
+    });
+    title_spans.push(Span::styled(
+        filter_text,
+        Style::default().fg(if is_focused { theme.green } else { Color::White }).add_modifier(Modifier::BOLD),
+    ));
+    cur_hit_x += label_len;
+
+    // Right arrow button: →
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: cur_hit_x,
+            y: area.y,
+            width: 1,
+            height: 1,
+        },
+        action: HitAction::LogFilterNext,
+    });
+    title_spans.push(Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    cur_hit_x += 1;
+
+    title_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
+    cur_hit_x += 2;
+
+    let auto_text = if app.auto_scroll { "pause " } else { "auto " };
+    let space_glyph = "␣";
+    let status_text = if app.auto_scroll { " [ON]" } else { " [OFF]" };
+    let auto_width = (auto_text.chars().count() + 1 + status_text.chars().count()) as u16;
+
+    title_spans.push(Span::styled(auto_text, Style::default().fg(theme.text_bright)));
+    title_spans.push(Span::styled(space_glyph, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    title_spans.push(Span::styled(
+        status_text,
+        Style::default().fg(if app.auto_scroll { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
+    ));
+    title_spans.push(Span::styled("┌", Style::default().fg(border_color)));
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: cur_hit_x,
+            y: area.y,
+            width: auto_width,
+            height: 1,
+        },
+        action: HitAction::ToggleLogsAuto,
+    });
+
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
-        .title(Line::from(vec![
-            Span::styled("┐", Style::default().fg(border_color)),
-            Span::styled("logs", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
-            Span::styled("┌┐", Style::default().fg(border_color)),
-            Span::styled(if app.auto_scroll { "pause " } else { "auto " }, Style::default().fg(theme.text_bright)),
-            Span::styled("␣", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled(if app.auto_scroll { " [ON]" } else { " [OFF]" }, Style::default().fg(if app.auto_scroll { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD)),
-            Span::styled("┌", Style::default().fg(border_color)),
-        ]))
+        .title(Line::from(title_spans))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
-
-    hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 7, y: area.y, width: 14, height: 1 },
-        action: HitAction::ToggleLogsAuto,
-    });
 
     let skip_count = if app.auto_scroll {
         max_scroll
@@ -1264,10 +1343,12 @@ pub fn count_wrapped_line(line: &str, max_width: usize) -> usize {
     }
 }
 
-pub fn count_wrapped_log_lines(lines: &std::collections::VecDeque<String>, max_width: usize) -> usize {
+pub fn count_wrapped_log_lines(lines: &std::collections::VecDeque<String>, filter: crate::app::LogFilter, max_width: usize) -> usize {
     let mut total = 0;
     for l in lines {
-        total += count_wrapped_line(l, max_width);
+        if filter.matches(l) {
+            total += count_wrapped_line(l, max_width);
+        }
     }
     total
 }

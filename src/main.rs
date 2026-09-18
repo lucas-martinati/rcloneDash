@@ -97,6 +97,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     app.filters = config::read_filters();
                                     app.reload_files();
                                     app.set_toast("✔ Fichier gdrive-filters.txt rechargé !");
+                                } else if action == app::Action::OpenFullLogs {
+                                    open_full_logs(&mut terminal, &mut app)?;
                                 }
                                 terminal.draw(|f| ui::render(f, &mut app))?;
                             } else if key.kind == crossterm::event::KeyEventKind::Release {
@@ -107,6 +109,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let action = app.handle_mouse(mouse);
                             if action == app::Action::OpenEditor {
                                 // Cas où un clic déclencherait l'éditeur
+                            } else if action == app::Action::OpenFullLogs {
+                                open_full_logs(&mut terminal, &mut app)?;
                             }
                             terminal.draw(|f| ui::render(f, &mut app))?;
                         }
@@ -126,5 +130,59 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
+    Ok(())
+}
+
+fn open_full_logs(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    app: &mut app::App,
+) -> Result<(), Box<dyn std::error::Error>> {
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        PopKeyboardEnhancementFlags,
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
+    terminal.show_cursor()?;
+
+    let log_path = "/tmp/rclone-bisync-full.log";
+    // Récupérer les logs complets via journalctl si possible
+    let output = std::process::Command::new("journalctl")
+        .args(["--user", "-u", "rclone-bisync", "--no-pager", "-n", "10000"])
+        .output();
+    if let Ok(out) = output {
+        if !out.stdout.is_empty() {
+            let _ = std::fs::write(log_path, &out.stdout);
+        } else {
+            let text = app.live.log_lines.iter().cloned().collect::<Vec<_>>().join("\n");
+            let _ = std::fs::write(log_path, text);
+        }
+    } else {
+        let text = app.live.log_lines.iter().cloned().collect::<Vec<_>>().join("\n");
+        let _ = std::fs::write(log_path, text);
+    }
+
+    let pager = std::env::var("PAGER")
+        .or_else(|_| std::env::var("EDITOR"))
+        .unwrap_or_else(|_| "less".to_string());
+    if pager == "less" {
+        let _ = std::process::Command::new("less").arg("-R").arg(log_path).status();
+    } else {
+        let _ = std::process::Command::new(&pager).arg(log_path).status();
+    }
+
+    enable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        EnterAlternateScreen,
+        EnableMouseCapture,
+        PushKeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::REPORT_EVENT_TYPES | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        )
+    )?;
+    terminal.clear()?;
+
+    app.set_toast("✔ Consultation des logs terminée");
     Ok(())
 }
