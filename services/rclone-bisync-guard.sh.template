@@ -54,7 +54,9 @@ run_bisync() {
             fi
         done
     fi
-    /usr/bin/rclone bisync "$REMOTE" "$SYNC_DIR" \
+    local rclone_bin
+    rclone_bin="$(command -v rclone 2>/dev/null || echo /usr/bin/rclone)"
+    "$rclone_bin" bisync "$REMOTE" "$SYNC_DIR" \
         --config "$RCLONE_CONF/rclone.conf" \
         --filter-from "$RCLONE_CONF/gdrive-filters.txt" \
         --drive-skip-shortcuts \

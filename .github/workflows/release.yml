@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Prepare release archive
+        id: package
+        run: |
+          VERSION="${GITHUB_REF_NAME:-v1.0.0}"
+          ARCH="linux-x86_64"
+          PACKAGE_NAME="rclonedash-${VERSION}-${ARCH}"
+          
+          mkdir -p "${PACKAGE_NAME}"
+          cp target/release/rclonedash "${PACKAGE_NAME}/"
+          cp install.sh "${PACKAGE_NAME}/"
+          cp uninstall.sh "${PACKAGE_NAME}/"
+          cp -r services "${PACKAGE_NAME}/"
+          cp README.md "${PACKAGE_NAME}/"
+          cp RELEASED.md "${PACKAGE_NAME}/"
+          
+          tar -czvf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+          sha256sum "${PACKAGE_NAME}.tar.gz" > "${PACKAGE_NAME}.tar.gz.sha256"
+
+          echo "archive=${PACKAGE_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "checksum=${PACKAGE_NAME}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "RcloneDash ${{ steps.package.outputs.version }}"
+          body_path: RELEASED.md
+          draft: false
+          prerelease: false
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

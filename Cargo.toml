@@ -1,6 +1,6 @@
 [package]
 name = "rclonedash"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["Lucas Martinati"]
 description = "Terminal User Interface (TUI) élégante et réactive pour surveiller rclone bisync"

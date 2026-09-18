@@ -82,30 +82,35 @@ Construit avec **[Ratatui](https://ratatui.rs/)**, **[Crossterm](https://github.
 
 ---
 
-### 🚀 Compilation et Lancement
+### 🚀 Installation et Démarrage
 
-#### Prérequis
-- `cargo` et `rustc` (Rust 1.80+) :
-  ```bash
-  sudo apt install cargo rustc
-  # ou via rustup : curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  ```
+#### Méthode 1 : Installation automatique (Recommandée)
+Que vous utilisiez une archive pré-compilée issue des **Releases GitHub** ou le dépôt cloné, lancez simplement le script d'installation :
 
-#### Lancer directement en mode développement
+```bash
+./install.sh
+```
+
+Ce script effectue automatiquement et sans privilèges root (`sudo` interdit) :
+1. L'installation du binaire `rclonedash` dans votre `~/.local/bin/`
+2. La configuration du script de garde intelligent dans `~/.local/share/RcloneDash/`
+3. La mise en place des filtres d'exclusion et de la configuration dans `~/.config/rclone/`
+4. L'enregistrement et l'activation du timer systemd utilisateur (`rclone-bisync.timer`)
+
+Pour désinstaller proprement à tout moment :
+```bash
+./uninstall.sh
+```
+
+#### Méthode 2 : Lancement en mode développement
 ```bash
 cargo run
 ```
 
-#### Compiler et installer le binaire release
+#### Méthode 3 : Compilation manuelle
 ```bash
-# Compilation optimisée
 cargo build --release
-
-# Lancement
 ./target/release/rclonedash
-
-# Optionnel : installer dans votre PATH utilisateur (~/.local/bin)
-install -m 755 target/release/rclonedash ~/.local/bin/
 ```
 
 ---
