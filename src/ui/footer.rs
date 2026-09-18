@@ -35,6 +35,7 @@ pub fn render_footer(
         CmdItem { prefix: "", key: "d", suffix: "ry-run", action: HitAction::ButtonDryRun },
         CmdItem { prefix: "", key: "b", suffix: "rowse", action: HitAction::ButtonFiles },
         CmdItem { prefix: "filtr", key: "e", suffix: "s", action: HitAction::ButtonFilters },
+        CmdItem { prefix: "cop", key: "y", suffix: "", action: HitAction::ButtonCopy },
         CmdItem { prefix: "", key: "Tab", suffix: " panel", action: HitAction::ButtonPanel },
     ];
 

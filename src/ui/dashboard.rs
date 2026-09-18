@@ -798,7 +798,13 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let is_focused = app.focused_panel == FocusedPanel::Logs;
     let border_color = if is_focused { theme.border_focus } else { theme.border_logs };
-    let total_lines = app.live.log_lines.len();
+
+    let max_text_width = (area.width.saturating_sub(3) as usize).max(20);
+    let mut all_wrapped: Vec<Line> = Vec::new();
+    for line in &app.live.log_lines {
+        all_wrapped.extend(wrap_and_colorize_log_line(line, max_text_width, theme));
+    }
+    let total_lines = all_wrapped.len();
 
     let visible_height = area.height.saturating_sub(2) as usize;
     let max_scroll = total_lines.saturating_sub(visible_height);
@@ -843,14 +849,22 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
             Span::styled(if app.auto_scroll { "pause " } else { "auto " }, Style::default().fg(theme.text_bright)),
             Span::styled("␣", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled(if app.auto_scroll { " [ON]" } else { " [OFF]" }, Style::default().fg(if app.auto_scroll { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD)),
+            Span::styled("┌┐", Style::default().fg(border_color)),
+            Span::styled("copier ", Style::default().fg(theme.text_bright)),
+            Span::styled("y", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("┌", Style::default().fg(border_color)),
         ]))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
 
     hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 8, y: area.y, width: 14, height: 1 },
+        rect: Rect { x: area.x + 7, y: area.y, width: 14, height: 1 },
         action: HitAction::ToggleLogsAuto,
+    });
+
+    hitboxes.push(Hitbox {
+        rect: Rect { x: area.x + 23, y: area.y, width: 9, height: 1 },
+        action: HitAction::CopyLogs,
     });
 
     let skip_count = if app.auto_scroll {
@@ -859,13 +873,10 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         max_scroll.saturating_sub(effective_scroll)
     };
 
-    let lines: Vec<Line> = app
-        .live
-        .log_lines
-        .iter()
+    let lines: Vec<Line> = all_wrapped
+        .into_iter()
         .skip(skip_count)
         .take(visible_height)
-        .map(|line| colorize_log_line(line, theme))
         .collect();
 
     let p = Paragraph::new(lines).block(outer_block);
@@ -1115,6 +1126,155 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     crate::ui::render_btop_scrollbar(f, area, files_to_display.len(), offset, max_show, theme);
 }
 
+/// Découpe un texte pour éviter tout crop horizontal dans le terminal.
+/// Conserve les mots si possible, et découpe proprement les mots trop longs sans panique UTF-8.
+pub fn wrap_text(text: &str, first_max: usize, cont_max: usize) -> Vec<String> {
+    if text.is_empty() {
+        return vec![String::new()];
+    }
+
+    let first_limit = first_max.max(10);
+    let cont_limit = cont_max.max(10);
+
+    let mut lines = Vec::new();
+    let mut cur_line = String::new();
+    let mut cur_limit = first_limit;
+
+    for word in text.split(' ') {
+        if word.is_empty() {
+            if !cur_line.is_empty() && cur_line.chars().count() < cur_limit {
+                cur_line.push(' ');
+            }
+            continue;
+        }
+
+        let cur_len = cur_line.chars().count();
+        let word_len = word.chars().count();
+        let needed = if cur_len == 0 { word_len } else { cur_len + 1 + word_len };
+
+        if needed <= cur_limit {
+            if cur_len > 0 {
+                cur_line.push(' ');
+            }
+            cur_line.push_str(word);
+        } else if word_len > cur_limit {
+            if cur_len > 0 {
+                lines.push(cur_line);
+                cur_line = String::new();
+                cur_limit = cont_limit;
+            }
+            let mut rem = word;
+            while !rem.is_empty() {
+                let count = rem.chars().count();
+                if count <= cur_limit {
+                    cur_line.push_str(rem);
+                    break;
+                } else {
+                    let split_idx = rem.char_indices().nth(cur_limit).map(|(i, _)| i).unwrap_or(rem.len());
+                    lines.push(rem[..split_idx].to_string());
+                    rem = &rem[split_idx..];
+                    cur_limit = cont_limit;
+                }
+            }
+        } else {
+            if !cur_line.is_empty() {
+                lines.push(cur_line);
+            }
+            cur_line = word.to_string();
+            cur_limit = cont_limit;
+        }
+    }
+
+    if !cur_line.is_empty() || lines.is_empty() {
+        lines.push(cur_line);
+    }
+
+    lines
+}
+
+pub fn count_wrapped_line(line: &str, max_width: usize) -> usize {
+    if line.len() > 25 && line.chars().nth(4) == Some('-') && line.chars().nth(7) == Some('-') {
+        let rest = &line[25..];
+        let rest_first = max_width.saturating_sub(25);
+        let cont = max_width.saturating_sub(4);
+        wrap_text(rest, rest_first, cont).len()
+    } else {
+        let cont = max_width.saturating_sub(4);
+        wrap_text(line, max_width, cont).len()
+    }
+}
+
+pub fn count_wrapped_log_lines(lines: &std::collections::VecDeque<String>, max_width: usize) -> usize {
+    let mut total = 0;
+    for l in lines {
+        total += count_wrapped_line(l, max_width);
+    }
+    total
+}
+
+pub fn wrap_and_colorize_log_line(line: &str, max_width: usize, theme: &ThemePalette) -> Vec<Line<'static>> {
+    let ll = line.to_lowercase();
+
+    let (prefix_color, is_bold) = if ll.contains("error") || ll.contains("failed") || ll.contains("critical") {
+        (theme.red, true)
+    } else if ll.contains("notice") || ll.contains("warning") || ll.contains("warn") {
+        (theme.yellow, false)
+    } else if ll.contains("bisync successful") || ll.contains("copied (new)") {
+        (theme.green, true)
+    } else if ll.contains("transferred:") || ll.contains("checks:") {
+        (theme.cyan, false)
+    } else {
+        (theme.text_bright, false)
+    };
+
+    let mut style = Style::default().fg(prefix_color);
+    if is_bold {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+
+    if line.len() > 25 && line.chars().nth(4) == Some('-') && line.chars().nth(7) == Some('-') {
+        let ts = &line[..25];
+        let rest = &line[25..];
+        let rest_first_limit = max_width.saturating_sub(25);
+        let cont_limit = max_width.saturating_sub(4);
+
+        let wrapped = wrap_text(rest, rest_first_limit, cont_limit);
+        let mut lines = Vec::with_capacity(wrapped.len());
+
+        for (i, part) in wrapped.into_iter().enumerate() {
+            if i == 0 {
+                lines.push(Line::from(vec![
+                    Span::styled(ts.to_string(), Style::default().fg(theme.text_muted)),
+                    Span::styled(part, style),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::styled("  ↳ ".to_string(), Style::default().fg(theme.text_muted)),
+                    Span::styled(part, style),
+                ]));
+            }
+        }
+        lines
+    } else {
+        let cont_limit = max_width.saturating_sub(4);
+        let wrapped = wrap_text(line, max_width, cont_limit);
+        let mut lines = Vec::with_capacity(wrapped.len());
+
+        for (i, part) in wrapped.into_iter().enumerate() {
+            if i == 0 {
+                lines.push(Line::from(vec![Span::styled(part, style)]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::styled("  ↳ ".to_string(), Style::default().fg(theme.text_muted)),
+                    Span::styled(part, style),
+                ]));
+            }
+        }
+        lines
+    }
+}
+
+#[allow(dead_code)]
 fn colorize_log_line<'a>(line: &'a str, theme: &ThemePalette) -> Line<'a> {
     let ll = line.to_lowercase();
 

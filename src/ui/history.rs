@@ -139,12 +139,30 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
 
     // Erreurs
     if !run.errors.is_empty() {
-        all_lines.push((Line::from(Span::styled(
-            format!(" 🚨 ERREURS DÉTECTÉES ({}) :", run.errors.len()),
-            Style::default().fg(theme.red).add_modifier(Modifier::BOLD),
-        )), None));
+        all_lines.push((Line::from(vec![
+            Span::styled(format!(" 🚨 ERREURS DÉTECTÉES ({}) : ", run.errors.len()), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled("[y / c : Copier erreurs]", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        ]), None));
+
+        let max_err_width = (area.width.saturating_sub(6) as usize).max(30);
+        let first_limit = max_err_width.saturating_sub(5);
+        let cont_limit = max_err_width.saturating_sub(7);
+
         for err in &run.errors {
-            all_lines.push((Line::from(Span::styled(format!("   • {}", err), Style::default().fg(theme.red))), None));
+            let wrapped = crate::ui::dashboard::wrap_text(err, first_limit, cont_limit);
+            for (i, part) in wrapped.into_iter().enumerate() {
+                if i == 0 {
+                    all_lines.push((Line::from(vec![
+                        Span::styled("   • ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                        Span::styled(part, Style::default().fg(theme.red)),
+                    ]), None));
+                } else {
+                    all_lines.push((Line::from(vec![
+                        Span::styled("     ↳ ", Style::default().fg(theme.text_muted)),
+                        Span::styled(part, Style::default().fg(theme.red)),
+                    ]), None));
+                }
+            }
         }
         all_lines.push((Line::from(Span::styled("─".repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
     }
@@ -219,6 +237,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         .title(Line::from(vec![
             Span::styled("┌🔍 détails run", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
             Span::styled(format!(": #{} ({} {})┐", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
+            Span::styled("┌copier: y / c┐", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
         ]))
         .title_bottom(
@@ -277,18 +296,36 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let p = Paragraph::new(display_lines);
     f.render_widget(p, layout[0]);
 
+    let copy_label = if !run.errors.is_empty() { "Copier erreurs" } else { "Copier détails" };
     let footer_line = Line::from(vec![
         Span::styled("[Enter] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
         Span::styled("Ouvrir fichier  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("[Ctrl+Enter / d] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+        Span::styled("[d] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
         Span::styled("Dossier parent  │  ", Style::default().fg(theme.text_muted)),
+        Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{}  │  ", copy_label), Style::default().fg(theme.text_bright)),
         Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Sélectionner  │  ", Style::default().fg(theme.text_muted)),
+        Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
         Span::styled("[Esc] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
         Span::styled("Fermer", Style::default().fg(theme.text_muted)),
     ]);
     let footer_p = Paragraph::new(footer_line).alignment(ratatui::layout::Alignment::Center);
     f.render_widget(footer_p, layout[1]);
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x + 18,
+            y: area.y,
+            width: 16,
+            height: 1,
+        },
+        action: HitAction::CopyHistoryErrors(run_idx),
+    });
+
+    hitboxes.push(Hitbox {
+        rect: layout[1],
+        action: HitAction::CopyHistoryErrors(run_idx),
+    });
 
     crate::ui::render_btop_scrollbar(f, area, total_lines, scroll, visible_height, theme);
 }

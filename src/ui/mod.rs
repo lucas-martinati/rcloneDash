@@ -86,6 +86,8 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let hist_table_height = (mid_area.height.saturating_sub(2 + graph_height)).saturating_sub(2) as usize;
     app.history_viewport_height = hist_table_height.max(2);
     app.logs_viewport_height = mid_area.height.saturating_sub(2) as usize;
+    let logs_width = ((mid_area.width / 2).saturating_sub(3) as usize).max(20);
+    app.logs_total_wrapped = dashboard::count_wrapped_log_lines(&app.live.log_lines, logs_width);
 
     let recent_table_height = bot_area.height.saturating_sub(3) as usize;
     app.recent_viewport_height = recent_table_height.max(1);

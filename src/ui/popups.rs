@@ -256,6 +256,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ("Enter", "Opens selected file / Validates actions."),
                 ("Ctrl+Enter", "Opens containing folder in system file manager (xdg)."),
                 ("Spacebar", "Pauses / resumes logs auto-scroll."),
+                ("y", "Copies focused panel (logs, history errors, or file)."),
                 ("+ , -", "Speeds up / slows down UI tick rate interval."),
                 ("Tab, Shift+Tab", "Cycles active dashboard panel focus."),
                 ("t", "Cycles color theme."),

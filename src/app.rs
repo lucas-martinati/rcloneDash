@@ -103,6 +103,9 @@ pub enum HitAction {
     FileOpen(usize),
     FileParent,
     ToggleLogsAuto,
+    CopyLogs,
+    CopyHistoryErrors(usize),
+    ButtonCopy,
     FilterArea,
     FilterRow(usize),
 }
@@ -167,6 +170,7 @@ pub struct App {
     pub recent_scroll_offset: usize,
     pub recent_viewport_height: usize,
     pub logs_viewport_height: usize,
+    pub logs_total_wrapped: usize,
 
     // Paramètres
     pub settings_selected_idx: usize,
@@ -257,6 +261,7 @@ impl App {
             recent_scroll_offset: 0,
             recent_viewport_height: 6,
             logs_viewport_height: 10,
+            logs_total_wrapped: 0,
 
             settings_selected_idx: 0,
             is_editing_setting: false,
@@ -598,6 +603,68 @@ impl App {
         self.toast = Some((message.into(), Instant::now()));
     }
 
+    pub fn copy_logs_to_clipboard(&mut self) {
+        if self.live.log_lines.is_empty() {
+            self.set_toast("ℹ Aucun log à copier.");
+            return;
+        }
+        let text = self.live.log_lines.iter().cloned().collect::<Vec<_>>().join("\n");
+        let count = self.live.log_lines.len();
+        if crate::clipboard::copy_to_clipboard(&text) {
+            self.set_toast(format!("📋 {} lignes de logs copiées dans le presse-papiers !", count));
+        } else {
+            self.set_toast("⚠ Échec de copie dans le presse-papiers.");
+        }
+    }
+
+    pub fn copy_history_errors(&mut self, run_idx: usize) {
+        if let Some(run) = self.past_runs.get(run_idx) {
+            if !run.errors.is_empty() {
+                let text = format!(
+                    "Run #{} ({} {}) - {} erreurs détectées :\n{}",
+                    run.id,
+                    run.date,
+                    run.time,
+                    run.errors.len(),
+                    run.errors.iter().map(|e| format!("• {}", e)).collect::<Vec<_>>().join("\n")
+                );
+                if crate::clipboard::copy_to_clipboard(&text) {
+                    self.set_toast(format!("📋 {} erreur(s) du run #{} copiée(s) !", run.errors.len(), run.id));
+                } else {
+                    self.set_toast("⚠ Échec de copie dans le presse-papiers.");
+                }
+            } else {
+                let text = format!(
+                    "Run #{} ({} {}) - Statut : {:?} (Durée : {})\nFichiers copiés : {}\nFichiers modifiés : {}\nFichiers supprimés : {}",
+                    run.id,
+                    run.date,
+                    run.time,
+                    run.status,
+                    run.duration,
+                    run.files_copied.len(),
+                    run.files_modified.len(),
+                    run.files_deleted.len()
+                );
+                if crate::clipboard::copy_to_clipboard(&text) {
+                    self.set_toast(format!("📋 Détails du run #{} copiés !", run.id));
+                } else {
+                    self.set_toast("⚠ Échec de copie dans le presse-papiers.");
+                }
+            }
+        }
+    }
+
+    pub fn copy_selected_recent_file(&mut self) {
+        if let Some(idx) = self.recent_selected_idx {
+            let list = self.get_recent_files_list();
+            if let Some(path) = list.get(idx) {
+                if crate::clipboard::copy_to_clipboard(path) {
+                    self.set_toast(format!("📋 Chemin copié : {}", path));
+                }
+            }
+        }
+    }
+
     pub fn local_disk_stats(&self) -> (f64, f64, f64, f64) {
         systemd::get_disk_usage(&self.config.local_dir)
     }
@@ -732,6 +799,14 @@ impl App {
         let max_scroll = total_lines.saturating_sub(visible_height);
         if self.logs_scroll > max_scroll {
             self.logs_scroll = max_scroll;
+        }
+    }
+
+    pub fn total_log_lines(&self) -> usize {
+        if self.logs_total_wrapped > 0 {
+            self.logs_total_wrapped
+        } else {
+            self.live.log_lines.len()
         }
     }
 
@@ -976,7 +1051,7 @@ impl App {
                             HitAction::LogsArea => {
                                 self.focused_panel = FocusedPanel::Logs;
                                 let visible_height = self.logs_viewport_height.max(3);
-                                let max_scroll = self.live.log_lines.len().saturating_sub(visible_height);
+                                let max_scroll = self.total_log_lines().saturating_sub(visible_height);
                                 if max_scroll > 0 && self.logs_scroll < max_scroll {
                                     self.auto_scroll = false;
                                     self.logs_scroll += 1;
@@ -1034,7 +1109,7 @@ impl App {
                     return Action::None;
                 }
                 self.auto_scroll = false;
-                let max_scroll = self.live.log_lines.len().saturating_sub(self.logs_viewport_height.max(3));
+                let max_scroll = self.total_log_lines().saturating_sub(self.logs_viewport_height.max(3));
                 self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
             }
             MouseEventKind::Down(MouseButton::Left) => {
@@ -1267,6 +1342,29 @@ impl App {
                                 return Action::None;
                             }
                             HitAction::FilterArea => {
+                                return Action::None;
+                            }
+                            HitAction::CopyLogs => {
+                                self.copy_logs_to_clipboard();
+                                return Action::None;
+                            }
+                            HitAction::CopyHistoryErrors(idx) => {
+                                self.copy_history_errors(idx);
+                                return Action::None;
+                            }
+                            HitAction::ButtonCopy => {
+                                match self.focused_panel {
+                                    FocusedPanel::Logs => self.copy_logs_to_clipboard(),
+                                    FocusedPanel::History => {
+                                        if let Some(sel) = self.selected_run_idx {
+                                            let past_idx = if self.live.is_syncing { sel.saturating_sub(1) } else { sel };
+                                            self.copy_history_errors(past_idx);
+                                        } else {
+                                            self.copy_logs_to_clipboard();
+                                        }
+                                    }
+                                    FocusedPanel::RecentFiles => self.copy_selected_recent_file(),
+                                }
                                 return Action::None;
                             }
                         }
@@ -1865,6 +1963,9 @@ impl App {
                         KeyCode::Char('o') => {
                             self.modal = Modal::Settings;
                         }
+                        KeyCode::Char('y') | KeyCode::Char('c') => {
+                            self.copy_history_errors(run_idx_val);
+                        }
                         _ => {}
                     }
                 }
@@ -1976,6 +2077,25 @@ impl App {
                 }
                 return Action::None;
             }
+            KeyCode::Char('y') => {
+                match self.focused_panel {
+                    FocusedPanel::Logs => {
+                        self.copy_logs_to_clipboard();
+                    }
+                    FocusedPanel::History => {
+                        if let Some(sel) = self.selected_run_idx {
+                            let past_idx = if self.live.is_syncing { sel.saturating_sub(1) } else { sel };
+                            self.copy_history_errors(past_idx);
+                        } else {
+                            self.set_toast("ℹ Aucun run sélectionné dans l'historique.");
+                        }
+                    }
+                    FocusedPanel::RecentFiles => {
+                        self.copy_selected_recent_file();
+                    }
+                }
+                return Action::None;
+            }
             KeyCode::Char(' ') => {
                 self.auto_scroll = !self.auto_scroll;
                 if self.auto_scroll {
@@ -2014,7 +2134,7 @@ impl App {
                     }
                     FocusedPanel::Logs => {
                         self.auto_scroll = false;
-                        let max_scroll = self.live.log_lines.len().saturating_sub(self.logs_viewport_height.max(3));
+                        let max_scroll = self.total_log_lines().saturating_sub(self.logs_viewport_height.max(3));
                         self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
                     }
                     FocusedPanel::RecentFiles => {
@@ -2054,7 +2174,7 @@ impl App {
                     }
                     FocusedPanel::Logs => {
                         self.auto_scroll = false;
-                        let max_scroll = self.live.log_lines.len().saturating_sub(self.logs_viewport_height.max(3));
+                        let max_scroll = self.total_log_lines().saturating_sub(self.logs_viewport_height.max(3));
                         self.logs_scroll = (self.logs_scroll + 10).min(max_scroll);
                     }
                     FocusedPanel::RecentFiles => {
@@ -2104,7 +2224,7 @@ impl App {
                     }
                     FocusedPanel::Logs => {
                         self.auto_scroll = false;
-                        let max_scroll = self.live.log_lines.len().saturating_sub(self.logs_viewport_height.max(3));
+                        let max_scroll = self.total_log_lines().saturating_sub(self.logs_viewport_height.max(3));
                         self.logs_scroll = max_scroll;
                     }
                     FocusedPanel::RecentFiles => {
@@ -3040,6 +3160,88 @@ mod tests {
                 vp
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_wrap_text_no_crop() {
+        let long_line = "2026-09-18 13:40:12 ERROR : Failed to copy /home/user/very/long/path/to/my/awesome/document_with_special_data.pdf: corrupted file size mismatch 1243 vs 1255";
+        let wrapped = crate::ui::dashboard::wrap_text(long_line, 50, 45);
+        assert!(wrapped.len() >= 3);
+        for (i, line) in wrapped.iter().enumerate() {
+            let limit = if i == 0 { 50 } else { 45 };
+            assert!(line.chars().count() <= limit, "Ligne {} dépasse la limite {}: {}", i, limit, line);
+        }
+
+        // Test de sécurité UTF-8 (aucun panic avec caractères accentués ou emojis)
+        let utf8_line = "🚨 Événement critique détecté dans le répertoire /données/système/sécurité_avancée/fichier_spécial.json";
+        let wrapped_utf8 = crate::ui::dashboard::wrap_text(utf8_line, 30, 25);
+        assert!(wrapped_utf8.len() >= 2);
+        for line in &wrapped_utf8 {
+            assert!(!line.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_clipboard_copy_logs_and_history_errors() {
+        let mut app = App::new();
+
+        // 1. Copie des logs
+        app.live.log_lines.push_back("2026-09-18 13:40:12 INFO : Démarrage".into());
+        app.live.log_lines.push_back("2026-09-18 13:40:15 NOTICE : Synchro terminée".into());
+        app.copy_logs_to_clipboard();
+        assert!(app.toast.is_some());
+        let (msg, _) = app.toast.as_ref().unwrap();
+        assert!(msg.contains("2 lignes de logs copiées"));
+
+        // 2. Copie des erreurs d'un run
+        app.past_runs = vec![crate::monitor::history::PastRun {
+            id: 42,
+            date: "2026-09-18".into(),
+            time: "13:30:00".into(),
+            duration: "12s".into(),
+            status: crate::monitor::history::RunStatus::Failed,
+            files_copied: vec![],
+            files_modified: vec![],
+            files_deleted: vec![],
+            synced_files: vec![],
+            errors: vec![
+                "Failed to sync /docs: Google Drive quota exceeded".into(),
+                "Connection timeout after 30s".into(),
+            ],
+            summary: "2 erreurs".into(),
+        }];
+
+        app.copy_history_errors(0);
+        let (msg, _) = app.toast.as_ref().unwrap();
+        assert!(msg.contains("2 erreur(s) du run #42"));
+
+        // 3. Raccourci y / c dans Modal::HistoryDetails
+        app.modal = Modal::HistoryDetails(0);
+        let action = app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(action, Action::None);
+        let (msg, _) = app.toast.as_ref().unwrap();
+        assert!(msg.contains("2 erreur(s) du run #42"));
+
+        let action_c = app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('c'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(action_c, Action::None);
+        assert!(app.toast.is_some());
+
+        // 4. Raccourci y sur le dashboard quand Logs est focalisé
+        app.modal = Modal::None;
+        app.focused_panel = FocusedPanel::Logs;
+        let action_dash_y = app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(action_dash_y, Action::None);
+        let (msg, _) = app.toast.as_ref().unwrap();
+        assert!(msg.contains("lignes de logs copiées"));
     }
 }
 
