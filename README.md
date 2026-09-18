@@ -28,10 +28,6 @@ Construit avec **[Ratatui](https://ratatui.rs/)**, **[Crossterm](https://github.
 | :---: | :---: |
 | ![File Explorer](assets/screenshots/files.png) | ![Filters](assets/screenshots/filters.png) |
 
-| btop++ 3D Menu | Dry-Run Simulation Modal |
-| :---: | :---: |
-| ![Main Menu](assets/screenshots/menu.png) | ![Dry Run](assets/screenshots/dry_run.png) |
-
 ---
 
 ### 🌟 Fonctionnalités TUI
