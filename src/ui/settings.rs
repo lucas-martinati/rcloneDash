@@ -16,7 +16,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let is_wide = screen.width >= 86;
     let logo_h: u16 = if is_wide { 6 } else { 5 };
     let show_logo = screen.height >= 28;
-    let box_w = 78.min(screen.width);
+    let box_w = if is_wide { 86.min(screen.width) } else { 78.min(screen.width) };
     let box_h = if show_logo {
         20.min(screen.height.saturating_sub(logo_h + 3))
     } else {
@@ -37,7 +37,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             .split(container_area);
         crate::ui::menu::render_btop_logo(f, v_chunks[0]);
         let ver_line = Line::from(vec![
-            Span::raw("                             "),
             Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
         ]);
         f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
@@ -50,7 +49,15 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     let cur_opt = app.settings_selected_idx + 1;
 
-    // En-tête btop++ avec coin supérieur gauche ┌[tab]┐
+    let (up_col, down_col) = if app.settings_selected_idx == 0 {
+        (theme.text_muted, theme.red)
+    } else if app.settings_selected_idx >= SETTINGS_ITEMS_COUNT.saturating_sub(1) {
+        (theme.red, theme.text_muted)
+    } else {
+        (theme.red, theme.red)
+    };
+
+    // En-tête btop++ avec coin supérieur gauche ┌[options]┐
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
@@ -58,13 +65,15 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
             Span::styled("┌[", Style::default().fg(theme.red)),
-            Span::styled("tab", Style::default().fg(Color::Rgb(220, 220, 220))),
+            Span::styled("options", Style::default().fg(Color::Rgb(220, 220, 220))),
             Span::styled("]┐", Style::default().fg(theme.red)),
         ]))
         .title_bottom(
             Line::from(vec![
                 Span::styled("┘", Style::default().fg(theme.red)),
-                Span::styled("↑ select ↓", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+                Span::styled(" select ", Style::default().fg(Color::White)),
+                Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
                 Span::styled("└┘", Style::default().fg(theme.red)),
                 Span::styled("← modifier →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
                 Span::styled("└┘", Style::default().fg(theme.red)),
@@ -85,60 +94,12 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         height: area.height.saturating_sub(2),
     };
 
-    if inner.height < 6 || inner.width < 50 {
+    if inner.height < 4 || inner.width < 40 {
         return;
     }
 
-    // Découpage vertical :
-    // - Ligne 0 : Onglets des catégories btop++
-    // - Ligne 1 : Ligne séparatrice horizontale (div_left + div_up + div_right)
-    // - Reste : Les deux colonnes (options à gauche, aide détaillée à droite)
-    let v_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // Onglets
-            Constraint::Length(1), // Séparateur horizontal
-            Constraint::Min(4),    // Contenu 2 colonnes
-        ])
-        .split(inner);
-
-    let tabs_area = v_chunks[0];
-    let hsep_area = v_chunks[1];
-    let content_area = v_chunks[2];
-
-    // 1. Onglets style btop++ : [general]  2sync  3filet  4réseau
-    let tab_spans = vec![
-        Span::raw(" "),
-        Span::styled("[", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("général", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-        Span::styled("]", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::raw("      "),
-        Span::styled("2", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("sync", Style::default().fg(Color::Rgb(200, 205, 215))),
-        Span::raw("      "),
-        Span::styled("3", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("filet", Style::default().fg(Color::Rgb(200, 205, 215))),
-        Span::raw("      "),
-        Span::styled("4", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("réseau", Style::default().fg(Color::Rgb(200, 205, 215))),
-        Span::raw("      "),
-        Span::styled("5", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("chemins", Style::default().fg(Color::Rgb(200, 205, 215))),
-    ];
-    f.render_widget(Paragraph::new(Line::from(tab_spans)), tabs_area);
-
-    // 2. Séparateur horizontal btop++ :
-    // ├──────── (29 cols) ────────┬──────── (reste) ────────┤
-    let left_col_w = 29u16.min(content_area.width.saturating_sub(10));
-    let right_col_w = content_area.width.saturating_sub(left_col_w + 1);
-
-    let mut hsep_spans = Vec::new();
-    hsep_spans.push(Span::styled("─".repeat(left_col_w as usize), Style::default().fg(theme.border)));
-    hsep_spans.push(Span::styled("┬", Style::default().fg(theme.border)));
-    hsep_spans.push(Span::styled("─".repeat(right_col_w as usize), Style::default().fg(theme.border)));
-    f.render_widget(Paragraph::new(Line::from(hsep_spans)), hsep_area);
-
-    // 3. Découpage horizontal pour le contenu des deux colonnes
+    // Découpage horizontal direct pour les deux colonnes (sans onglets ni séparateur horizontal)
+    let left_col_w = 30u16.min(inner.width.saturating_sub(20));
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -146,14 +107,14 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             Constraint::Length(1),
             Constraint::Min(20),
         ])
-        .split(content_area);
+        .split(inner);
 
     let left_area = cols[0];
     let sep_area = cols[1];
     let right_area = cols[2];
 
     // Séparateur vertical btop++
-    let sep_lines: Vec<Line> = (0..content_area.height)
+    let sep_lines: Vec<Line> = (0..inner.height)
         .map(|_| Line::from(Span::styled("│", Style::default().fg(theme.border))))
         .collect();
     f.render_widget(Paragraph::new(sep_lines), sep_area);

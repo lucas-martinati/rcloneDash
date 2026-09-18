@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
@@ -16,15 +16,7 @@ pub fn render_footer(
     area: Rect,
     hitboxes: &mut Vec<Hitbox>,
 ) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(65),    // Raccourcis unifiés
-            Constraint::Length(18), // Focus actif uniquement
-        ])
-        .split(area);
-
-    // Commandes unifiées : chaque raccourci a sa touche d'activation en rouge (au début ou dans le mot)
+    // Commandes unifiées : chaque raccourci a sa touche d'activation en rouge
     struct CmdItem {
         prefix: &'static str,
         key: &'static str,
@@ -32,16 +24,22 @@ pub fn render_footer(
         action: HitAction,
     }
 
+    let sync_or_cancel_item = if app.live.is_syncing {
+        CmdItem { prefix: "", key: "c", suffix: "ancel", action: HitAction::ButtonCancel }
+    } else {
+        CmdItem { prefix: "", key: "s", suffix: "ync", action: HitAction::ButtonSync }
+    };
+
     let items = [
-        CmdItem { prefix: "", key: "s", suffix: "ync", action: HitAction::ButtonSync },
+        sync_or_cancel_item,
         CmdItem { prefix: "", key: "d", suffix: "ry-run", action: HitAction::ButtonDryRun },
-        CmdItem { prefix: "", key: "f", suffix: "iles", action: HitAction::ButtonFiles },
+        CmdItem { prefix: "", key: "b", suffix: "rowse", action: HitAction::ButtonFiles },
         CmdItem { prefix: "filtr", key: "e", suffix: "s", action: HitAction::ButtonFilters },
         CmdItem { prefix: "", key: "Tab", suffix: " panel", action: HitAction::ButtonPanel },
     ];
 
     let mut spans: Vec<Span> = Vec::new();
-    let mut cur_x = chunks[0].x;
+    let mut cur_x = area.x;
 
     for (i, item) in items.iter().enumerate() {
         if i > 0 {
@@ -73,24 +71,8 @@ pub fn render_footer(
         cur_x += len;
     }
 
-    let p_left = Paragraph::new(Line::from(spans))
+    let p = Paragraph::new(Line::from(spans))
         .alignment(Alignment::Left)
         .block(Block::default().style(Style::default().bg(theme.footer_bg)));
-    f.render_widget(p_left, chunks[0]);
-
-    // Panneau actuellement actif
-    let right_spans = vec![
-        Span::styled("Focus: ", Style::default().fg(theme.text_muted)),
-        Span::styled(
-            format!("{} ", app.focused_panel.label()),
-            Style::default()
-                .fg(theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ];
-
-    let p_right = Paragraph::new(Line::from(right_spans))
-        .alignment(Alignment::Right)
-        .block(Block::default().style(Style::default().bg(theme.footer_bg)));
-    f.render_widget(p_right, chunks[1]);
+    f.render_widget(p, area);
 }

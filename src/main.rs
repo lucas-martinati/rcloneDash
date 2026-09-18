@@ -12,7 +12,7 @@ use std::time::Duration;
 use crossterm::{
     event::{
         DisableMouseCapture, EnableMouseCapture, Event, EventStream,
-        KeyboardEnhancementFlags, KeyModifiers, PopKeyboardEnhancementFlags,
+        KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
         PushKeyboardEnhancementFlags,
     },
     execute,
@@ -77,12 +77,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(Ok(event)) = maybe_event {
                     match event {
                         Event::Key(key) => {
-                            if key.modifiers.contains(KeyModifiers::CONTROL) {
-                                app.ctrl_mode = true;
-                            } else if key.kind == crossterm::event::KeyEventKind::Release {
-                                app.ctrl_mode = false;
-                            }
-
                             if key.kind == crossterm::event::KeyEventKind::Press {
                                 let action = app.handle_key(key);
                                 if action == app::Action::OpenEditor {
@@ -109,9 +103,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                         Event::Mouse(mouse) => {
-                            if mouse.modifiers.contains(KeyModifiers::CONTROL) {
-                                app.ctrl_mode = true;
-                            }
                             let action = app.handle_mouse(mouse);
                             if action == app::Action::OpenEditor {
                                 // Cas où un clic déclencherait l'éditeur

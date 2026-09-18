@@ -1,8 +1,8 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
+    widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table},
     Frame,
 };
 
@@ -35,20 +35,34 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
     let total_files = app.file_entries.len();
     let cur_file = if total_files > 0 { app.file_selected_idx + 1 } else { 0 };
 
+    let (up_col, down_col) = if total_files <= 1 {
+        (theme.text_muted, theme.text_muted)
+    } else if app.file_selected_idx == 0 {
+        (theme.text_muted, theme.red)
+    } else if app.file_selected_idx >= total_files.saturating_sub(1) {
+        (theme.red, theme.text_muted)
+    } else {
+        (theme.red, theme.red)
+    };
+
+    let title_line = Line::from(vec![
+        Span::styled("┌📁 explorateur", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(": {}┐", title_path), Style::default().fg(theme.text_muted)),
+        Span::styled("┌ouvrir: ↵┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
+    ]);
+
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
         .border_style(Style::default().fg(theme.border_history))
         .style(Style::default().bg(theme.card_bg))
-        .title(Line::from(vec![
-            Span::styled("┌📁 explorateur", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(": {}┐", title_path), Style::default().fg(theme.text_muted)),
-            Span::styled("┌ouvrir: ↵┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-            Span::styled("┌fermer: Esc┐", Style::default().fg(theme.text_muted)),
-        ]))
+        .title(title_line)
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+                Span::styled("/", Style::default().fg(theme.text_muted)),
+                Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
                 Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
                 Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" ouvrir  ", Style::default().fg(theme.text_muted)),
@@ -111,26 +125,39 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     entry.name.clone()
                 };
 
-                let name_style = if is_selected {
-                    Style::default().fg(if app.ctrl_mode { theme.yellow } else { theme.accent }).add_modifier(Modifier::BOLD)
-                } else if app.ctrl_mode {
-                    Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(name_color)
-                };
-
                 let (status_badge, status_color) = if entry.ignored {
                     ("[IGNORÉ]", theme.red)
                 } else {
                     ("[SYNC]", theme.green)
                 };
 
-                Row::new(vec![
-                    Cell::from(Line::from(vec![cursor, type_badge, Span::styled(display_name, name_style)])),
-                    Cell::from(Span::styled(entry.size_formatted(), Style::default().fg(theme.text_muted))),
-                    Cell::from(Span::styled(&entry.mtime, Style::default().fg(theme.text_muted))),
-                    Cell::from(Span::styled(status_badge, Style::default().fg(status_color))),
-                ])
+                if is_selected {
+                    let highlight_bg = Color::Rgb(90, 32, 32);
+                    let type_str = if entry.is_dir { "[DIR] " } else { "[FIC] " };
+                    Row::new(vec![
+                        Cell::from(Line::from(vec![
+                            cursor,
+                            Span::styled(type_str, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                            Span::styled(display_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                        ])),
+                        Cell::from(Span::styled(entry.size_formatted(), Style::default().fg(Color::White))),
+                        Cell::from(Span::styled(&entry.mtime, Style::default().fg(Color::White))),
+                        Cell::from(Span::styled(status_badge, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
+                    ])
+                    .style(Style::default().bg(highlight_bg))
+                } else {
+                    let name_style = if app.ctrl_mode {
+                        Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(name_color)
+                    };
+                    Row::new(vec![
+                        Cell::from(Line::from(vec![cursor, type_badge, Span::styled(display_name, name_style)])),
+                        Cell::from(Span::styled(entry.size_formatted(), Style::default().fg(theme.text_muted))),
+                        Cell::from(Span::styled(&entry.mtime, Style::default().fg(theme.text_muted))),
+                        Cell::from(Span::styled(status_badge, Style::default().fg(status_color))),
+                    ])
+                }
             })
             .collect()
     };
@@ -168,16 +195,14 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     f.render_widget(table, area);
 
-    if app.file_entries.len() > visible_height {
-        let mut scrollbar_state = ScrollbarState::new(app.file_entries.len())
-            .position(app.file_selected_idx);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
-        f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
-    }
+    crate::ui::render_btop_scrollbar(
+        f,
+        area,
+        app.file_entries.len(),
+        app.file_selected_idx,
+        visible_height,
+        theme,
+    );
 }
 
 fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {

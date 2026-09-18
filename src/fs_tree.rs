@@ -142,8 +142,14 @@ pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
     } else {
         base.join(clean)
     };
+    if !full.exists() {
+        return Err("Fichier supprimé ou introuvable".to_string());
+    }
     Command::new("xdg-open")
         .arg(&full)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -182,6 +188,9 @@ pub fn open_folder_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
 
     Command::new("xdg-open")
         .arg(&target)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())

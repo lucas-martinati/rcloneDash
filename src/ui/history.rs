@@ -2,9 +2,9 @@
 
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -85,17 +85,8 @@ fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
 
     f.render_widget(list, area);
 
-    // Scrollbar latérale
-    if app.past_runs.len() > area.height.saturating_sub(3) as usize {
-        let mut scrollbar_state = ScrollbarState::new(app.past_runs.len())
-            .position(app.selected_run_idx);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
-        f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
-    }
+    let visible_height = area.height.saturating_sub(3) as usize;
+    crate::ui::render_btop_scrollbar(f, area, app.past_runs.len(), app.selected_run_idx, visible_height, theme);
 }
 
 pub fn render_history_details_modal(f: &mut Frame, app: &App, run_idx: usize, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
@@ -174,11 +165,6 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             };
 
             let prefix = if is_selected { " ▶ " } else { "   " };
-            let row_style = if is_selected {
-                Style::default().fg(theme.text_bright).bg(theme.border_focus).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(theme.text_bright)
-            };
 
             let display_text = if app.ctrl_mode {
                 let file_path = std::path::Path::new(*path);
@@ -193,21 +179,25 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 path.to_string()
             };
 
-            let path_style = if app.ctrl_mode {
-                if is_selected {
-                    Style::default().fg(theme.yellow).bg(theme.border_focus).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
-                }
+            if is_selected {
+                let highlight_bg = Color::Rgb(90, 32, 32);
+                all_lines.push((Line::from(vec![
+                    Span::styled(prefix, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" {:<9} ", badge_icon), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(display_text, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                ]), Some(idx)));
             } else {
-                row_style
-            };
-
-            all_lines.push((Line::from(vec![
-                Span::styled(prefix, Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-                Span::styled(format!(" {:<9} ", badge_icon), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
-                Span::styled(display_text, path_style),
-            ]), Some(idx)));
+                let path_style = if app.ctrl_mode {
+                    Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(theme.text_bright)
+                };
+                all_lines.push((Line::from(vec![
+                    Span::styled(prefix, Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" {:<9} ", badge_icon), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(display_text, path_style),
+                ]), Some(idx)));
+            }
         }
     } else if run.errors.is_empty() {
         all_lines.push((Line::from(Span::styled(
@@ -300,15 +290,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let footer_p = Paragraph::new(footer_line).alignment(ratatui::layout::Alignment::Center);
     f.render_widget(footer_p, layout[1]);
 
-    if total_lines > visible_height {
-        let mut scrollbar_state = ScrollbarState::new(total_lines).position(scroll);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
-        f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
-    }
+    crate::ui::render_btop_scrollbar(f, area, total_lines, scroll, visible_height, theme);
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

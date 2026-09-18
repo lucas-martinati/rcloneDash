@@ -210,7 +210,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             let screen = f.area();
             let is_wide = screen.width >= 86;
             let logo_h: u16 = if is_wide { 6 } else { 5 };
-            let box_w = 78.min(screen.width);
+            let box_w = if is_wide { 86.min(screen.width) } else { 78.min(screen.width) };
             let box_h = 24.min(screen.height.saturating_sub(logo_h + 3));
 
             let total_h = logo_h + 1 + box_h;
@@ -230,7 +230,6 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
 
             // Version
             let ver_line = Line::from(vec![
-                Span::raw("                             "),
                 Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
             ]);
             f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
@@ -248,8 +247,8 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ("s", "Triggers bisync synchronization (confirmation)."),
                 ("d", "Runs bisync dry-run simulation (confirmation)."),
                 ("c", "Cancels active synchronization run."),
-                ("r", "Forces full resynchronization (--resync)."),
-                ("f", "In Recent files: search filter. Otherwise: file browser."),
+                ("b, p", "Opens file browser modal (explorer)."),
+                ("f, /", "In Recent files: search filter."),
                 ("e", "Opens exclusion rules editor (gdrive-filters.txt)."),
                 ("Ctrl+X", "Toggles parent directory mode (shows folder paths)."),
                 ("Enter", "Opens selected file / Validates actions."),
@@ -392,13 +391,5 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
     let footer_p = Paragraph::new(footer_line).alignment(Alignment::Center);
     f.render_widget(footer_p, chunks[1]);
 
-    if total_lines > visible_height {
-        let mut scrollbar_state = ratatui::widgets::ScrollbarState::new(total_lines).position(scroll);
-        let scrollbar = ratatui::widgets::Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.accent));
-        f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
-    }
+    crate::ui::render_btop_scrollbar(f, chunks[0], total_lines, scroll, visible_height, theme);
 }

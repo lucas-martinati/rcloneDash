@@ -74,3 +74,61 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     app.hitboxes = hitboxes;
 }
+
+/// Scrollbar intégrée dans les conteneurs (style btop++)
+/// Dessinée directement dans la colonne droite intérieure (x = area.x + area.width - 2)
+/// avec flèche ↑ en haut, flèche ↓ en bas, et curseur plein █ au niveau de la position.
+pub fn render_btop_scrollbar(
+    f: &mut Frame,
+    area: ratatui::layout::Rect,
+    total: usize,
+    pos: usize,
+    visible: usize,
+    theme: &crate::ui::theme::ThemePalette,
+) {
+    if total <= visible || area.height < 4 || area.width < 5 {
+        return;
+    }
+    let scroll_x = area.x + area.width.saturating_sub(2);
+    let top_y = area.y + 1;
+    let bot_y = area.y + area.height.saturating_sub(2);
+
+    if bot_y <= top_y + 1 {
+        return;
+    }
+
+    let track_height = (bot_y - top_y - 1) as usize;
+    let buf = f.buffer_mut();
+
+    // Flèche haut
+    buf.set_string(scroll_x, top_y, "↑", Style::default().fg(theme.text_muted));
+    // Flèche bas
+    buf.set_string(scroll_x, bot_y, "↓", Style::default().fg(theme.text_muted));
+
+    if track_height == 0 {
+        return;
+    }
+
+    // Effacer la colonne de piste entre les flèches
+    for y in (top_y + 1)..bot_y {
+        buf.set_string(scroll_x, y, " ", Style::default());
+    }
+
+    // Calcul du curseur
+    let thumb_size = ((visible as f64 / total as f64) * track_height as f64).round().max(1.0) as usize;
+    let max_scroll = total.saturating_sub(visible);
+    let effective_pos = pos.min(max_scroll);
+    let thumb_start = if max_scroll > 0 {
+        ((effective_pos as f64 / max_scroll as f64) * (track_height.saturating_sub(thumb_size)) as f64).round() as usize
+    } else {
+        0
+    };
+
+    let thumb_style = Style::default().fg(ratatui::style::Color::Rgb(200, 205, 215));
+    for i in 0..thumb_size {
+        let y = top_y + 1 + (thumb_start + i) as u16;
+        if y < bot_y {
+            buf.set_string(scroll_x, y, "█", thumb_style);
+        }
+    }
+}

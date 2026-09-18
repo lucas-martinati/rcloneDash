@@ -31,6 +31,7 @@ impl FocusedPanel {
             FocusedPanel::RecentFiles => FocusedPanel::Logs,
         }
     }
+    #[allow(dead_code)]
     pub fn label(self) -> &'static str {
         match self {
             FocusedPanel::History => "Historique",
@@ -201,6 +202,11 @@ pub struct CloudQuota {
     pub free_bytes: u64,
 }
 
+pub fn is_ctrl_x(key: &KeyEvent) -> bool {
+    (matches!(key.code, KeyCode::Char('x') | KeyCode::Char('X')) && key.modifiers.contains(KeyModifiers::CONTROL))
+        || key.code == KeyCode::Char('\u{18}')
+}
+
 impl App {
     pub fn new() -> Self {
         let streamer = spawn_log_streamer();
@@ -227,7 +233,7 @@ impl App {
             auto_scroll: true,
             toast: None,
 
-            focused_panel: FocusedPanel::Logs,
+            focused_panel: FocusedPanel::RecentFiles,
             tick_rate_ms_live: tick_rate,
             tick_rate_changed: false,
             menu_selected_idx: 0,
@@ -446,9 +452,19 @@ impl App {
 
     pub fn open_selected_file(&mut self, rel_path: &str) {
         let base = config::expand_tilde(&self.config.local_dir);
+        let clean = rel_path.trim_start_matches('/');
+        let full = if clean.is_empty() {
+            base.clone()
+        } else {
+            base.join(clean)
+        };
+        if !full.exists() {
+            self.set_toast("Fichier supprimé (introuvable)");
+            return;
+        }
         match fs_tree::open_with_xdg(&base, rel_path) {
             Ok(_) => self.set_toast(format!("✔ Ouverture : {}", rel_path)),
-            Err(e) => self.set_toast(format!("✗ Impossible d'ouvrir : {}", e)),
+            Err(_) => self.set_toast("Fichier supprimé (introuvable)"),
         }
     }
 
@@ -720,16 +736,18 @@ impl App {
                     {
                         match hb.action {
                             HitAction::LogsArea => {
-                                self.logs_scroll = self.logs_scroll.saturating_sub(2);
+                                self.focused_panel = FocusedPanel::Logs;
+                                self.logs_scroll = self.logs_scroll.saturating_sub(1);
                                 if self.logs_scroll == 0 {
                                     self.auto_scroll = true;
                                 }
                                 return Action::None;
                             }
                             HitAction::HistoryArea | HitAction::HistoryRow(_) => {
+                                self.focused_panel = FocusedPanel::History;
                                 let total = self.total_history_runs();
                                 if total > 0 && self.selected_run_idx < total - 1 {
-                                    self.selected_run_idx = (self.selected_run_idx + 2).min(total - 1);
+                                    self.selected_run_idx = (self.selected_run_idx + 1).min(total - 1);
                                 }
                                 let vp = self.history_viewport_height.max(3);
                                 self.ensure_history_visible(vp);
@@ -739,13 +757,14 @@ impl App {
                                 let past_idx = if self.live.is_syncing { self.selected_run_idx.saturating_sub(1) } else { self.selected_run_idx };
                                 let total_files = self.past_runs.get(past_idx).map(|r| r.all_affected_files().len()).unwrap_or(0);
                                 let max_scroll = total_files.saturating_sub(5);
-                                self.history_details_scroll = (self.history_details_scroll + 2).min(max_scroll);
+                                self.history_details_scroll = (self.history_details_scroll + 1).min(max_scroll);
                                 return Action::None;
                             }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
+                                self.focused_panel = FocusedPanel::RecentFiles;
                                 let list_len = self.get_recent_files_list().len();
                                 if list_len > 0 && self.recent_selected_idx < list_len - 1 {
-                                    self.recent_selected_idx = (self.recent_selected_idx + 2).min(list_len - 1);
+                                    self.recent_selected_idx = (self.recent_selected_idx + 1).min(list_len - 1);
                                 }
                                 let vp = self.recent_viewport_height.max(3);
                                 self.ensure_recent_visible(vp);
@@ -776,11 +795,12 @@ impl App {
                 }
                 if self.modal == Modal::DryRun {
                     let max_dry = self.dry_run_logs.len().saturating_sub(5);
-                    self.dry_run_scroll = (self.dry_run_scroll + 2).min(max_dry);
+                    self.dry_run_scroll = (self.dry_run_scroll + 1).min(max_dry);
                     return Action::None;
                 }
                 // Défilement par défaut (logs)
-                self.logs_scroll = self.logs_scroll.saturating_sub(2);
+                self.focused_panel = FocusedPanel::Logs;
+                self.logs_scroll = self.logs_scroll.saturating_sub(1);
                 if self.logs_scroll == 0 {
                     self.auto_scroll = true;
                 }
@@ -794,23 +814,26 @@ impl App {
                     {
                         match hb.action {
                             HitAction::LogsArea => {
+                                self.focused_panel = FocusedPanel::Logs;
                                 self.auto_scroll = false;
                                 let max_scroll = self.live.log_lines.len().saturating_sub(self.logs_viewport_height.max(3));
-                                self.logs_scroll = (self.logs_scroll + 2).min(max_scroll);
+                                self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
                                 return Action::None;
                             }
                             HitAction::HistoryArea | HitAction::HistoryRow(_) => {
-                                self.selected_run_idx = self.selected_run_idx.saturating_sub(2);
+                                self.focused_panel = FocusedPanel::History;
+                                self.selected_run_idx = self.selected_run_idx.saturating_sub(1);
                                 let vp = self.history_viewport_height.max(3);
                                 self.ensure_history_visible(vp);
                                 return Action::None;
                             }
                             HitAction::HistoryFile(_) => {
-                                self.history_details_scroll = self.history_details_scroll.saturating_sub(2);
+                                self.history_details_scroll = self.history_details_scroll.saturating_sub(1);
                                 return Action::None;
                             }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
-                                self.recent_selected_idx = self.recent_selected_idx.saturating_sub(2);
+                                self.focused_panel = FocusedPanel::RecentFiles;
+                                self.recent_selected_idx = self.recent_selected_idx.saturating_sub(1);
                                 let vp = self.recent_viewport_height.max(3);
                                 self.ensure_recent_visible(vp);
                                 return Action::None;
@@ -835,12 +858,12 @@ impl App {
                     }
                 }
                 if self.modal == Modal::DryRun {
-                    self.dry_run_scroll = self.dry_run_scroll.saturating_sub(2);
+                    self.dry_run_scroll = self.dry_run_scroll.saturating_sub(1);
                     return Action::None;
                 }
                 self.auto_scroll = false;
                 let max_scroll = self.live.log_lines.len().saturating_sub(self.logs_viewport_height.max(3));
-                self.logs_scroll = (self.logs_scroll + 2).min(max_scroll);
+                self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
             }
             MouseEventKind::Down(MouseButton::Left) => {
                 let col = mouse.column;
@@ -986,11 +1009,14 @@ impl App {
                             }
                             HitAction::RecentFile(idx) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
-                                self.recent_selected_idx = idx;
-                                if self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL) {
-                                    self.open_recent_folder(idx);
+                                if self.recent_selected_idx == idx {
+                                    if self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL) {
+                                        self.open_recent_folder(idx);
+                                    } else {
+                                        self.open_recent_file(idx);
+                                    }
                                 } else {
-                                    self.open_recent_file(idx);
+                                    self.recent_selected_idx = idx;
                                 }
                                 return Action::None;
                             }
@@ -1149,7 +1175,19 @@ impl App {
         }
     }
 
+
     pub fn handle_key(&mut self, key: KeyEvent) -> Action {
+        // Raccourci universel Ctrl+X pour basculer le mode dossier parent
+        if is_ctrl_x(&key) {
+            self.ctrl_mode = !self.ctrl_mode;
+            if self.ctrl_mode {
+                self.set_toast("📁 Mode dossier actif (chemins des dossiers affichés)");
+            } else {
+                self.set_toast("📄 Mode fichier actif (chemins des fichiers affichés)");
+            }
+            return Action::None;
+        }
+
         // Saisie en cours pour le filtre des fichiers récents (style btop)
         if self.is_filtering_recent && self.modal == Modal::None {
             match key.code {
@@ -1590,17 +1628,13 @@ impl App {
                 self.modal = Modal::ConfirmDryRun;
                 return Action::None;
             }
-            KeyCode::Char('f') => {
-                if self.focused_panel == FocusedPanel::RecentFiles {
-                    self.is_filtering_recent = true;
-                } else {
-                    self.modal = Modal::Files;
-                }
-                return Action::None;
-            }
-            KeyCode::Char('/') => {
+            KeyCode::Char('f') | KeyCode::Char('/') => {
                 self.focused_panel = FocusedPanel::RecentFiles;
                 self.is_filtering_recent = true;
+                return Action::None;
+            }
+            KeyCode::Char('b') | KeyCode::Char('B') | KeyCode::Char('p') | KeyCode::Char('P') => {
+                self.modal = if self.modal == Modal::Files { Modal::None } else { Modal::Files };
                 return Action::None;
             }
             KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1939,7 +1973,7 @@ mod tests {
         };
         app.handle_mouse(scroll_up);
         assert!(!app.auto_scroll, "Le défilement vers le haut doit désactiver l'auto-scroll");
-        assert_eq!(app.logs_scroll, 2);
+        assert_eq!(app.logs_scroll, 1);
 
         // Molette vers le bas dans les logs
         let scroll_down = MouseEvent {
@@ -2175,6 +2209,23 @@ mod tests {
         // Clicking again toggles back off
         app.handle_mouse(click_ctrl);
         assert!(!app.ctrl_mode);
+
+        // Key Ctrl+X toggles on
+        let ctrl_x = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL);
+        app.handle_key(ctrl_x);
+        assert!(app.ctrl_mode);
+
+        // Key Ctrl+X toggles off
+        app.handle_key(ctrl_x);
+        assert!(!app.ctrl_mode);
+
+        // Raw 0x18 keycode also works even while filtering
+        app.is_filtering_recent = true;
+        let raw_ctrl_x = KeyEvent::new(KeyCode::Char('\u{18}'), KeyModifiers::NONE);
+        app.handle_key(raw_ctrl_x);
+        assert!(app.ctrl_mode);
+        app.handle_key(raw_ctrl_x);
+        assert!(!app.ctrl_mode);
     }
 
     #[tokio::test]
@@ -2308,12 +2359,18 @@ mod tests {
         assert!(app.is_filtering_recent, "'f' sur RecentFiles doit activer le filtre");
         app.is_filtering_recent = false;
 
-        // Quand un autre panel est focus, 'f' ouvre la modal Files
+        // 'b' ouvre la modal Files (explorateur)
         app.focused_panel = FocusedPanel::History;
-        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::Files);
         app.modal = Modal::None;
-        app.focused_panel = FocusedPanel::RecentFiles;
+
+        // 'f' active le filtre même depuis un autre panel et focus RecentFiles
+        app.focused_panel = FocusedPanel::History;
+        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        assert!(app.is_filtering_recent);
+        assert_eq!(app.focused_panel, FocusedPanel::RecentFiles);
+        app.is_filtering_recent = false;
 
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::ConfirmSync);

@@ -1,10 +1,9 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Table,
+        Block, BorderType, Borders, Cell, Paragraph, Row, Table,
     },
     Frame,
 };
@@ -193,15 +192,15 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     let tick_str = format!("{}ms", tick_ms);
 
     // Hitboxes pour le stepper de fréquence [ - ] et [ + ]
-    let tick_widget_len = (tick_str.chars().count() + 6) as u16;
+    let tick_widget_len = (tick_str.chars().count() + 4) as u16;
     let tick_x = area.x + area.width.saturating_sub(tick_widget_len + 1);
 
     hitboxes.push(Hitbox {
-        rect: Rect { x: tick_x, y: area.y, width: 3, height: 1 },
+        rect: Rect { x: tick_x + 1, y: area.y, width: 2, height: 1 },
         action: HitAction::TickRateDec,
     });
     hitboxes.push(Hitbox {
-        rect: Rect { x: tick_x + tick_widget_len.saturating_sub(3), y: area.y, width: 3, height: 1 },
+        rect: Rect { x: tick_x + tick_widget_len.saturating_sub(2), y: area.y, width: 2, height: 1 },
         action: HitAction::TickRateInc,
     });
 
@@ -219,13 +218,13 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         ]))
         .title(
             Line::from(vec![
-                Span::styled("┌", Style::default().fg(theme.border)),
+                Span::styled("┐", Style::default().fg(theme.border_sys)),
                 Span::styled("-", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" ", Style::default().fg(theme.border)),
+                Span::styled(" ", Style::default().fg(theme.border_sys)),
                 Span::styled(tick_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-                Span::styled(" ", Style::default().fg(theme.border)),
+                Span::styled(" ", Style::default().fg(theme.border_sys)),
                 Span::styled("+", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled("┐─", Style::default().fg(theme.border)),
+                Span::styled("┌", Style::default().fg(theme.border_sys)),
             ])
             .alignment(Alignment::Right),
         );
@@ -542,15 +541,30 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
             height: area.height.saturating_sub(2),
         });
 
+    let (up_col, down_col) = if total_runs <= 1 {
+        (theme.text_muted, theme.text_muted)
+    } else if app.selected_run_idx == 0 {
+        (theme.text_muted, theme.red)
+    } else if app.selected_run_idx >= total_runs.saturating_sub(1) {
+        (theme.red, theme.text_muted)
+    } else {
+        (theme.red, theme.red)
+    };
+
+    let (det_col, key_col) = if total_runs == 0 {
+        (theme.text_muted, theme.text_muted)
+    } else {
+        (theme.text_bright, theme.red)
+    };
+
     let left_bottom = Line::from(vec![
         Span::styled("┘", Style::default().fg(border_color)),
-        Span::styled("↑ select ↓", Style::default().fg(theme.text_bright)),
+        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(" select ", Style::default().fg(Color::White)),
+        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled("└┘", Style::default().fg(border_color)),
-        Span::styled("détails ", Style::default().fg(theme.text_bright)),
-        Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("└┘", Style::default().fg(border_color)),
-        Span::styled("c", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("ancel", Style::default().fg(theme.text_bright)),
+        Span::styled("détails ", Style::default().fg(det_col)),
+        Span::styled("↵", Style::default().fg(key_col).add_modifier(Modifier::BOLD)),
         Span::styled("└", Style::default().fg(border_color)),
     ]);
     let right_bottom = Line::from(vec![
@@ -565,24 +579,17 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         .title(Line::from(vec![
             Span::styled("┐", Style::default().fg(border_color)),
             Span::styled("history", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
-            Span::styled("┌┐", Style::default().fg(border_color)),
-            Span::styled("details ", Style::default().fg(theme.text_bright)),
-            Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("┌", Style::default().fg(border_color)),
         ]))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
     f.render_widget(outer_block, area);
 
-    // Hitbox pour les onglets du bas du panneau historique
+    // Hitbox pour le bouton détails du bas du panneau historique
     let bottom_y = area.y + area.height.saturating_sub(1);
     hitboxes.push(Hitbox {
         rect: Rect { x: area.x + 11, y: bottom_y, width: 11, height: 1 },
         action: HitAction::HistoryRow(app.selected_run_idx),
-    });
-    hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 22, y: bottom_y, width: 8, height: 1 },
-        action: HitAction::ButtonCancel,
     });
 
     // 1. Graphe de durées multi-lignes (btop style) avec hitboxes sur chaque colonne
@@ -633,11 +640,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     for item_idx in offset..(offset + visible_rows).min(total_runs) {
         visible_indices.push(item_idx);
         let is_selected = item_idx == app.selected_run_idx;
-        let cursor = if is_selected {
-            Span::styled("▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
-        } else {
-            Span::styled("  ", Style::default())
-        };
+        let highlight_bg = ratatui::style::Color::Rgb(90, 32, 32);
 
         if is_syncing && item_idx == 0 {
             // Ligne de la synchronisation en cours
@@ -651,15 +654,29 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
             let chk_val = format!("{}/{}", app.live.transfer.files_done, app.live.transfer.files_total);
             let eta_val = if app.live.transfer.eta.is_empty() { "--".to_string() } else { format!("ETA:{}", app.live.transfer.eta) };
 
-            table_rows.push(Row::new(vec![
-                Cell::from(Line::from(vec![cursor, Span::styled(time_str, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))])),
-                Cell::from(Span::styled(status_str, Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
-                Cell::from(Span::styled(copied_val, Style::default().fg(theme.green).add_modifier(Modifier::BOLD))),
-                Cell::from(Span::styled(mod_val, Style::default().fg(theme.yellow))),
-                Cell::from(Span::styled(chk_val, Style::default().fg(theme.accent))),
-                Cell::from(Span::styled(elapsed, Style::default().fg(theme.text_bright))),
-                Cell::from(Span::styled(eta_val, Style::default().fg(theme.text_muted))),
-            ]));
+            if is_selected {
+                let cursor = Span::styled("▶ ", Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
+                table_rows.push(Row::new(vec![
+                    Cell::from(Line::from(vec![cursor, Span::styled(time_str, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))])),
+                    Cell::from(Span::styled(status_str, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(copied_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(mod_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(chk_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(elapsed, Style::default().fg(ratatui::style::Color::White))),
+                    Cell::from(Span::styled(eta_val, Style::default().fg(ratatui::style::Color::White))),
+                ]).style(Style::default().bg(highlight_bg)));
+            } else {
+                let cursor = Span::styled("  ", Style::default());
+                table_rows.push(Row::new(vec![
+                    Cell::from(Line::from(vec![cursor, Span::styled(time_str, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))])),
+                    Cell::from(Span::styled(status_str, Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(copied_val, Style::default().fg(theme.green).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(mod_val, Style::default().fg(theme.yellow))),
+                    Cell::from(Span::styled(chk_val, Style::default().fg(theme.accent))),
+                    Cell::from(Span::styled(elapsed, Style::default().fg(theme.text_bright))),
+                    Cell::from(Span::styled(eta_val, Style::default().fg(theme.text_muted))),
+                ]));
+            }
         } else {
             let past_idx = if is_syncing { item_idx - 1 } else { item_idx };
             if let Some(run) = app.past_runs.get(past_idx) {
@@ -676,23 +693,31 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
                     format!("{} {}", run.date, run.time)
                 };
 
-                let row_style = if is_selected {
-                    Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.text_bright)
-                };
-
                 let err_color = if run.errors.is_empty() { theme.text_muted } else { theme.red };
 
-                table_rows.push(Row::new(vec![
-                    Cell::from(Line::from(vec![cursor, Span::styled(time_short, row_style)])),
-                    Cell::from(Span::styled(status_badge, Style::default().fg(status_color).add_modifier(Modifier::BOLD))),
-                    Cell::from(Span::styled(run.files_copied.len().to_string(), Style::default().fg(theme.green))),
-                    Cell::from(Span::styled(run.files_modified.len().to_string(), Style::default().fg(theme.yellow))),
-                    Cell::from(Span::styled(run.files_deleted.len().to_string(), Style::default().fg(theme.red))),
-                    Cell::from(Span::styled(&run.duration, Style::default().fg(theme.text_muted))),
-                    Cell::from(Span::styled(run.errors.len().to_string(), Style::default().fg(err_color))),
-                ]));
+                if is_selected {
+                    let cursor = Span::styled("▶ ", Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
+                    table_rows.push(Row::new(vec![
+                        Cell::from(Line::from(vec![cursor, Span::styled(time_short, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))])),
+                        Cell::from(Span::styled(status_badge, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                        Cell::from(Span::styled(run.files_copied.len().to_string(), Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                        Cell::from(Span::styled(run.files_modified.len().to_string(), Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                        Cell::from(Span::styled(run.files_deleted.len().to_string(), Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                        Cell::from(Span::styled(&run.duration, Style::default().fg(ratatui::style::Color::White))),
+                        Cell::from(Span::styled(run.errors.len().to_string(), Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                    ]).style(Style::default().bg(highlight_bg)));
+                } else {
+                    let cursor = Span::styled("  ", Style::default());
+                    table_rows.push(Row::new(vec![
+                        Cell::from(Line::from(vec![cursor, Span::styled(time_short, Style::default().fg(theme.text_bright))])),
+                        Cell::from(Span::styled(status_badge, Style::default().fg(status_color).add_modifier(Modifier::BOLD))),
+                        Cell::from(Span::styled(run.files_copied.len().to_string(), Style::default().fg(theme.green))),
+                        Cell::from(Span::styled(run.files_modified.len().to_string(), Style::default().fg(theme.yellow))),
+                        Cell::from(Span::styled(run.files_deleted.len().to_string(), Style::default().fg(theme.red))),
+                        Cell::from(Span::styled(&run.duration, Style::default().fg(theme.text_muted))),
+                        Cell::from(Span::styled(run.errors.len().to_string(), Style::default().fg(err_color))),
+                    ]));
+                }
             }
         }
     }
@@ -732,16 +757,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     f.render_widget(table, chunks[1]);
 
-    if total_runs > visible_rows {
-        let mut scrollbar_state = ScrollbarState::new(total_runs)
-            .position(app.selected_run_idx);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.highlight));
-        f.render_stateful_widget(scrollbar, chunks[1], &mut scrollbar_state);
-    }
+    crate::ui::render_btop_scrollbar(f, area, total_runs, app.selected_run_idx, visible_rows, theme);
 }
 
 fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
@@ -765,12 +781,21 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         total_lines.saturating_sub(effective_scroll)
     };
 
+    let (up_col, down_col) = if total_lines <= visible_height {
+        (theme.text_muted, theme.text_muted)
+    } else if effective_scroll == 0 {
+        (theme.red, theme.text_muted)
+    } else if effective_scroll >= max_scroll {
+        (theme.text_muted, theme.red)
+    } else {
+        (theme.red, theme.red)
+    };
+
     let left_bottom = Line::from(vec![
         Span::styled("┘", Style::default().fg(border_color)),
-        Span::styled("↑ scroll ↓", Style::default().fg(theme.text_bright)),
-        Span::styled("└┘", Style::default().fg(border_color)),
-        Span::styled(if app.auto_scroll { "pause " } else { "auto " }, Style::default().fg(theme.text_bright)),
-        Span::styled("␣", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(" scroll ", Style::default().fg(Color::White)),
+        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled("└", Style::default().fg(border_color)),
     ]);
     let right_bottom = Line::from(vec![
@@ -786,7 +811,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
             Span::styled("┐", Style::default().fg(border_color)),
             Span::styled("logs", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
             Span::styled("┌┐", Style::default().fg(border_color)),
-            Span::styled("auto ", Style::default().fg(theme.text_bright)),
+            Span::styled(if app.auto_scroll { "pause " } else { "auto " }, Style::default().fg(theme.text_bright)),
             Span::styled("␣", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled(if app.auto_scroll { " [ON]" } else { " [OFF]" }, Style::default().fg(if app.auto_scroll { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD)),
             Span::styled("┌", Style::default().fg(border_color)),
@@ -794,9 +819,8 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
 
-    let bottom_y = area.y + area.height.saturating_sub(1);
     hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 11, y: bottom_y, width: 9, height: 1 },
+        rect: Rect { x: area.x + 8, y: area.y, width: 14, height: 1 },
         action: HitAction::ToggleLogsAuto,
     });
 
@@ -818,21 +842,13 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let p = Paragraph::new(lines).block(outer_block);
     f.render_widget(p, area);
 
-    // Scrollbar btop++ pour les logs
-    if total_lines > visible_height {
-        let current_pos = if app.auto_scroll {
-            total_lines
-        } else {
-            total_lines.saturating_sub(effective_scroll)
-        };
-        let mut scrollbar_state = ScrollbarState::new(total_lines).position(current_pos);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.highlight));
-        f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
-    }
+    // Scrollbar intégrée style btop++
+    let current_pos = if app.auto_scroll {
+        max_scroll
+    } else {
+        max_scroll.saturating_sub(effective_scroll)
+    };
+    crate::ui::render_btop_scrollbar(f, area, total_lines, current_pos, visible_height, theme);
 }
 
 fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
@@ -857,6 +873,8 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         0
     };
 
+    let highlight_bg = ratatui::style::Color::Rgb(90, 32, 32);
+
     let rows: Vec<Row> = if files_to_display.is_empty() {
         vec![Row::new(vec![
             Cell::from(Span::styled(" Aucun fichier récemment synchronisé", Style::default().fg(theme.text_muted))),
@@ -870,46 +888,54 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
             .skip(offset)
             .take(max_show)
             .map(|(real_idx, (action, path, _size, time))| {
-                let is_selected = is_focused && real_idx == app.recent_selected_idx;
+                let is_selected = real_idx == app.recent_selected_idx;
                 let (badge_text, badge_color) = match action.as_str() {
                     "new" => ("● Ajouté", theme.green),
                     "deleted" => ("● Supprimé", theme.red),
                     _ => ("● Modifié", theme.yellow),
                 };
 
-                let prefix = if is_selected { "▶ " } else { "  " };
-                let row_style = if is_selected {
-                    Style::default().fg(theme.text_bright).bg(theme.border_focus).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.text_bright)
-                };
-
                 let file_path = std::path::Path::new(path);
-                let (display_path, path_style) = if app.ctrl_mode {
+                let display_path = if app.ctrl_mode {
                     let parent = file_path.parent().and_then(|p| p.to_str()).unwrap_or("");
                     let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
-                    let formatted = if parent_clean.is_empty() {
+                    if parent_clean.is_empty() {
                         "📁 ./".to_string()
                     } else {
                         format!("📁 {}/", parent_clean)
-                    };
-                    if is_selected {
-                        (formatted, Style::default().fg(theme.yellow).bg(theme.border_focus).add_modifier(Modifier::BOLD))
-                    } else {
-                        (formatted, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
                     }
                 } else {
-                    (path.clone(), row_style)
+                    path.clone()
                 };
 
-                Row::new(vec![
-                    Cell::from(Line::from(vec![
-                        Span::styled(prefix, Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-                        Span::styled(format!("{} ", badge_text), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
-                    ])),
-                    Cell::from(Span::styled(display_path, path_style)),
-                    Cell::from(Span::styled(time, Style::default().fg(theme.text_muted))),
-                ])
+                if is_selected {
+                    let cursor = Span::styled("▶ ", Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
+                    let badge = Span::styled(format!("{} ", badge_text), Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
+                    let path_span = Span::styled(display_path, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
+                    let time_span = Span::styled(time, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
+
+                    Row::new(vec![
+                        Cell::from(Line::from(vec![cursor, badge])),
+                        Cell::from(path_span),
+                        Cell::from(time_span),
+                    ])
+                    .style(Style::default().bg(highlight_bg))
+                } else {
+                    let cursor = Span::styled("  ", Style::default());
+                    let badge = Span::styled(format!("{} ", badge_text), Style::default().fg(badge_color).add_modifier(Modifier::BOLD));
+                    let path_span = if app.ctrl_mode {
+                        Span::styled(display_path, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+                    } else {
+                        Span::styled(display_path, Style::default().fg(theme.text_bright))
+                    };
+                    let time_span = Span::styled(time, Style::default().fg(theme.text_muted));
+
+                    Row::new(vec![
+                        Cell::from(Line::from(vec![cursor, badge])),
+                        Cell::from(path_span),
+                        Cell::from(time_span),
+                    ])
+                }
             })
             .collect()
     };
@@ -930,22 +956,32 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         }
     }
 
-    let mut bottom_spans = vec![
-        Span::styled("┘", Style::default().fg(border_color)),
-        Span::styled("↑ select ↓", Style::default().fg(theme.text_bright)),
-        Span::styled("└┘", Style::default().fg(border_color)),
-        Span::styled("open ", Style::default().fg(theme.text_bright)),
-        Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("└┘", Style::default().fg(border_color)),
-    ];
-    if app.ctrl_mode {
-        bottom_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
-        bottom_spans.push(Span::styled(" dossier [ON]", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)));
+    let (up_col, down_col) = if total_files <= 1 {
+        (theme.text_muted, theme.text_muted)
+    } else if app.recent_selected_idx == 0 {
+        (theme.text_muted, theme.red)
+    } else if app.recent_selected_idx >= total_files.saturating_sub(1) {
+        (theme.red, theme.text_muted)
     } else {
-        bottom_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
-        bottom_spans.push(Span::styled(" dossier", Style::default().fg(theme.text_bright)));
-    }
-    bottom_spans.push(Span::styled("└", Style::default().fg(border_color)));
+        (theme.red, theme.red)
+    };
+
+    let (opn_col, key_col) = if total_files == 0 {
+        (theme.text_muted, theme.text_muted)
+    } else {
+        (theme.text_bright, theme.red)
+    };
+
+    let bottom_spans = vec![
+        Span::styled("┘", Style::default().fg(border_color)),
+        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(" select ", Style::default().fg(ratatui::style::Color::White)),
+        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
+        Span::styled("└┘", Style::default().fg(border_color)),
+        Span::styled("open ", Style::default().fg(opn_col)),
+        Span::styled("↵", Style::default().fg(key_col).add_modifier(Modifier::BOLD)),
+        Span::styled("└", Style::default().fg(border_color)),
+    ];
 
     let left_bottom = Line::from(bottom_spans);
     let right_bottom = Line::from(vec![
@@ -957,26 +993,33 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         Span::styled("recent files", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
         Span::styled("┌┐", Style::default().fg(border_color)),
     ];
-    if app.is_filtering_recent {
+    let filter_start_x = area.x + 14;
+    let filter_w = if app.is_filtering_recent {
         top_spans.push(Span::styled("filter: ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
         top_spans.push(Span::styled(&app.recent_filter, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
         top_spans.push(Span::styled("█", Style::default().fg(theme.highlight)));
+        8 + app.recent_filter.chars().count() as u16 + 1
     } else if !app.recent_filter.is_empty() {
         top_spans.push(Span::styled("filter: ", Style::default().fg(theme.text_muted)));
         top_spans.push(Span::styled(&app.recent_filter, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
         top_spans.push(Span::styled(" (", Style::default().fg(theme.text_muted)));
         top_spans.push(Span::styled("f", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
         top_spans.push(Span::styled(")", Style::default().fg(theme.text_muted)));
+        11 + app.recent_filter.chars().count() as u16
     } else {
         top_spans.push(Span::styled("f", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
         top_spans.push(Span::styled(" filter", Style::default().fg(theme.text_bright)));
-    }
-    top_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
-    top_spans.push(Span::styled("open ", Style::default().fg(theme.text_bright)));
-    top_spans.push(Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),);
+        8
+    };
+
     top_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
     top_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
-    top_spans.push(Span::styled(if app.ctrl_mode { " dossier [ON]" } else { " dossier" }, Style::default().fg(if app.ctrl_mode { theme.yellow } else { theme.text_bright }).add_modifier(Modifier::BOLD)));
+    let (dossier_text, dossier_color) = if app.ctrl_mode {
+        (" dossier [ON]", theme.yellow)
+    } else {
+        (" dossier", theme.text_bright)
+    };
+    top_spans.push(Span::styled(dossier_text, Style::default().fg(dossier_color).add_modifier(Modifier::BOLD)));
     top_spans.push(Span::styled("┌", Style::default().fg(border_color)));
 
     let outer_block = Block::default()
@@ -990,18 +1033,20 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     // Hitbox pour l'onglet filter dans le bandeau supérieur
     hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 14, y: area.y, width: 12, height: 1 },
+        rect: Rect { x: filter_start_x, y: area.y, width: filter_w, height: 1 },
         action: HitAction::RecentFilterFocus,
+    });
+
+    // Hitbox pour l'onglet Ctrl+X dossier dans le bandeau supérieur
+    hitboxes.push(Hitbox {
+        rect: Rect { x: filter_start_x + filter_w + 2, y: area.y, width: 6 + dossier_text.chars().count() as u16, height: 1 },
+        action: HitAction::ToggleCtrlMode,
     });
 
     let bottom_y = area.y + area.height.saturating_sub(1);
     hitboxes.push(Hitbox {
         rect: Rect { x: area.x + 11, y: bottom_y, width: 8, height: 1 },
         action: HitAction::RecentFile(app.recent_selected_idx),
-    });
-    hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 20, y: bottom_y, width: if app.ctrl_mode { 17 } else { 12 }, height: 1 },
-        action: HitAction::ToggleCtrlMode,
     });
 
     let header_title = if app.ctrl_mode { "DOSSIER PARENT (MODE CTRL ACTIF)" } else { "CHEMIN DU FICHIER" };
@@ -1021,16 +1066,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     f.render_widget(table, area);
 
-    if files_to_display.len() > max_show {
-        let mut scrollbar_state = ScrollbarState::new(files_to_display.len())
-            .position(offset);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.highlight));
-        f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
-    }
+    crate::ui::render_btop_scrollbar(f, area, files_to_display.len(), offset, max_show, theme);
 }
 
 fn colorize_log_line<'a>(line: &'a str, theme: &ThemePalette) -> Line<'a> {

@@ -1,8 +1,8 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -18,6 +18,16 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
     let total_rules = app.filters.len();
     let cur_rule = if total_rules > 0 { app.selected_filter_idx + 1 } else { 0 };
 
+    let (up_col, down_col) = if total_rules <= 1 {
+        (theme.text_muted, theme.text_muted)
+    } else if app.selected_filter_idx == 0 {
+        (theme.text_muted, theme.red)
+    } else if app.selected_filter_idx >= total_rules.saturating_sub(1) {
+        (theme.red, theme.text_muted)
+    } else {
+        (theme.red, theme.red)
+    };
+
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
@@ -31,7 +41,9 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+                Span::styled("/", Style::default().fg(theme.text_muted)),
+                Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
                 Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
                 Span::styled("e", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" éditer  ", Style::default().fg(theme.text_muted)),
@@ -106,39 +118,50 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     (theme.cyan, "[RULE]   ")
                 };
 
-                let cursor = if is_selected {
-                    Span::styled("▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
+                if is_selected {
+                    let highlight_bg = Color::Rgb(90, 32, 32);
+                    let line = Line::from(vec![
+                        Span::styled("▶ ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                        Span::styled(format!("{:2} │ ", i + 1), Style::default().fg(Color::White)),
+                        Span::styled(format!("{} ", prefix), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                        Span::styled(rule, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    ]);
+                    // Enregistrer la hitbox de la ligne
+                    let row_y = area.y + (i.saturating_sub(offset)) as u16;
+                    if row_y < area.y + area.height {
+                        hitboxes.push(Hitbox {
+                            rect: Rect {
+                                x: area.x,
+                                y: row_y,
+                                width: area.width,
+                                height: 1,
+                            },
+                            action: HitAction::FilterRow(i),
+                        });
+                    }
+                    ListItem::new(line).style(Style::default().bg(highlight_bg))
                 } else {
-                    Span::styled("  ", Style::default())
-                };
-
-                let line = Line::from(vec![
-                    cursor,
-                    Span::styled(format!("{:2} │ ", i + 1), Style::default().fg(theme.text_muted)),
-                    Span::styled(format!("{} ", prefix), Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                    Span::styled(
-                        rule,
-                        Style::default()
-                            .fg(if is_selected { theme.text_bright } else { theme.text_muted })
-                            .add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() }),
-                    ),
-                ]);
-
-                // Enregistrer la hitbox de la ligne
-                let row_y = area.y + (i.saturating_sub(offset)) as u16;
-                if row_y < area.y + area.height {
-                    hitboxes.push(Hitbox {
-                        rect: Rect {
-                            x: area.x,
-                            y: row_y,
-                            width: area.width,
-                            height: 1,
-                        },
-                        action: HitAction::FilterRow(i),
-                    });
+                    let line = Line::from(vec![
+                        Span::styled("  ", Style::default()),
+                        Span::styled(format!("{:2} │ ", i + 1), Style::default().fg(theme.text_muted)),
+                        Span::styled(format!("{} ", prefix), Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                        Span::styled(rule, Style::default().fg(theme.text_muted)),
+                    ]);
+                    // Enregistrer la hitbox de la ligne
+                    let row_y = area.y + (i.saturating_sub(offset)) as u16;
+                    if row_y < area.y + area.height {
+                        hitboxes.push(Hitbox {
+                            rect: Rect {
+                                x: area.x,
+                                y: row_y,
+                                width: area.width,
+                                height: 1,
+                            },
+                            action: HitAction::FilterRow(i),
+                        });
+                    }
+                    ListItem::new(line)
                 }
-
-                ListItem::new(line)
             })
             .collect()
     };
@@ -146,16 +169,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let list = List::new(items).block(Block::default().borders(Borders::NONE));
     f.render_widget(list, area);
 
-    if app.filters.len() > visible_height {
-        let mut scrollbar_state = ScrollbarState::new(app.filters.len())
-            .position(app.selected_filter_idx);
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("▲"))
-            .end_symbol(Some("▼"))
-            .track_style(Style::default().fg(theme.border))
-            .thumb_style(Style::default().fg(theme.highlight));
-        f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
-    }
+    crate::ui::render_btop_scrollbar(f, area, app.filters.len(), app.selected_filter_idx, visible_height, theme);
 }
 
 fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
