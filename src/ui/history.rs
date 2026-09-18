@@ -86,11 +86,21 @@ fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
     f.render_widget(list, area);
 
     let visible_height = area.height.saturating_sub(3) as usize;
-    crate::ui::render_btop_scrollbar(f, area, app.past_runs.len(), app.selected_run_idx.unwrap_or(0), visible_height, theme);
+    let mut dummy_hitboxes = Vec::new();
+    crate::ui::render_btop_scrollbar(
+        f,
+        area,
+        app.past_runs.len(),
+        app.selected_run_idx.unwrap_or(0),
+        visible_height,
+        theme,
+        &mut dummy_hitboxes,
+        crate::app::ScrollbarTarget::History,
+    );
 }
 
 pub fn render_history_details_modal(f: &mut Frame, app: &App, run_idx: usize, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
-    let area = centered_rect(82, 78, f.area());
+    let area = centered_rect(78, 74, f.area());
     f.render_widget(ratatui::widgets::Clear, area);
     render_run_details(f, app, run_idx, theme, area, hitboxes);
 }
@@ -327,7 +337,16 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         action: HitAction::CopyHistoryErrors(run_idx),
     });
 
-    crate::ui::render_btop_scrollbar(f, area, total_lines, scroll, visible_height, theme);
+    crate::ui::render_btop_scrollbar(
+        f,
+        area,
+        total_lines,
+        scroll,
+        visible_height,
+        theme,
+        hitboxes,
+        crate::app::ScrollbarTarget::HistoryDetails(run_idx),
+    );
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

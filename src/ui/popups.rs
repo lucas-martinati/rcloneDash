@@ -408,5 +408,14 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
     let footer_p = Paragraph::new(footer_line).alignment(Alignment::Center);
     f.render_widget(footer_p, chunks[1]);
 
-    crate::ui::render_btop_scrollbar(f, chunks[0], total_lines, scroll, visible_height, theme);
+    crate::ui::render_btop_scrollbar(
+        f,
+        chunks[0],
+        total_lines,
+        scroll,
+        visible_height,
+        theme,
+        hitboxes,
+        crate::app::ScrollbarTarget::DryRun,
+    );
 }

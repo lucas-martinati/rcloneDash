@@ -70,6 +70,17 @@ pub const TICK_RATE_STEPS: [u64; 21] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollbarTarget {
+    Logs,
+    History,
+    RecentFiles,
+    HistoryDetails(usize),
+    Files,
+    Filters,
+    DryRun,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum HitAction {
     ButtonMenu,
@@ -108,6 +119,15 @@ pub enum HitAction {
     ButtonCopy,
     FilterArea,
     FilterRow(usize),
+    ScrollbarArrowUp(ScrollbarTarget),
+    ScrollbarArrowDown(ScrollbarTarget),
+    ScrollbarTrack {
+        target: ScrollbarTarget,
+        top_y: u16,
+        track_height: u16,
+        total: usize,
+        visible: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,6 +206,7 @@ pub struct App {
     // Sélection d'éléments interactifs
     pub history_selected_file_idx: usize,
     pub recent_selected_idx: Option<usize>,
+    pub active_scrollbar_drag: Option<(ScrollbarTarget, u16, u16, usize, usize)>,
 
     // Registre précis des hitboxes cliquables (au pixel près)
     pub hitboxes: Vec<Hitbox>,
@@ -274,6 +295,7 @@ impl App {
 
             history_selected_file_idx: 0,
             recent_selected_idx: None,
+            active_scrollbar_drag: None,
 
             hitboxes: Vec::with_capacity(64),
 
@@ -953,6 +975,198 @@ impl App {
         }
     }
 
+    pub fn commit_setting_edit(&mut self) {
+        if !self.is_editing_setting {
+            return;
+        }
+        let trimmed = self.setting_edit_buffer.trim().to_string();
+        if self.settings_selected_idx == 5 {
+            if !trimmed.is_empty() {
+                if self.config.local_dir != trimmed {
+                    self.config.local_dir = trimmed;
+                    self.reload_files();
+                    self.save_current_settings();
+                    self.set_toast(format!("✔ Dossier local mis à jour : {}", self.config.local_dir));
+                }
+            }
+        } else if self.settings_selected_idx == 6 {
+            if !trimmed.is_empty() {
+                if self.config.remote != trimmed {
+                    self.config.remote = trimmed;
+                    self.save_current_settings();
+                    self.set_toast(format!("✔ Remote distant mis à jour : {}", self.config.remote));
+                }
+            }
+        }
+        self.is_editing_setting = false;
+    }
+
+    pub fn apply_scrollbar_step(&mut self, target: ScrollbarTarget, up: bool) {
+        match target {
+            ScrollbarTarget::Logs => {
+                self.focused_panel = FocusedPanel::Logs;
+                if up {
+                    let visible_height = self.logs_viewport_height.max(3);
+                    let max_scroll = self.total_log_lines().saturating_sub(visible_height);
+                    if max_scroll > 0 && self.logs_scroll < max_scroll {
+                        self.auto_scroll = false;
+                        self.logs_scroll += 1;
+                    }
+                } else {
+                    if self.logs_scroll > 0 {
+                        self.logs_scroll = self.logs_scroll.saturating_sub(1);
+                        if self.logs_scroll == 0 {
+                            self.auto_scroll = true;
+                        }
+                    }
+                }
+            }
+            ScrollbarTarget::History => {
+                self.focused_panel = FocusedPanel::History;
+                let vp = self.history_viewport_height.max(2);
+                if up {
+                    self.scroll_history_up(vp);
+                } else {
+                    self.scroll_history_down(vp);
+                }
+            }
+            ScrollbarTarget::RecentFiles => {
+                self.focused_panel = FocusedPanel::RecentFiles;
+                let vp = self.recent_viewport_height.max(1);
+                if up {
+                    self.scroll_recent_up(vp);
+                } else {
+                    self.scroll_recent_down(vp);
+                }
+            }
+            ScrollbarTarget::HistoryDetails(run_idx) => {
+                if up {
+                    if self.history_details_scroll > 0 {
+                        self.history_details_scroll -= 1;
+                    }
+                } else {
+                    let total_files = self.past_runs.get(run_idx).map(|r| r.all_affected_files().len()).unwrap_or(0);
+                    let max_scroll = total_files.saturating_sub(5);
+                    if self.history_details_scroll < max_scroll {
+                        self.history_details_scroll += 1;
+                    }
+                }
+            }
+            ScrollbarTarget::Files => {
+                if up {
+                    if self.file_selected_idx > 0 {
+                        self.file_selected_idx -= 1;
+                        if self.file_selected_idx < self.file_scroll_offset {
+                            self.file_scroll_offset = self.file_scroll_offset.saturating_sub(1);
+                        }
+                    }
+                } else {
+                    if !self.file_entries.is_empty() && self.file_selected_idx < self.file_entries.len() - 1 {
+                        self.file_selected_idx += 1;
+                        let vp = self.file_viewport_height;
+                        if self.file_selected_idx >= self.file_scroll_offset + vp {
+                            self.file_scroll_offset = self.file_selected_idx - vp + 1;
+                        }
+                    }
+                }
+            }
+            ScrollbarTarget::Filters => {
+                if up {
+                    self.selected_filter_idx = self.selected_filter_idx.saturating_sub(1);
+                    let vp = self.filter_viewport_height;
+                    self.ensure_filter_visible(vp);
+                } else {
+                    if !self.filters.is_empty() {
+                        let max = self.filters.len().saturating_sub(1);
+                        self.selected_filter_idx = (self.selected_filter_idx + 1).min(max);
+                        let vp = self.filter_viewport_height;
+                        self.ensure_filter_visible(vp);
+                    }
+                }
+            }
+            ScrollbarTarget::DryRun => {
+                if up {
+                    self.dry_run_scroll = self.dry_run_scroll.saturating_sub(1);
+                } else {
+                    let max_dry = self.dry_run_logs.len().saturating_sub(5);
+                    if self.dry_run_scroll < max_dry {
+                        self.dry_run_scroll += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn apply_scrollbar_jump(
+        &mut self,
+        target: ScrollbarTarget,
+        click_offset: u16,
+        track_height: u16,
+        total: usize,
+        visible: usize,
+    ) {
+        if total <= visible || track_height == 0 {
+            return;
+        }
+        let max_scroll = total.saturating_sub(visible);
+        let ratio = (click_offset as f64) / ((track_height.saturating_sub(1)).max(1) as f64);
+        let ratio = ratio.clamp(0.0, 1.0);
+
+        match target {
+            ScrollbarTarget::Logs => {
+                self.focused_panel = FocusedPanel::Logs;
+                let pos = ((ratio * max_scroll as f64).round() as usize).min(max_scroll);
+                let new_logs_scroll = max_scroll.saturating_sub(pos);
+                self.logs_scroll = new_logs_scroll;
+                self.auto_scroll = new_logs_scroll == 0;
+            }
+            ScrollbarTarget::History => {
+                self.focused_panel = FocusedPanel::History;
+                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
+                self.selected_run_idx = Some(target_idx);
+                let vp = self.history_viewport_height.max(2);
+                if target_idx < self.history_scroll_offset {
+                    self.history_scroll_offset = target_idx;
+                } else if target_idx >= self.history_scroll_offset + vp {
+                    self.history_scroll_offset = target_idx + 1 - vp;
+                }
+            }
+            ScrollbarTarget::RecentFiles => {
+                self.focused_panel = FocusedPanel::RecentFiles;
+                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
+                self.recent_selected_idx = Some(target_idx);
+                let vp = self.recent_viewport_height.max(1);
+                if target_idx < self.recent_scroll_offset {
+                    self.recent_scroll_offset = target_idx;
+                } else if target_idx >= self.recent_scroll_offset + vp {
+                    self.recent_scroll_offset = target_idx + 1 - vp;
+                }
+            }
+            ScrollbarTarget::HistoryDetails(_) => {
+                self.history_details_scroll = ((ratio * max_scroll as f64).round() as usize).min(max_scroll);
+            }
+            ScrollbarTarget::Files => {
+                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
+                self.file_selected_idx = target_idx;
+                let vp = self.file_viewport_height;
+                if target_idx < self.file_scroll_offset {
+                    self.file_scroll_offset = target_idx;
+                } else if target_idx >= self.file_scroll_offset + vp {
+                    self.file_scroll_offset = target_idx + 1 - vp;
+                }
+            }
+            ScrollbarTarget::Filters => {
+                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
+                self.selected_filter_idx = target_idx;
+                let vp = self.filter_viewport_height;
+                self.ensure_filter_visible(vp);
+            }
+            ScrollbarTarget::DryRun => {
+                self.dry_run_scroll = ((ratio * max_scroll as f64).round() as usize).min(max_scroll);
+            }
+        }
+    }
+
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Action {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
@@ -1191,6 +1405,7 @@ impl App {
                                 return Action::None;
                             }
                             HitAction::CloseModal => {
+                                self.commit_setting_edit();
                                 self.modal = Modal::None;
                                 return Action::None;
                             }
@@ -1273,6 +1488,9 @@ impl App {
                                 return Action::None;
                             }
                             HitAction::SettingOption(idx) => {
+                                if self.is_editing_setting && idx != self.settings_selected_idx {
+                                    self.commit_setting_edit();
+                                }
                                 self.settings_selected_idx = idx;
                                 if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
@@ -1289,6 +1507,9 @@ impl App {
                                 return Action::None;
                             }
                             HitAction::SettingCycle(idx, forward) => {
+                                if self.is_editing_setting && idx != self.settings_selected_idx {
+                                    self.commit_setting_edit();
+                                }
                                 self.settings_selected_idx = idx;
                                 if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
@@ -1305,6 +1526,7 @@ impl App {
                                 return Action::None;
                             }
                             HitAction::SaveSettings => {
+                                self.commit_setting_edit();
                                 self.save_current_settings();
                                 return Action::None;
                             }
@@ -1367,14 +1589,53 @@ impl App {
                                 }
                                 return Action::None;
                             }
+                            HitAction::ScrollbarArrowUp(target) => {
+                                self.apply_scrollbar_step(target, true);
+                                return Action::None;
+                            }
+                            HitAction::ScrollbarArrowDown(target) => {
+                                self.apply_scrollbar_step(target, false);
+                                return Action::None;
+                            }
+                            HitAction::ScrollbarTrack { target, top_y, track_height, total, visible } => {
+                                self.active_scrollbar_drag = Some((target, top_y, track_height, total, visible));
+                                let click_offset = row.saturating_sub(top_y).min(track_height.saturating_sub(1));
+                                self.apply_scrollbar_jump(target, click_offset, track_height, total, visible);
+                                return Action::None;
+                            }
                         }
                     }
                 }
 
                 // Clic en dehors d'une modale ouverte : fermeture
                 if self.modal != Modal::None {
+                    self.commit_setting_edit();
                     self.modal = Modal::None;
                 }
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                let row = mouse.row;
+                if let Some((target, top_y, track_height, total, visible)) = self.active_scrollbar_drag {
+                    let click_offset = row.saturating_sub(top_y).min(track_height.saturating_sub(1));
+                    self.apply_scrollbar_jump(target, click_offset, track_height, total, visible);
+                    return Action::None;
+                }
+                let col = mouse.column;
+                for hb in self.hitboxes.iter().rev() {
+                    if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
+                        && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
+                    {
+                        if let HitAction::ScrollbarTrack { target, top_y, track_height, total, visible } = hb.action {
+                            self.active_scrollbar_drag = Some((target, top_y, track_height, total, visible));
+                            let click_offset = row.saturating_sub(top_y).min(track_height.saturating_sub(1));
+                            self.apply_scrollbar_jump(target, click_offset, track_height, total, visible);
+                            return Action::None;
+                        }
+                    }
+                }
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                self.active_scrollbar_drag = None;
             }
             _ => {}
         }
@@ -1628,26 +1889,8 @@ impl App {
                 Modal::Settings => {
                     if self.is_editing_setting {
                         match key.code {
-                            KeyCode::Esc => {
-                                self.is_editing_setting = false;
-                            }
-                            KeyCode::Enter => {
-                                let trimmed = self.setting_edit_buffer.trim().to_string();
-                                if self.settings_selected_idx == 5 {
-                                    if !trimmed.is_empty() {
-                                        self.config.local_dir = trimmed;
-                                        self.reload_files();
-                                        self.save_current_settings();
-                                        self.set_toast(format!("✔ Dossier local mis à jour : {}", self.config.local_dir));
-                                    }
-                                } else if self.settings_selected_idx == 6 {
-                                    if !trimmed.is_empty() {
-                                        self.config.remote = trimmed;
-                                        self.save_current_settings();
-                                        self.set_toast(format!("✔ Remote distant mis à jour : {}", self.config.remote));
-                                    }
-                                }
-                                self.is_editing_setting = false;
+                            KeyCode::Esc | KeyCode::Enter => {
+                                self.commit_setting_edit();
                             }
                             KeyCode::Backspace => {
                                 self.setting_edit_buffer.pop();
@@ -3042,10 +3285,10 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
         assert_eq!(app.setting_edit_buffer, "/home/user/drive/su");
 
-        // Annulation avec Échap : la configuration ne doit pas changer
+        // Sortie avec Échap : ce qui est écrit dans le champ est sauvegardé (selon demande utilisateur)
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(!app.is_editing_setting);
-        assert_eq!(app.config.local_dir, "/home/user/drive");
+        assert_eq!(app.config.local_dir, "/home/user/drive/su");
 
         // Entrée en édition avec 'e', modification et validation avec Entrée
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
@@ -3055,15 +3298,68 @@ mod tests {
         assert!(!app.is_editing_setting);
         assert_eq!(app.config.local_dir, "/home/new/path");
 
-        // Test sur le remote (option 6)
+        // Test sur le remote (option 6) : par exemple "GoogleDrive:"
         app.settings_selected_idx = 6;
-        app.config.remote = "gdrive:backup".to_string();
-        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)); // Flèche droite active aussi l'édition
+        app.config.remote = "GoogleDrive:".to_string();
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)); // Flèche droite active l'édition
         assert!(app.is_editing_setting);
-        assert_eq!(app.setting_edit_buffer, "gdrive:backup");
-        app.setting_edit_buffer = "myremote:data".to_string();
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert_eq!(app.config.remote, "myremote:data");
+        assert_eq!(app.setting_edit_buffer, "GoogleDrive:");
+
+        // L'utilisateur ne modifie rien à la chaîne et sort : "GoogleDrive:" reste inchangé
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!app.is_editing_setting);
+        assert_eq!(app.config.remote, "GoogleDrive:");
+    }
+
+    #[tokio::test]
+    async fn test_scrollbar_mouse_interaction() {
+        let mut app = App::new();
+        app.logs_viewport_height = 5;
+        app.live.log_lines = (0..20).map(|i| format!("log line {}", i)).collect();
+
+        // 1. Clic sur flèche haut scrollbar logs
+        assert_eq!(app.logs_scroll, 0);
+        assert!(app.auto_scroll);
+        app.apply_scrollbar_step(ScrollbarTarget::Logs, true);
+        assert_eq!(app.logs_scroll, 1);
+        assert!(!app.auto_scroll);
+
+        // 2. Clic sur flèche bas scrollbar logs
+        app.apply_scrollbar_step(ScrollbarTarget::Logs, false);
+        assert_eq!(app.logs_scroll, 0);
+        assert!(app.auto_scroll);
+
+        // 3. Saut / Glissement (drag) sur la piste scrollbar
+        // Piste de hauteur 10, offset 5 -> milieu
+        app.apply_scrollbar_jump(ScrollbarTarget::Logs, 5, 10, 20, 5);
+        assert!(app.logs_scroll > 0);
+        assert!(!app.auto_scroll);
+
+        // 4. Test ScrollbarTarget::History step & jump
+        app.past_runs = (0..10).map(|i| crate::monitor::history::PastRun {
+            id: i,
+            date: "2026-09-18".into(),
+            time: "12:00:00".into(),
+            duration: "5s".into(),
+            status: crate::monitor::history::RunStatus::Success,
+            files_copied: vec![],
+            files_modified: vec![],
+            files_deleted: vec![],
+            synced_files: vec![],
+            errors: vec![],
+            summary: "OK".into(),
+        }).collect();
+        app.history_viewport_height = 4;
+        app.selected_run_idx = Some(0);
+
+        app.apply_scrollbar_step(ScrollbarTarget::History, false);
+        assert_eq!(app.selected_run_idx, Some(1));
+
+        app.apply_scrollbar_step(ScrollbarTarget::History, true);
+        assert_eq!(app.selected_run_idx, Some(0));
+
+        app.apply_scrollbar_jump(ScrollbarTarget::History, 9, 10, 10, 4);
+        assert_eq!(app.selected_run_idx, Some(9));
     }
 
     #[test]

@@ -17,16 +17,16 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let logo_h: u16 = if is_wide { 6 } else { 5 };
     let show_logo = screen.height >= 30;
     let box_w = if screen.width >= 96 {
-        92.min(screen.width.saturating_sub(4))
+        88.min(screen.width.saturating_sub(4))
     } else if screen.width >= 86 {
-        86.min(screen.width.saturating_sub(2))
+        82.min(screen.width.saturating_sub(2))
     } else {
-        78.min(screen.width.saturating_sub(2))
+        76.min(screen.width.saturating_sub(2))
     };
     let box_h = if show_logo {
-        23.min(screen.height.saturating_sub(logo_h + 3))
+        21.min(screen.height.saturating_sub(logo_h + 3))
     } else {
-        24.min(screen.height.saturating_sub(2))
+        21.min(screen.height.saturating_sub(2))
     };
 
     let total_h = if show_logo { logo_h + 1 + box_h } else { box_h };

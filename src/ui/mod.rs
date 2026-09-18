@@ -13,7 +13,7 @@ pub mod theme;
 pub mod keys;
 
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     widgets::Block,
     Frame,
@@ -62,14 +62,14 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let show_active_sync = app.live.is_syncing || app.live.transfer.pct > 0;
 
     let mut dash_constraints = Vec::new();
-    dash_constraints.push(Constraint::Length(6)); // Stockage & Métriques
+    dash_constraints.push(Constraint::Length(5)); // Stockage & Métriques compact (style btop++)
     if show_alert {
         dash_constraints.push(Constraint::Length(3));
     }
     if show_active_sync {
-        dash_constraints.push(Constraint::Length(7));
+        dash_constraints.push(Constraint::Length(5)); // Synchronisation en cours compacte
     }
-    dash_constraints.push(Constraint::Percentage(55)); // Historique + Logs
+    dash_constraints.push(Constraint::Percentage(52)); // Historique + Logs
     dash_constraints.push(Constraint::Min(6)); // Fichiers récents
 
     let dash_chunks = Layout::default()
@@ -107,6 +107,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
 /// Scrollbar intégrée dans les conteneurs (style btop++)
 /// Dessinée directement dans la colonne droite intérieure (x = area.x + area.width - 2)
 /// avec flèche ↑ en haut, flèche ↓ en bas, et curseur plein █ au niveau de la position.
+/// Désormais entièrement interactive à la souris (clic flèches, clic piste, glisser-déposer).
 pub fn render_btop_scrollbar(
     f: &mut Frame,
     area: ratatui::layout::Rect,
@@ -114,6 +115,8 @@ pub fn render_btop_scrollbar(
     pos: usize,
     visible: usize,
     theme: &crate::ui::theme::ThemePalette,
+    hitboxes: &mut Vec<crate::app::Hitbox>,
+    target: crate::app::ScrollbarTarget,
 ) {
     if total <= visible || area.height < 4 || area.width < 5 {
         return;
@@ -131,8 +134,17 @@ pub fn render_btop_scrollbar(
 
     // Flèche haut
     buf.set_string(scroll_x, top_y, "↑", Style::default().fg(theme.text_muted));
+    hitboxes.push(crate::app::Hitbox {
+        rect: Rect { x: scroll_x, y: top_y, width: 1, height: 1 },
+        action: crate::app::HitAction::ScrollbarArrowUp(target),
+    });
+
     // Flèche bas
     buf.set_string(scroll_x, bot_y, "↓", Style::default().fg(theme.text_muted));
+    hitboxes.push(crate::app::Hitbox {
+        rect: Rect { x: scroll_x, y: bot_y, width: 1, height: 1 },
+        action: crate::app::HitAction::ScrollbarArrowDown(target),
+    });
 
     if track_height == 0 {
         return;
@@ -142,6 +154,23 @@ pub fn render_btop_scrollbar(
     for y in (top_y + 1)..bot_y {
         buf.set_string(scroll_x, y, " ", Style::default());
     }
+
+    // Hitbox pour toute la piste (clic ou drag)
+    hitboxes.push(crate::app::Hitbox {
+        rect: Rect {
+            x: scroll_x,
+            y: top_y + 1,
+            width: 1,
+            height: track_height as u16,
+        },
+        action: crate::app::HitAction::ScrollbarTrack {
+            target,
+            top_y: top_y + 1,
+            track_height: track_height as u16,
+            total,
+            visible,
+        },
+    });
 
     // Calcul du curseur
     let thumb_size = ((visible as f64 / total as f64) * track_height as f64).round().max(1.0) as usize;

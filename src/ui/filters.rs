@@ -169,7 +169,16 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let list = List::new(items).block(Block::default().borders(Borders::NONE));
     f.render_widget(list, area);
 
-    crate::ui::render_btop_scrollbar(f, area, app.filters.len(), app.selected_filter_idx, visible_height, theme);
+    crate::ui::render_btop_scrollbar(
+        f,
+        area,
+        app.filters.len(),
+        app.selected_filter_idx,
+        visible_height,
+        theme,
+        hitboxes,
+        crate::app::ScrollbarTarget::Filters,
+    );
 }
 
 fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {

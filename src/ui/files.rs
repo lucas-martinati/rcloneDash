@@ -206,6 +206,8 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         app.file_selected_idx,
         visible_height,
         theme,
+        hitboxes,
+        crate::app::ScrollbarTarget::Files,
     );
 }
 

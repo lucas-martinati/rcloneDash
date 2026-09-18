@@ -177,12 +177,27 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
         Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
     ];
 
-    let p = Paragraph::new(vec![
+    let mut lines = vec![
         Line::from(line1_spans),
         Line::from(line2_spans),
-        Line::from(line3_spans),
-        Line::from(line4_spans),
-    ]);
+    ];
+    if inner.height >= 4 {
+        lines.push(Line::from(line3_spans));
+        lines.push(Line::from(line4_spans));
+    } else {
+        let line3_compact = vec![
+            Span::styled("Dossier: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{} ", &app.config.local_dir), Style::default().fg(theme.text_bright)),
+            Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
+            Span::styled(" │ Filet: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("│ bw: ", Style::default().fg(theme.text_muted)),
+            Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
+        ];
+        lines.push(Line::from(line3_compact));
+    }
+
+    let p = Paragraph::new(lines);
     f.render_widget(p, inner);
 }
 
@@ -316,18 +331,33 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     let mut line4_spans = vec![
         Span::styled("Fiabilité:", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
-    line4_spans.extend(rel_bar);
+    line4_spans.extend(rel_bar.clone());
     line4_spans.push(Span::styled(
         format!(" {:>3.0}% taux de réussite (7 jours)", rate),
         Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
     ));
 
-    let p = Paragraph::new(vec![
-        Line::from(line1_spans),
-        Line::from(line2_spans),
-        Line::from(line3_spans),
-        Line::from(line4_spans),
-    ]);
+    let mut lines = vec![Line::from(line1_spans)];
+    if inner.height >= 4 {
+        lines.push(Line::from(line2_spans));
+        lines.push(Line::from(line3_spans));
+        lines.push(Line::from(line4_spans));
+    } else {
+        let mut line2_compact = vec![
+            Span::styled("Débit: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{:<8} ", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("│ Fiab: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        ];
+        line2_compact.extend(rel_bar);
+        line2_compact.push(Span::styled(
+            format!(" {:>3.0}% (7j)", rate),
+            Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
+        ));
+        lines.push(Line::from(line2_compact));
+        lines.push(Line::from(line3_spans));
+    }
+
+    let p = Paragraph::new(lines);
     f.render_widget(p, inner);
 }
 
@@ -458,7 +488,7 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
         .constraints([
             Constraint::Length(1), // Stepper
             Constraint::Length(1), // KPIs
-            Constraint::Min(2),    // Changements côte à côte
+            Constraint::Min(1),    // Changements côte à côte
         ])
         .split(inner);
 
@@ -786,7 +816,16 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     f.render_widget(table, chunks[1]);
 
-    crate::ui::render_btop_scrollbar(f, area, total_runs, app.selected_run_idx.unwrap_or(0), visible_rows, theme);
+    crate::ui::render_btop_scrollbar(
+        f,
+        area,
+        total_runs,
+        app.selected_run_idx.unwrap_or(0),
+        visible_rows,
+        theme,
+        hitboxes,
+        crate::app::ScrollbarTarget::History,
+    );
 }
 
 fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
@@ -888,7 +927,16 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     } else {
         max_scroll.saturating_sub(effective_scroll)
     };
-    crate::ui::render_btop_scrollbar(f, area, total_lines, current_pos, visible_height, theme);
+    crate::ui::render_btop_scrollbar(
+        f,
+        area,
+        total_lines,
+        current_pos,
+        visible_height,
+        theme,
+        hitboxes,
+        crate::app::ScrollbarTarget::Logs,
+    );
 }
 
 fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
@@ -1123,7 +1171,16 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     f.render_widget(table, area);
 
-    crate::ui::render_btop_scrollbar(f, area, files_to_display.len(), offset, max_show, theme);
+    crate::ui::render_btop_scrollbar(
+        f,
+        area,
+        files_to_display.len(),
+        offset,
+        max_show,
+        theme,
+        hitboxes,
+        crate::app::ScrollbarTarget::RecentFiles,
+    );
 }
 
 /// Découpe un texte pour éviter tout crop horizontal dans le terminal.
