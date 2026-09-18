@@ -935,7 +935,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
                         format!("📁 {}/", parent_clean)
                     }
                 } else {
-                    path.clone()
+                    normalize_display_path(path)
                 };
 
                 if is_selected {
@@ -1137,4 +1137,12 @@ fn colorize_log_line<'a>(line: &'a str, theme: &ThemePalette) -> Line<'a> {
     } else {
         Line::from(Span::styled(line, style))
     }
+}
+
+pub fn normalize_display_path(p: &str) -> String {
+    let mut s = p.replace(" From ", " from ");
+    if s.starts_with("From ") {
+        s = format!("from {}", &s[5..]);
+    }
+    s.replace("/From ", "/from ")
 }

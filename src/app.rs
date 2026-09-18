@@ -1193,12 +1193,20 @@ impl App {
                             }
                             HitAction::SettingOption(idx) => {
                                 self.settings_selected_idx = idx;
-                                self.cycle_setting(true);
+                                if idx == 7 {
+                                    self.modal = Modal::ConfirmResync;
+                                } else {
+                                    self.cycle_setting(true);
+                                }
                                 return Action::None;
                             }
                             HitAction::SettingCycle(idx, forward) => {
                                 self.settings_selected_idx = idx;
-                                self.cycle_setting(forward);
+                                if idx == 7 {
+                                    self.modal = Modal::ConfirmResync;
+                                } else {
+                                    self.cycle_setting(forward);
+                                }
                                 return Action::None;
                             }
                             HitAction::SaveSettings => {
@@ -1339,7 +1347,7 @@ impl App {
                 self.tick_rate_changed = true;
             }
             7 => {
-                self.save_current_settings();
+                self.modal = Modal::ConfirmResync;
             }
             _ => {}
         }
@@ -1507,11 +1515,26 @@ impl App {
                             self.settings_selected_idx += 1;
                         }
                     }
-                    KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
-                        self.cycle_setting(true);
+                    KeyCode::Enter => {
+                        if self.settings_selected_idx == 7 {
+                            self.modal = Modal::ConfirmResync;
+                        } else {
+                            self.save_current_settings();
+                        }
+                    }
+                    KeyCode::Right | KeyCode::Char('l') => {
+                        if self.settings_selected_idx == 7 {
+                            self.modal = Modal::ConfirmResync;
+                        } else {
+                            self.cycle_setting(true);
+                        }
                     }
                     KeyCode::Left | KeyCode::Char('h') => {
-                        self.cycle_setting(false);
+                        if self.settings_selected_idx == 7 {
+                            self.modal = Modal::ConfirmResync;
+                        } else {
+                            self.cycle_setting(false);
+                        }
                     }
                     _ => {}
                 },
@@ -1567,7 +1590,14 @@ impl App {
                     KeyCode::Enter => {
                         self.enter_selected_file_or_dir();
                     }
-                    KeyCode::Backspace => {
+                    KeyCode::Right | KeyCode::Char('l') => {
+                        if let Some(entry) = self.file_entries.get(self.file_selected_idx) {
+                            if entry.is_dir {
+                                self.enter_selected_file_or_dir();
+                            }
+                        }
+                    }
+                    KeyCode::Backspace | KeyCode::Left | KeyCode::Char('h') => {
                         self.parent_file_dir();
                     }
                     KeyCode::Char('d') => {
@@ -2654,6 +2684,77 @@ mod tests {
         app.tick_rate_ms_live = 1000;
         assert!(app.can_dec_tick_rate());
         assert!(app.can_inc_tick_rate());
+    }
+
+    #[tokio::test]
+    async fn test_settings_resync_modal_trigger() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        app.settings_selected_idx = 7; // Resynchronisation complète
+
+        // Appuyer sur Entrée doit ouvrir ConfirmResync
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::ConfirmResync);
+
+        // Annuler avec Esc
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+
+        // Rouvrir et tester avec Flèche Droite
+        app.modal = Modal::Settings;
+        app.settings_selected_idx = 7;
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::ConfirmResync);
+    }
+
+    #[tokio::test]
+    async fn test_files_browser_left_right_navigation() {
+        let mut app = App::new();
+        app.modal = Modal::Files;
+        app.file_entries = vec![
+            crate::fs_tree::FileEntry {
+                name: "dossier_a".into(),
+                rel_path: "dossier_a".into(),
+                is_dir: true,
+                size: 0,
+                mtime: "".into(),
+                ignored: false,
+            },
+            crate::fs_tree::FileEntry {
+                name: "fichier_b.txt".into(),
+                rel_path: "fichier_b.txt".into(),
+                is_dir: false,
+                size: 100,
+                mtime: "".into(),
+                ignored: false,
+            },
+        ];
+        app.file_selected_idx = 0; // dossier_a
+
+        // Flèche droite sur un dossier entre dans le dossier
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        assert_eq!(app.file_current_rel, "dossier_a");
+
+        // Flèche gauche remonte au parent
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        assert_eq!(app.file_current_rel, "");
+    }
+
+    #[test]
+    fn test_normalize_display_path() {
+        use crate::ui::dashboard::normalize_display_path;
+        assert_eq!(
+            normalize_display_path("Images/Screenshot From 2026-09-18 08-08-09.png"),
+            "Images/Screenshot from 2026-09-18 08-08-09.png"
+        );
+        assert_eq!(
+            normalize_display_path("Images/Screenshot from 2026-09-03 08-56-39.png"),
+            "Images/Screenshot from 2026-09-03 08-56-39.png"
+        );
+        assert_eq!(
+            normalize_display_path("From zero to hero.pdf"),
+            "from zero to hero.pdf"
+        );
     }
 }
 

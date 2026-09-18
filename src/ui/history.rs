@@ -176,7 +176,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                     format!("📁 {}/", parent_clean)
                 }
             } else {
-                path.to_string()
+                crate::ui::dashboard::normalize_display_path(path)
             };
 
             if is_selected {

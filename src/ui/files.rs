@@ -64,8 +64,12 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
                 Span::styled("/", Style::default().fg(theme.text_muted)),
                 Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
                 Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
+                Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" parent  ", Style::default().fg(theme.text_muted)),
+                Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("/", Style::default().fg(theme.text_muted)),
                 Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" ouvrir  ", Style::default().fg(theme.text_muted)),
+                Span::styled(" entrer  ", Style::default().fg(theme.text_muted)),
                 Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
                 Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
@@ -242,8 +246,12 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
         Span::styled("Actions rapides :", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [Entrée/Double-clic] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-        Span::styled("Ouvrir / Entrer", Style::default().fg(theme.text_bright)),
+        Span::styled(" [→ / Entrée] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled("Entrer / Ouvrir", Style::default().fg(theme.text_bright)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled(" [← / Backspace] ", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+        Span::styled("Dossier parent", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![
         Span::styled(" [d] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
@@ -256,10 +264,6 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
     lines.push(Line::from(vec![
         Span::styled(" [Suppr] ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         Span::styled("Supprimer localement", Style::default().fg(theme.red)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled(" [Backspace] ", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-        Span::styled("Dossier parent", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![
         Span::styled(" [Échap] ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),

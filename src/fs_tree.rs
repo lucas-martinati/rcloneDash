@@ -114,27 +114,103 @@ pub fn list_directory(base: &Path, rel: &str, filters: &[String]) -> Result<Vec<
     Ok(entries)
 }
 
+pub fn glob_to_regex(pat: &str) -> String {
+    let mut out = String::from("^");
+    let chars: Vec<char> = pat.chars().collect();
+    let n = chars.len();
+    let mut i = 0;
+    while i < n {
+        if i + 2 < n && chars[i] == '*' && chars[i + 1] == '*' && chars[i + 2] == '/' {
+            out.push_str("(?:.*/)?");
+            i += 3;
+        } else if i + 1 < n && chars[i] == '*' && chars[i + 1] == '*' {
+            out.push_str(".*");
+            i += 2;
+        } else if chars[i] == '*' {
+            out.push_str("[^/]*");
+            i += 1;
+        } else if chars[i] == '?' {
+            out.push_str("[^/]");
+            i += 1;
+        } else {
+            out.push_str(&regex::escape(&chars[i].to_string()));
+            i += 1;
+        }
+    }
+    out.push('$');
+    out
+}
+
+fn match_any_level(rx_str: &str, path: &str, anchored: bool) -> bool {
+    let Ok(rx) = regex::Regex::new(rx_str) else {
+        return false;
+    };
+    let segs: Vec<&str> = path.split('/').collect();
+    let start_indices: Vec<usize> = if anchored {
+        vec![0]
+    } else {
+        (0..segs.len()).collect()
+    };
+
+    for i in start_indices {
+        let subpath = segs[i..].join("/");
+        if rx.is_match(&subpath) {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool {
-    let normalized = format!("/{}", rel_path.trim_start_matches('/'));
+    let clean = rel_path.trim_matches('/');
+    if clean.is_empty() {
+        return false;
+    }
+
     for rule in filters {
         let trimmed = rule.trim();
-        if trimmed.starts_with('-') {
-            let pat = trimmed[1..].trim();
-            if pat.ends_with("/**") {
-                let dir_pat = &pat[..pat.len() - 3];
-                if normalized.starts_with(dir_pat) {
-                    return true;
-                }
-            } else if pat.starts_with("*.") {
-                let ext = &pat[1..];
-                if normalized.ends_with(ext) {
-                    return true;
-                }
-            } else if pat == normalized || (is_dir && normalized.starts_with(pat)) {
+        let pat = if let Some(stripped) = trimmed.strip_prefix("- ") {
+            stripped.trim()
+        } else if let Some(stripped) = trimmed.strip_prefix('-') {
+            stripped.trim()
+        } else {
+            continue;
+        };
+
+        if pat.is_empty() {
+            continue;
+        }
+
+        let anchored = pat.starts_with('/');
+        let body = if anchored { pat.trim_start_matches('/') } else { pat };
+        if body.is_empty() {
+            continue;
+        }
+
+        let rx_full = glob_to_regex(body);
+        if match_any_level(&rx_full, clean, anchored) {
+            return true;
+        }
+
+        // « base/** » : le dossier « base » lui-même est aussi considéré exclu
+        if body.ends_with("/**") {
+            let base_body = &body[..body.len() - 3];
+            let rx_base = glob_to_regex(base_body);
+            if match_any_level(&rx_base, clean, anchored) {
+                return true;
+            }
+        }
+
+        // Si c'est un dossier et que le motif se termine par '/', tester la base
+        if is_dir && body.ends_with('/') {
+            let base_body = &body[..body.len() - 1];
+            let rx_base = glob_to_regex(base_body);
+            if match_any_level(&rx_base, clean, anchored) {
                 return true;
             }
         }
     }
+
     false
 }
 
@@ -256,6 +332,35 @@ mod tests {
 
         assert!(!is_path_ignored("Documents/rapport.pdf", false, &filters));
         assert!(!is_path_ignored("important/notes.txt", false, &filters));
+
+        // Test parité web : règles sans slash initial (node_modules/**, target/**, venv/**)
+        let rclone_filters = vec![
+            "- venv/**".to_string(),
+            "- node_modules/**".to_string(),
+            "- target/**".to_string(),
+            "- **/.DS_Store".to_string(),
+            "- Cours/2GT7/**".to_string(),
+        ];
+
+        // Le dossier lui-même doit être exclu !
+        assert!(is_path_ignored("venv", true, &rclone_filters));
+        assert!(is_path_ignored("node_modules", true, &rclone_filters));
+        assert!(is_path_ignored("target", true, &rclone_filters));
+        assert!(is_path_ignored("Cours/2GT7", true, &rclone_filters));
+
+        // Dossiers exclus imbriqués
+        assert!(is_path_ignored("projets/mon_app/node_modules", true, &rclone_filters));
+        assert!(is_path_ignored("projets/mon_app/node_modules/index.js", false, &rclone_filters));
+        assert!(is_path_ignored("projets/sub/target", true, &rclone_filters));
+        assert!(is_path_ignored("sous_dossier/venv/bin/python", false, &rclone_filters));
+
+        // Motifs **/
+        assert!(is_path_ignored(".DS_Store", false, &rclone_filters));
+        assert!(is_path_ignored("Images/.DS_Store", false, &rclone_filters));
+
+        // Fichiers autorisés
+        assert!(!is_path_ignored("Cours/Autre/fichier.pdf", false, &rclone_filters));
+        assert!(!is_path_ignored("projets/mon_app/src/main.rs", false, &rclone_filters));
     }
 
     #[test]

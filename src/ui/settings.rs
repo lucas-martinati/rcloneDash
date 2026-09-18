@@ -9,7 +9,7 @@ use ratatui::{
 use crate::app::{App, HitAction, Hitbox};
 use crate::ui::theme::ThemePalette;
 
-pub const SETTINGS_ITEMS_COUNT: usize = 7;
+pub const SETTINGS_ITEMS_COUNT: usize = 8;
 
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let screen = f.area();
@@ -18,7 +18,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let show_logo = screen.height >= 28;
     let box_w = if is_wide { 86.min(screen.width) } else { 78.min(screen.width) };
     let box_h = if show_logo {
-        20.min(screen.height.saturating_sub(logo_h + 3))
+        21.min(screen.height.saturating_sub(logo_h + 3))
     } else {
         22.min(screen.height.saturating_sub(2))
     };
@@ -57,6 +57,18 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         (theme.red, theme.red)
     };
 
+    let (mid_cmd, save_cmd) = if app.settings_selected_idx == 7 {
+        (
+            Span::styled("↵ lancer", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ resynchroniser", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        )
+    } else {
+        (
+            Span::styled("← modifier →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("↵ enregistrer", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        )
+    };
+
     // En-tête btop++ uniforme : ┐options┌ à gauche, ┐Esc fermer┌ à droite
     let outer_block = Block::default()
         .borders(Borders::ALL)
@@ -84,9 +96,9 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 Span::styled(" select ", Style::default().fg(Color::White)),
                 Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
                 Span::styled("└┘", Style::default().fg(theme.red)),
-                Span::styled("← modifier →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                mid_cmd,
                 Span::styled("└┘", Style::default().fg(theme.red)),
-                Span::styled("↵ enregistrer", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+                save_cmd,
                 Span::styled("└", Style::default().fg(theme.red)),
             ])
             .alignment(Alignment::Left),
@@ -161,6 +173,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         ("Fréquence UI", format!("{} ms", app.tick_rate_ms_live)),
         ("Dossier local", app.config.local_dir.clone()),
         ("Remote distant", app.config.remote.clone()),
+        ("Resynchronisation complète", "Lancer (--resync)".to_string()),
     ];
 
     // Rendu de la colonne gauche
@@ -203,12 +216,18 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
             ]);
 
-            // Flèche gauche et droite intégrées dans la ligne de valeur style btop++
+            // Flèche gauche et droite intégrées dans la ligne de valeur style btop++ (ou ↵ pour l'action resync)
             let inner_w = w.saturating_sub(4);
             let val_centered = format!("{:^width$}", val, width = inner_w);
-            let line2 = Line::from(vec![
-                Span::styled(format!("← {} →", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-            ]);
+            let line2 = if i == 7 {
+                Line::from(vec![
+                    Span::styled(format!("↵ {} ↵", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::styled(format!("← {} →", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                ])
+            };
 
             left_lines.push(line1);
             left_lines.push(line2);
@@ -256,6 +275,10 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         6 => (
             "Remote cloud distant.",
             "Identifiant du stockage distant configuré dans ~/.config/rclone/rclone.conf.\n\nUtilisé pour les requêtes de quota, de listing distant et de synchronisation bidirectionnelle."
+        ),
+        7 => (
+            "Resynchronisation complète (--resync).",
+            "En cas d'erreur critique de bisync ou de base de synchronisation locale/cloud corrompue, cette action reconstruit les index de listing en comparant le dossier local et Google Drive (en conservant les versions les plus récentes : --resync-mode newer).\n\nAppuyez sur Entrée pour ouvrir le dialogue de confirmation."
         ),
         _ => ("Description.", "Sélectionnez un paramètre pour afficher son aide détaillée."),
     };
