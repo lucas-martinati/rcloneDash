@@ -64,7 +64,7 @@ pub fn get_service_info() -> ServiceInfo {
 
     // 2. Statut du timer
     let timer_out = Command::new("systemctl")
-        .args(["--user", "list-timers", "--no-legend", "rclone-bisync.timer"])
+        .args(["--user", "list-timers", "--no-legend", "-l", "rclone-bisync.timer"])
         .output();
 
     if let Ok(out) = timer_out {
@@ -72,23 +72,70 @@ pub fn get_service_info() -> ServiceInfo {
         let line = text.trim();
         if !line.is_empty() {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            // Format typique: NEXT LEFT LAST PASSED UNIT ACTIVATES
-            // Ex: "Fri 2026-09-18 00:10:00 CEST  8min left ..."
-            if parts.len() >= 5 {
-                // Recherche de "left"
+            let cfg_interval = config::load_config().timer_interval;
+            let interval_mins: u64 = if cfg_interval.ends_with("min") {
+                cfg_interval.trim_end_matches("min").parse().unwrap_or(10)
+            } else if cfg_interval.ends_with('h') {
+                cfg_interval.trim_end_matches('h').parse::<u64>().unwrap_or(1) * 60
+            } else {
+                10
+            };
+
+            if parts.is_empty() || parts[0] == "-" || parts[0] == "n/a" {
+                // Le timer est inactif ou en attente d'inactivité du service
+                // On cherche l'heure de la dernière exécution dans la ligne (ex: "Fri 2026-09-18 08:08:58 CEST")
+                let last_time_opt = parts.iter().find(|p| p.contains(':') && p.len() >= 5);
+                if let Some(lt) = last_time_opt {
+                    if let Ok(last_chrono) = chrono::NaiveTime::parse_from_str(lt, "%H:%M:%S") {
+                        let next_dt = last_chrono + chrono::Duration::minutes(interval_mins as i64);
+                        let now = chrono::Local::now().time();
+                        let diff_secs = (next_dt - now).num_seconds();
+                        if diff_secs > 0 {
+                            let mins = diff_secs / 60;
+                            let secs = diff_secs % 60;
+                            info.timer_next = next_dt.format("%H:%M:%S").to_string();
+                            info.timer_left = format!("{}m {:02}s", mins, secs);
+                        } else if info.state == ServiceState::Active {
+                            info.timer_next = "En cours".to_string();
+                            info.timer_left = format!("après sync ({})", cfg_interval);
+                        } else {
+                            info.timer_next = next_dt.format("%H:%M:%S").to_string();
+                            info.timer_left = "imminent".to_string();
+                        }
+                    } else {
+                        info.timer_next = format!("~{}", cfg_interval);
+                        info.timer_left = format!("dans ~{}", cfg_interval);
+                    }
+                } else {
+                    info.timer_next = format!("~{}", cfg_interval);
+                    info.timer_left = format!("dans ~{}", cfg_interval);
+                }
+            } else {
+                // Date/Heure programmée présente dans parts
+                // Format: Day Date Time Timezone ...
+                let next_time = if parts.len() >= 3 && parts[2].contains(':') {
+                    parts[2]
+                } else if parts.len() >= 2 && parts[1].contains(':') {
+                    parts[1]
+                } else {
+                    parts[0]
+                };
+                info.timer_next = next_time.to_string();
+
+                // Recherche du décompte (ex: "9min left" ou "374ms")
                 if let Some(left_idx) = parts.iter().position(|&w| w == "left") {
                     if left_idx > 0 {
                         info.timer_left = parts[left_idx - 1].to_string();
                     }
-                } else if parts.len() >= 4 {
-                    info.timer_left = parts[3].to_string();
+                } else if parts.len() >= 5 && parts[4] != "-" && !parts[4].is_empty() {
+                    info.timer_left = parts[4].to_string();
+                } else {
+                    info.timer_left = next_time.to_string();
                 }
-                info.timer_next = parts[..3.min(parts.len())].join(" ");
-            } else {
-                info.timer_left = line.to_string();
             }
         } else {
             info.timer_left = "Désactivé".to_string();
+            info.timer_next = "Désactivé".to_string();
         }
     }
 

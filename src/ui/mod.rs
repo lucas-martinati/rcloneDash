@@ -57,7 +57,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     render_dashboard(f, app, &theme, chunks[1], &mut hitboxes);
 
     // 3. Pied de page
-    render_footer(f, app, &theme, chunks[2]);
+    render_footer(f, app, &theme, chunks[2], &mut hitboxes);
 
     // 4. Modales overlay (Settings btop, Fichiers, Filtres, Confirmations)
     render_popups(f, app, &theme, &mut hitboxes);

@@ -31,8 +31,13 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓ naviguer  e éditer  Esc fermer ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ règle {}/{}┘", cur_rule, total_rules), Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
+                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
+                Span::styled("e", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" éditer  ", Style::default().fg(theme.text_muted)),
+                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ {}/{} ", cur_rule, total_rules), Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );

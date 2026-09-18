@@ -72,8 +72,12 @@ pub enum HitAction {
     ButtonFilters,
     ButtonSettings,
     ButtonQuit,
+    ButtonHelp,
+    ButtonTheme,
+    ButtonPanel,
     TickRateDec,
     TickRateInc,
+    SparklinePoint(usize),
     HistoryRow(usize),
     HistoryFile(usize),
     RecentFile(usize),
@@ -330,9 +334,14 @@ impl App {
     }
 
     pub fn step_tick_rate(&mut self, faster: bool) {
-        let steps = [50, 100, 250, 500, 1000, 2000];
+        let steps = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000];
         let current = self.tick_rate_ms_live;
-        let pos = steps.iter().position(|&s| s == current).unwrap_or(2);
+        let pos = steps
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, &s)| (s as i64 - current as i64).abs())
+            .map(|(i, _)| i)
+            .unwrap_or(11);
         let next_idx = if faster {
             pos.saturating_sub(1)
         } else {
@@ -346,6 +355,13 @@ impl App {
             let _ = config::save_config(&self.config);
             self.set_toast(format!("Fréquence : {} ms", new_rate));
         }
+    }
+
+    pub fn next_theme(&mut self) {
+        self.current_theme = self.current_theme.next();
+        self.config.theme = Some(self.current_theme);
+        let _ = config::save_config(&self.config);
+        self.set_toast(format!("Thème actif : {}", self.current_theme.name()));
     }
 
     pub fn open_selected_file(&mut self, rel_path: &str) {
@@ -382,25 +398,41 @@ impl App {
         }
     }
 
-    pub fn get_recent_files_list(&self) -> Vec<String> {
+    pub fn get_all_recent_files(&self) -> Vec<(String, String, String, String)> {
         let mut list = Vec::new();
-        for sf in self.live.synced_files.iter().rev().take(30) {
-            list.push(sf.path.clone());
+        // 1. Fichiers du live stream
+        for sf in self.live.synced_files.iter().rev() {
+            list.push((sf.action.clone(), sf.path.clone(), String::new(), sf.time.clone()));
         }
-        if list.is_empty() {
-            for run in self.past_runs.iter().take(5) {
-                for f in &run.files_copied {
-                    list.push(f.clone());
+        // 2. Fichiers de l'historique complet (jusqu'à 100 fichiers, parité web)
+        for run in &self.past_runs {
+            if !run.synced_files.is_empty() {
+                for (act, path, time) in run.synced_files.iter().rev() {
+                    list.push((act.clone(), path.clone(), String::new(), time.clone()));
                 }
-                for f in &run.files_modified {
-                    list.push(f.clone());
+            } else {
+                for f in run.files_copied.iter().rev() {
+                    list.push(("new".to_string(), f.clone(), String::new(), run.time.clone()));
                 }
-                for f in &run.files_deleted {
-                    list.push(f.clone());
+                for f in run.files_modified.iter().rev() {
+                    list.push(("modified".to_string(), f.clone(), String::new(), run.time.clone()));
+                }
+                for f in run.files_deleted.iter().rev() {
+                    list.push(("deleted".to_string(), f.clone(), String::new(), run.time.clone()));
                 }
             }
+            if list.len() >= 100 {
+                break;
+            }
+        }
+        if list.len() > 100 {
+            list.truncate(100);
         }
         list
+    }
+
+    pub fn get_recent_files_list(&self) -> Vec<String> {
+        self.get_all_recent_files().into_iter().map(|(_, p, _, _)| p).collect()
     }
 
     pub fn open_recent_file(&mut self, recent_idx: usize) {
@@ -570,7 +602,7 @@ impl App {
                     {
                         match hb.action {
                             HitAction::LogsArea => {
-                                self.logs_scroll = self.logs_scroll.saturating_sub(2);
+                                self.logs_scroll = self.logs_scroll.saturating_sub(1);
                                 if self.logs_scroll == 0 {
                                     self.auto_scroll = true;
                                 }
@@ -609,7 +641,7 @@ impl App {
                             HitAction::FilterArea | HitAction::FilterRow(_) => {
                                 if !self.filters.is_empty() {
                                     let max = self.filters.len().saturating_sub(1);
-                                    self.selected_filter_idx = (self.selected_filter_idx + 2).min(max);
+                                    self.selected_filter_idx = (self.selected_filter_idx + 1).min(max);
                                     let vp = self.filter_viewport_height;
                                     self.ensure_filter_visible(vp);
                                 }
@@ -623,8 +655,8 @@ impl App {
                     self.dry_run_scroll = self.dry_run_scroll.saturating_add(2);
                     return Action::None;
                 }
-                // Défilement par défaut (logs)
-                self.logs_scroll = self.logs_scroll.saturating_sub(2);
+                // Défilement par défaut (logs) - pas net de 1 ligne
+                self.logs_scroll = self.logs_scroll.saturating_sub(1);
                 if self.logs_scroll == 0 {
                     self.auto_scroll = true;
                 }
@@ -639,7 +671,7 @@ impl App {
                         match hb.action {
                             HitAction::LogsArea => {
                                 self.auto_scroll = false;
-                                self.logs_scroll = self.logs_scroll.saturating_add(2);
+                                self.logs_scroll = self.logs_scroll.saturating_add(1);
                                 return Action::None;
                             }
                             HitAction::HistoryRow(_) => {
@@ -671,7 +703,7 @@ impl App {
                                 return Action::None;
                             }
                             HitAction::FilterArea | HitAction::FilterRow(_) => {
-                                self.selected_filter_idx = self.selected_filter_idx.saturating_sub(2);
+                                self.selected_filter_idx = self.selected_filter_idx.saturating_sub(1);
                                 let vp = self.filter_viewport_height;
                                 self.ensure_filter_visible(vp);
                                 return Action::None;
@@ -685,7 +717,7 @@ impl App {
                     return Action::None;
                 }
                 self.auto_scroll = false;
-                self.logs_scroll = self.logs_scroll.saturating_add(2);
+                self.logs_scroll = self.logs_scroll.saturating_add(1);
             }
             MouseEventKind::Down(MouseButton::Left) => {
                 let col = mouse.column;
@@ -733,6 +765,18 @@ impl App {
                                 self.running = false;
                                 return Action::None;
                             }
+                            HitAction::ButtonHelp => {
+                                self.modal = if self.modal == Modal::Help { Modal::None } else { Modal::Help };
+                                return Action::None;
+                            }
+                            HitAction::ButtonTheme => {
+                                self.next_theme();
+                                return Action::None;
+                            }
+                            HitAction::ButtonPanel => {
+                                self.focused_panel = self.focused_panel.next();
+                                return Action::None;
+                            }
                             HitAction::TickRateDec => {
                                 self.step_tick_rate(true);
                                 return Action::None;
@@ -741,15 +785,29 @@ impl App {
                                 self.step_tick_rate(false);
                                 return Action::None;
                             }
+                            HitAction::SparklinePoint(idx) => {
+                                if idx < self.past_runs.len() {
+                                    self.selected_run_idx = idx;
+                                    let run = &self.past_runs[idx];
+                                    let st = match run.status {
+                                        RunStatus::Success => "✓ Réussie",
+                                        RunStatus::Failed => "✗ Erreur",
+                                        RunStatus::Skipped => "○ Ignorée",
+                                        RunStatus::Running => "⟳ En cours",
+                                    };
+                                    let files_count = run.files_copied.len() + run.files_modified.len() + run.files_deleted.len();
+                                    self.set_toast(format!("{} — {} · {} fichier(s) · {}", run.time, run.duration, files_count, st));
+                                }
+                                return Action::None;
+                            }
                             HitAction::CloseModal => {
                                 self.modal = Modal::None;
                                 return Action::None;
                             }
                             HitAction::MenuOption(idx) => {
                                 match idx {
-                                    0 => { self.modal = Modal::Settings; }
-                                    1 => { self.modal = Modal::Help; }
-                                    2 => { self.running = false; }
+                                    0 => { self.modal = Modal::Help; }
+                                    1 => { self.running = false; }
                                     _ => {}
                                 }
                                 return Action::None;
@@ -948,20 +1006,18 @@ impl App {
                             self.menu_selected_idx -= 1;
                         }
                     }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        if self.menu_selected_idx < 2 {
+                    KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => {
+                        if self.menu_selected_idx < 1 {
                             self.menu_selected_idx += 1;
                         }
                     }
-                    KeyCode::Enter => {
+                    KeyCode::Enter | KeyCode::Char(' ') => {
                         match self.menu_selected_idx {
-                            0 => { self.modal = Modal::Settings; }
-                            1 => { self.modal = Modal::Help; }
-                            2 => { self.running = false; }
+                            0 => { self.modal = Modal::Help; }
+                            1 => { self.running = false; }
                             _ => {}
                         }
                     }
-                    KeyCode::Char('o') | KeyCode::Char('s') => { self.modal = Modal::Settings; }
                     KeyCode::Char('?') | KeyCode::Char('h') => { self.modal = Modal::Help; }
                     KeyCode::Char('q') => { self.running = false; }
                     _ => {}
@@ -1336,9 +1392,7 @@ impl App {
                 return Action::None;
             }
             KeyCode::Char('t') => {
-                self.current_theme = self.current_theme.next();
-                self.config.theme = Some(self.current_theme);
-                self.set_toast(format!("Thème actif : {}", self.current_theme.name()));
+                self.next_theme();
                 return Action::None;
             }
             KeyCode::Char('?') | KeyCode::Char('h') => {
@@ -1585,7 +1639,7 @@ mod tests {
         };
         app.handle_mouse(scroll_up);
         assert!(!app.auto_scroll, "Le défilement vers le haut doit désactiver l'auto-scroll");
-        assert_eq!(app.logs_scroll, 2);
+        assert_eq!(app.logs_scroll, 1);
     }
 
     #[tokio::test]
@@ -1621,6 +1675,7 @@ mod tests {
                 files_copied: vec!["file1.txt".to_string()],
                 files_modified: vec![],
                 files_deleted: vec![],
+                synced_files: vec![("new".to_string(), "file1.txt".to_string(), "22:00".to_string())],
                 errors: vec![],
             });
 
@@ -1640,10 +1695,8 @@ mod tests {
         app.handle_key(esc_event);
         assert_eq!(app.modal, Modal::Menu);
 
-        // Pressing Down arrow selects second option (Help)
-        let down_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
-        app.handle_key(down_event);
-        assert_eq!(app.menu_selected_idx, 1);
+        // First option is Help
+        assert_eq!(app.menu_selected_idx, 0);
 
         // Pressing Enter opens Help modal
         let enter_event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
@@ -1658,38 +1711,21 @@ mod tests {
     #[tokio::test]
     async fn test_tick_rate_stepping() {
         let mut app = App::new();
-        app.tick_rate_ms_live = 250;
+        app.tick_rate_ms_live = 2000;
 
-        // '-' speeds up (lower ms)
+        // '-' speeds up (lower ms: 2000 -> 1500 -> 1000)
         let minus_event = KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE);
         app.handle_key(minus_event);
-        assert_eq!(app.tick_rate_ms_live, 100);
+        assert_eq!(app.tick_rate_ms_live, 1500);
 
         app.handle_key(minus_event);
-        assert_eq!(app.tick_rate_ms_live, 50);
-
-        // Clamping at lowest
-        app.handle_key(minus_event);
-        assert_eq!(app.tick_rate_ms_live, 50);
+        assert_eq!(app.tick_rate_ms_live, 1000);
 
         // '+' slows down (higher ms)
         let plus_event = KeyEvent::new(KeyCode::Char('+'), KeyModifiers::NONE);
         app.handle_key(plus_event);
-        assert_eq!(app.tick_rate_ms_live, 100);
+        assert_eq!(app.tick_rate_ms_live, 1500);
 
-        app.handle_key(plus_event);
-        assert_eq!(app.tick_rate_ms_live, 250);
-
-        app.handle_key(plus_event);
-        assert_eq!(app.tick_rate_ms_live, 500);
-
-        app.handle_key(plus_event);
-        assert_eq!(app.tick_rate_ms_live, 1000);
-
-        app.handle_key(plus_event);
-        assert_eq!(app.tick_rate_ms_live, 2000);
-
-        // Clamping at highest
         app.handle_key(plus_event);
         assert_eq!(app.tick_rate_ms_live, 2000);
     }
@@ -1772,7 +1808,7 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         };
         app.handle_mouse(scroll_down);
-        assert_eq!(app.selected_filter_idx, 4);
+        assert_eq!(app.selected_filter_idx, 3);
 
         // 4. Mouse Wheel ScrollUp over FilterArea
         let scroll_up = MouseEvent {

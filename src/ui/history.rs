@@ -210,8 +210,15 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓ défiler  ↵ ouvrir  d dossier  Esc fermer ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ ligne {}/{}┘", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" défiler  ", Style::default().fg(theme.text_muted)),
+                Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" ouvrir  ", Style::default().fg(theme.text_muted)),
+                Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
+                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ {}/{} ", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );

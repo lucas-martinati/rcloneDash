@@ -6,41 +6,98 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::App;
+use crate::app::{App, HitAction, Hitbox};
 use crate::ui::theme::ThemePalette;
 
-pub fn render_footer(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+pub fn render_footer(
+    f: &mut Frame,
+    app: &App,
+    theme: &ThemePalette,
+    area: Rect,
+    hitboxes: &mut Vec<Hitbox>,
+) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Min(65),    // Raccourcis btop++
-            Constraint::Length(30), // Panel actif + Tick rate
+            Constraint::Min(65),    // Raccourcis unifiés
+            Constraint::Length(18), // Focus actif uniquement
         ])
         .split(area);
 
-    // 1. Barre de raccourcis btop++ authentique (clé colorée + action en texte clair)
-    let mut spans: Vec<Span> = Vec::new();
+    // Commandes unifiées avec règle de formatage :
+    // - Si la 1ère lettre est la touche : première lettre en rouge, reste en clair.
+    // - Sinon : touche en rouge suivie d'un espace puis du nom de l'action.
+    enum CmdFmt {
+        FirstLetterRed(&'static str, &'static str, HitAction), // ("m", "enu", action)
+        PrefixedKey(&'static str, &'static str, HitAction),    // ("e", "filtres", action)
+    }
 
     let items = [
-        ("Esc", "menu", theme.highlight),
-        ("q", "quit", theme.red),
-        ("s", "sync", theme.green),
-        ("d", "dry-run", theme.cyan),
-        ("f", "files", theme.blue),
-        ("e", "filtres", theme.purple),
-        ("o", "options", theme.yellow),
-        ("t", "theme", theme.accent),
-        ("Tab", "panel", theme.highlight),
-        ("+/-", "speed", theme.highlight),
-        ("?", "aide", theme.text_muted),
+        CmdFmt::FirstLetterRed("m", "enu", HitAction::ButtonMenu),
+        CmdFmt::FirstLetterRed("q", "uit", HitAction::ButtonQuit),
+        CmdFmt::FirstLetterRed("s", "ync", HitAction::ButtonSync),
+        CmdFmt::FirstLetterRed("d", "ry-run", HitAction::ButtonDryRun),
+        CmdFmt::FirstLetterRed("f", "iles", HitAction::ButtonFiles),
+        CmdFmt::PrefixedKey("e", "filtres", HitAction::ButtonFilters),
+        CmdFmt::FirstLetterRed("o", "ptions", HitAction::ButtonSettings),
+        CmdFmt::FirstLetterRed("t", "heme", HitAction::ButtonTheme),
+        CmdFmt::PrefixedKey("Tab", "panel", HitAction::ButtonPanel),
+        CmdFmt::PrefixedKey("?", "aide", HitAction::ButtonHelp),
     ];
 
-    for (i, (key, label, color)) in items.iter().enumerate() {
+    let mut spans: Vec<Span> = Vec::new();
+    let mut cur_x = chunks[0].x;
+
+    for (i, item) in items.iter().enumerate() {
         if i > 0 {
             spans.push(Span::styled("  ", Style::default()));
+            cur_x += 2;
         }
-        spans.push(Span::styled(*key, Style::default().fg(*color).add_modifier(Modifier::BOLD)));
-        spans.push(Span::styled(format!(" {}", label), Style::default().fg(theme.text_bright)));
+
+        match item {
+            CmdFmt::FirstLetterRed(first, rest, action) => {
+                let len = (first.chars().count() + rest.chars().count()) as u16;
+                hitboxes.push(Hitbox {
+                    rect: Rect {
+                        x: cur_x,
+                        y: area.y,
+                        width: len,
+                        height: 1,
+                    },
+                    action: *action,
+                });
+                spans.push(Span::styled(
+                    *first,
+                    Style::default().fg(theme.red).add_modifier(Modifier::BOLD),
+                ));
+                spans.push(Span::styled(
+                    *rest,
+                    Style::default().fg(theme.text_bright),
+                ));
+                cur_x += len;
+            }
+            CmdFmt::PrefixedKey(key, action_name, action) => {
+                let len = (key.chars().count() + 1 + action_name.chars().count()) as u16;
+                hitboxes.push(Hitbox {
+                    rect: Rect {
+                        x: cur_x,
+                        y: area.y,
+                        width: len,
+                        height: 1,
+                    },
+                    action: *action,
+                });
+                spans.push(Span::styled(
+                    *key,
+                    Style::default().fg(theme.red).add_modifier(Modifier::BOLD),
+                ));
+                spans.push(Span::styled(
+                    format!(" {}", action_name),
+                    Style::default().fg(theme.text_bright),
+                ));
+                cur_x += len;
+            }
+        }
     }
 
     let p_left = Paragraph::new(Line::from(spans))
@@ -48,7 +105,7 @@ pub fn render_footer(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect)
         .block(Block::default().style(Style::default().bg(theme.footer_bg)));
     f.render_widget(p_left, chunks[0]);
 
-    // 2. Info panel actif et rafraîchissement
+    // Panneau actuellement actif
     let right_spans = vec![
         Span::styled("Focus: ", Style::default().fg(theme.text_muted)),
         Span::styled(
@@ -56,12 +113,6 @@ pub fn render_footer(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect)
             Style::default()
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled("│ ", Style::default().fg(theme.border)),
-        Span::styled("⚡ ", Style::default().fg(theme.yellow)),
-        Span::styled(
-            format!("{}ms ", app.tick_rate_ms_live),
-            Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
         ),
     ];
 

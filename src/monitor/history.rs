@@ -13,6 +13,7 @@ pub struct PastRun {
     pub files_copied: Vec<String>,
     pub files_modified: Vec<String>,
     pub files_deleted: Vec<String>,
+    pub synced_files: Vec<(String, String, String)>,
     pub errors: Vec<String>,
 }
 
@@ -49,7 +50,7 @@ pub fn fetch_past_runs(limit: usize) -> Vec<PastRun> {
             "rclone-bisync.service",
             "--output=short-iso",
             "-n",
-            "1000",
+            "2500",
         ])
         .output();
 
@@ -151,6 +152,7 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
     let mut copied = Vec::new();
     let mut modified = Vec::new();
     let mut deleted = Vec::new();
+    let mut synced_files = Vec::new();
     let mut errors = Vec::new();
     let mut duration = "< 1s".to_string();
 
@@ -168,10 +170,11 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
 
         if let Some(synced) = parse_synced_file(line) {
             match synced.action.as_str() {
-                "new" => copied.push(synced.path),
-                "deleted" => deleted.push(synced.path),
-                _ => modified.push(synced.path),
+                "new" => copied.push(synced.path.clone()),
+                "deleted" => deleted.push(synced.path.clone()),
+                _ => modified.push(synced.path.clone()),
             }
+            synced_files.push((synced.action, synced.path, time.clone()));
         }
 
         if ll.contains("elapsed time:") {
@@ -208,6 +211,7 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
         files_copied: copied,
         files_modified: modified,
         files_deleted: deleted,
+        synced_files,
         errors,
     })
 }

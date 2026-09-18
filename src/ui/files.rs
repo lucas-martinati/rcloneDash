@@ -48,8 +48,15 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓ naviguer  ↵ ouvrir  d dossier  Esc fermer ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ fichier {}/{}┘", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
+                Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" ouvrir  ", Style::default().fg(theme.text_muted)),
+                Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
+                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ {}/{} ", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );

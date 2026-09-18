@@ -55,26 +55,29 @@ pub fn render_speed_sparkline(
     f.render_widget(p, area);
 }
 
-/// Render duration sparkline of past runs with status and gradient colors (like btop)
+/// Render duration sparkline of past runs with status and gradient colors
 pub fn render_history_sparkline(
     past_runs: &[PastRun],
     theme: &ThemePalette,
     width: usize,
+    selected_idx: Option<usize>,
 ) -> Line<'static> {
     if past_runs.is_empty() {
-        return Line::from(vec![Span::styled(" [Aucun run]", Style::default().fg(theme.text_muted))]);
+        return Line::from(vec![Span::styled("[Aucun run]", Style::default().fg(theme.text_muted))]);
     }
 
-    // Prendre les derniers runs dans l'ordre chronologique
-    let runs_slice: Vec<&PastRun> = past_runs.iter().take(width).rev().collect();
+    let count = past_runs.len().min(width).min(24);
+    let runs_slice: Vec<&PastRun> = past_runs.iter().take(count).rev().collect();
 
     let durations: Vec<f64> = runs_slice.iter().map(|r| parse_duration_seconds(&r.duration)).collect();
     let max_dur = durations.iter().copied().fold(0.0f64, f64::max).max(1.0);
 
     let mut spans = Vec::new();
-    spans.push(Span::styled(" Graphe durées : ", Style::default().fg(theme.text_muted)));
 
     for (i, run) in runs_slice.iter().enumerate() {
+        let original_idx = count.saturating_sub(1 + i);
+        let is_sel = selected_idx == Some(original_idx);
+
         let dur = durations[i];
         let level = if dur > 0.0 {
             (((dur / max_dur) * 6.0).ceil() as usize).clamp(1, 7)
@@ -100,7 +103,12 @@ pub fn render_history_sparkline(
             RunStatus::Running => theme.highlight,
         };
 
-        spans.push(Span::styled(block.to_string(), Style::default().fg(color).add_modifier(Modifier::BOLD)));
+        let mut style = Style::default().fg(color).add_modifier(Modifier::BOLD);
+        if is_sel {
+            style = style.bg(theme.border_focus).add_modifier(Modifier::UNDERLINED);
+        }
+
+        spans.push(Span::styled(block.to_string(), style));
         spans.push(Span::styled(" ", Style::default()));
     }
 

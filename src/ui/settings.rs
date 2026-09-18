@@ -32,8 +32,15 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓ naviguer  ←/→ modifier  ↵ enregistrer  Esc fermer ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ option {}/{}┘", cur_opt, SETTINGS_ITEMS_COUNT), Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
+                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
+                Span::styled("←/→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" modifier  ", Style::default().fg(theme.text_muted)),
+                Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" enregistrer  ", Style::default().fg(theme.text_muted)),
+                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("─ {}/{} ", cur_opt, SETTINGS_ITEMS_COUNT), Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );
