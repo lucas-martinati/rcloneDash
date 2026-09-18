@@ -3,7 +3,7 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Cell, Gauge, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+        Block, BorderType, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table,
     },
     Frame,
@@ -17,31 +17,25 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     let alerts = app.active_alerts();
     let show_alert = !alerts.is_empty();
     let show_active_sync = app.live.is_syncing || app.live.transfer.pct > 0;
-    let show_active_files = show_active_sync && !app.live.active_files.is_empty();
 
     let mut constraints = Vec::new();
-    // 1. Cadran Stockage & Métriques (btop++ Disks/Mem style)
-    constraints.push(Constraint::Length(5));
+    // 1. Cadran Stockage & Métriques (6 lignes pour intégrer horloge, fréquence, quota et KPIs)
+    constraints.push(Constraint::Length(6));
 
     // 2. Bannière d'alerte contextuelle si alerte active
     if show_alert {
         constraints.push(Constraint::Length(3));
     }
 
-    // 3. Barre de sync active (Phase stepper + Jauge + Sparkline)
+    // 3. Barre de sync active (Phase stepper + 7 KPIs + Fichiers modifiés précis)
     if show_active_sync {
-        constraints.push(Constraint::Length(3));
+        constraints.push(Constraint::Length(6));
     }
 
-    // 4. Fichiers en cours de transfert
-    if show_active_files {
-        constraints.push(Constraint::Length(3));
-    }
-
-    // 5. Zone centrale (Historique + Logs)
+    // 4. Zone centrale (Historique + Logs)
     constraints.push(Constraint::Percentage(55));
 
-    // 6. Zone inférieure (Fichiers récents)
+    // 5. Zone inférieure (Fichiers récents)
     constraints.push(Constraint::Min(6));
 
     let chunks = Layout::default()
@@ -51,8 +45,8 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     let mut chunk_idx = 0;
 
-    // 1. Cadrans Stockage & Métriques (2 cadrans spacieux type btop++)
-    render_system_cadrans(f, app, theme, chunks[chunk_idx]);
+    // 1. Cadrans Stockage & Métriques (2 cadrans spacieux)
+    render_system_cadrans(f, app, theme, chunks[chunk_idx], hitboxes);
     chunk_idx += 1;
 
     // 2. Alerte
@@ -67,13 +61,7 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         chunk_idx += 1;
     }
 
-    // 4. Fichiers actifs
-    if show_active_files {
-        render_active_files_bar(f, app, theme, chunks[chunk_idx]);
-        chunk_idx += 1;
-    }
-
-    // 5. Milieu : Historique + Logs
+    // 4. Milieu : Historique + Logs
     let middle_area = chunks[chunk_idx];
     chunk_idx += 1;
     let bottom_area = chunks[chunk_idx];
@@ -86,20 +74,20 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     render_history_panel(f, app, theme, middle_chunks[0], hitboxes);
     render_logs_panel(f, app, theme, middle_chunks[1], hitboxes);
 
-    // 6. Fichiers récents
+    // 5. Fichiers récents
     render_recent_files_panel(f, app, theme, bottom_area, hitboxes);
 }
 
 /// Affiche 2 cadrans élégants (Stockage/Cloud à gauche, Métriques/Fiabilité à droite)
 /// avec barres de progression horizontales à dégradé, zéro texte tronqué
-fn render_system_cadrans(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+fn render_system_cadrans(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let sub = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
     render_disks_cloud_box(f, app, theme, sub[0]);
-    render_metrics_box(f, app, theme, sub[1]);
+    render_metrics_box(f, app, theme, sub[1], hitboxes);
 }
 
 fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
@@ -109,12 +97,13 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
         .border_style(Style::default().fg(theme.border_storage))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌disks & cloud", Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┐", Style::default().fg(theme.border_storage)),
+            Span::styled("disks & cloud", Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
+            Span::styled("┌", Style::default().fg(theme.border_storage)),
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("statvfs / bisync ─ ", Style::default().fg(theme.border_storage)),
+                Span::styled("─ statvfs / bisync ─", Style::default().fg(theme.border_storage)),
             ])
             .alignment(Alignment::Right),
         );
@@ -127,62 +116,116 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
         height: area.height.saturating_sub(2),
     };
 
-    let (used_gb, free_gb, total_gb, pct) = app.local_disk_stats();
-    let bar_width = 10usize.min((inner.width.saturating_sub(42) / 2) as usize);
-    let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, theme);
+    let bar_width = 8usize.min((inner.width.saturating_sub(45) / 2) as usize);
 
+    // 1. Disque local
+    let (used_gb, free_gb, total_gb, pct) = app.local_disk_stats();
+    let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, theme);
     let mut line1_spans = vec![
         Span::styled("Disque:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
     line1_spans.extend(disk_bar);
     line1_spans.push(Span::styled(
-        format!(" {:>3.0}%  {:.0} Go / {:.0} Go ({:.1} Go libres)", pct, used_gb, total_gb, free_gb),
+        format!(" {:>3.0}%  {:.1} Go / {:.1} Go ({:.1} Go libres)", pct, used_gb, total_gb, free_gb),
         Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
     ));
 
-    let cloud_net = &app.service_info.cloud_safety_net;
-    let bwlimit_str = app.config.bwlimit.as_deref().unwrap_or("Illimité");
-    let line2_spans = vec![
+    // 2. Stockage Cloud réel
+    let mut line2_spans = vec![
         Span::styled("Cloud:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{:<15}", &app.config.remote), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("Filet: ", Style::default().fg(theme.text_muted)),
-        Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled("│ bwlimit: ", Style::default().fg(theme.text_muted)),
-        Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
     ];
-
-    let count = if !app.file_entries.is_empty() {
-        app.file_entries.iter().filter(|f| !f.is_dir).count()
+    if let Some(q) = &app.cloud_quota {
+        let used_mb = q.used_bytes as f64 / (1024.0 * 1024.0);
+        let total_tb = q.total_bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
+        let free_tb = q.free_bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
+        let q_pct = if q.total_bytes > 0 { (q.used_bytes as f64 / q.total_bytes as f64) * 100.0 } else { 0.0 };
+        let cloud_bar = crate::ui::sparkline::render_gradient_bar(q_pct, bar_width, theme);
+        line2_spans.extend(cloud_bar);
+        let used_str = if used_mb >= 1024.0 {
+            format!("{:.1} Go", used_mb / 1024.0)
+        } else {
+            format!("{:.1} Mo", used_mb)
+        };
+        line2_spans.push(Span::styled(
+            format!(" {:>3.0}%  {} / {:.2} To ({:.2} To libres)", q_pct, used_str, total_tb, free_tb),
+            Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
+        ));
     } else {
-        22224
+        line2_spans.push(Span::styled(format!("{:<15}", &app.config.remote), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
+        line2_spans.push(Span::styled("· synchronisation quota...", Style::default().fg(theme.text_muted)));
+    }
+
+    // 3. Dossier local & compteur de fichiers suivis (débloqué de 0)
+    let count = app.get_tracked_files_count();
+    let count_str = if count > 0 {
+        format!("{} fichiers suivis", count)
+    } else {
+        "analyse...".to_string()
     };
     let line3_spans = vec![
         Span::styled("Dossier: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{} ", &app.config.local_dir), Style::default().fg(theme.text_bright)),
-        Span::styled(format!("({} fichiers suivis)", count), Style::default().fg(theme.text_muted)),
+        Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
+    ];
+
+    // 4. Filet Cloud & bwlimit
+    let cloud_net = &app.service_info.cloud_safety_net;
+    let bwlimit_str = app.config.bwlimit.as_deref().unwrap_or("Illimité");
+    let line4_spans = vec![
+        Span::styled("Filet:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled(" │ bwlimit: ", Style::default().fg(theme.text_muted)),
+        Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
     ];
 
     let p = Paragraph::new(vec![
         Line::from(line1_spans),
         Line::from(line2_spans),
         Line::from(line3_spans),
+        Line::from(line4_spans),
     ]);
     f.render_widget(p, inner);
 }
 
-fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
+    let clock_str = chrono::Local::now().format("%H:%M:%S").to_string();
+    let tick_ms = app.tick_rate_ms_live;
+    let tick_str = format!("{}ms", tick_ms);
+
+    // Hitboxes pour le stepper de fréquence [ - ] et [ + ]
+    let tick_widget_len = (tick_str.chars().count() + 6) as u16;
+    let tick_x = area.x + area.width.saturating_sub(tick_widget_len + 1);
+
+    hitboxes.push(Hitbox {
+        rect: Rect { x: tick_x, y: area.y, width: 3, height: 1 },
+        action: HitAction::TickRateDec,
+    });
+    hitboxes.push(Hitbox {
+        rect: Rect { x: tick_x + tick_widget_len.saturating_sub(3), y: area.y, width: 3, height: 1 },
+        action: HitAction::TickRateInc,
+    });
+
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
         .border_style(Style::default().fg(theme.border_sys))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌metrics", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┐", Style::default().fg(theme.border_sys)),
+            Span::styled("metrics", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
+            Span::styled("┌── ", Style::default().fg(theme.border_sys)),
+            Span::styled(clock_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+            Span::styled(" ──", Style::default().fg(theme.border_sys)),
         ]))
-        .title_bottom(
+        .title(
             Line::from(vec![
-                Span::styled("systemd rclone ─ ", Style::default().fg(theme.border_sys)),
+                Span::styled("┌", Style::default().fg(theme.border)),
+                Span::styled("-", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" ", Style::default().fg(theme.border)),
+                Span::styled(tick_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+                Span::styled(" ", Style::default().fg(theme.border)),
+                Span::styled("+", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("┐─", Style::default().fg(theme.border)),
             ])
             .alignment(Alignment::Right),
         );
@@ -195,25 +238,61 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         height: area.height.saturating_sub(2),
     };
 
-    let speed = if app.live.transfer.speed.is_empty() {
-        "0.0 KiB/s".to_string()
+    // 1. Statut du service rclone & Horaires (transférés de l'ancien header)
+    let is_active = app.service_info.state == crate::systemd::ServiceState::Active || app.live.is_syncing;
+    let (status_dot, status_label, status_col) = if is_active {
+        ("●", "SYNC ACTIVE", theme.green)
     } else {
-        app.live.transfer.speed.clone()
+        match app.service_info.state {
+            crate::systemd::ServiceState::Idle => ("●", "EN ATTENTE", theme.cyan),
+            crate::systemd::ServiceState::Failed => ("●", "ÉCHEC", theme.red),
+            _ => ("●", "INCONNU", theme.text_muted),
+        }
     };
-    let is_syncing = app.live.is_syncing;
+    let last_sync_str = app.past_runs.first()
+        .map(|r| format!("{} ({})", r.time, r.duration))
+        .unwrap_or_else(|| "—".to_string());
+
+    let next_sync_str = if app.service_info.timer_left.is_empty() {
+        "—".to_string()
+    } else if !app.service_info.timer_next.is_empty()
+        && app.service_info.timer_next != app.service_info.timer_left
+        && !app.service_info.timer_left.contains(&app.service_info.timer_next)
+    {
+        format!("{} ({})", app.service_info.timer_next, app.service_info.timer_left)
+    } else {
+        app.service_info.timer_left.clone()
+    };
+
     let line1_spans = vec![
-        Span::styled("Débit:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{:<13}", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled("transfert rclone  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled(
-            if is_syncing { "● Actif" } else { "○ En attente" },
-            Style::default().fg(if is_syncing { theme.green } else { theme.text_muted }).add_modifier(Modifier::BOLD),
-        ),
+        Span::styled("Statut:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} {} ", status_dot, status_label), Style::default().fg(status_col).add_modifier(Modifier::BOLD)),
+        Span::styled("│ Dernière: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", last_sync_str), Style::default().fg(theme.text_bright)),
+        Span::styled("│ Prochaine: ", Style::default().fg(theme.text_muted)),
+        Span::styled(next_sync_str, Style::default().fg(theme.text_bright)),
     ];
 
+    // 2. Débit dynamique corrigé (sans la mention doublon « transfert clone actif »)
+    let speed = if !app.live.transfer.speed.is_empty() && app.live.transfer.speed != "0 B/s" {
+        app.live.transfer.speed.clone()
+    } else if let Some((_, af)) = app.live.active_files.iter().find(|(_, f)| !f.speed.is_empty()) {
+        af.speed.clone()
+    } else {
+        "0 B/s".to_string()
+    };
+    let speed_label = if is_active { "instantané" } else { "dernier transfert" };
+
+    let line2_spans = vec![
+        Span::styled("Débit:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{:<13}", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("({})", speed_label), Style::default().fg(theme.text_muted)),
+    ];
+
+    // 3. Aujourd'hui : distinction stricte erreurs vs conflits
     let (ok_today, err_today) = app.runs_today_stats();
     let conflicts = app.conflicts_today_stats();
-    let line2_spans = vec![
+    let line3_spans = vec![
         Span::styled("Aujourd'hui:", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled(format!(" {} sync réussie(s)", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         Span::styled(" · ", Style::default().fg(theme.border)),
@@ -228,15 +307,16 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         ),
     ];
 
+    // 4. Fiabilité 7 jours avec barre à dégradé btop++
     let (rate, _) = app.calculate_success_rate();
-    let rel_bar_width = 10usize.min((inner.width.saturating_sub(42) / 2) as usize);
-    let rel_bar = crate::ui::sparkline::render_gradient_bar(rate, rel_bar_width, theme);
+    let bar_width = 8usize.min((inner.width.saturating_sub(45) / 2) as usize);
+    let rel_bar = crate::ui::sparkline::render_gradient_bar(rate, bar_width, theme);
 
-    let mut line3_spans = vec![
+    let mut line4_spans = vec![
         Span::styled("Fiabilité:", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
-    line3_spans.extend(rel_bar);
-    line3_spans.push(Span::styled(
+    line4_spans.extend(rel_bar);
+    line4_spans.push(Span::styled(
         format!(" {:>3.0}% taux de réussite (7 jours)", rate),
         Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
     ));
@@ -245,6 +325,7 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         Line::from(line1_spans),
         Line::from(line2_spans),
         Line::from(line3_spans),
+        Line::from(line4_spans),
     ]);
     f.render_widget(p, inner);
 }
@@ -279,22 +360,39 @@ fn render_alert_banner(f: &mut Frame, alert: &Alert, theme: &ThemePalette, area:
 }
 
 fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(38), // Phase Stepper
-            Constraint::Percentage(38), // Jauge de transfert
-            Constraint::Percentage(24), // Sparkline débit réseau
-        ])
-        .split(area);
+    let elapsed = if app.live.transfer.elapsed.is_empty() {
+        "0s"
+    } else {
+        &app.live.transfer.elapsed
+    };
 
-    render_phase_stepper(f, app, theme, chunks[0]);
-    render_transfer_gauge(f, app, theme, chunks[1]);
-    crate::ui::sparkline::render_speed_sparkline(f, &app.live.speed_history, &app.live.transfer.speed, theme, chunks[2]);
-}
+    let title_line = Line::from(vec![
+        Span::styled("┐", Style::default().fg(theme.accent)),
+        Span::styled("synchronisation en cours", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+        Span::styled("┌", Style::default().fg(theme.accent)),
+    ]);
 
-fn render_phase_stepper(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
-    let mut spans = Vec::new();
+    let right_title = Line::from(vec![
+        Span::styled("⏱ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} ", elapsed), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+    ]);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(Style::default().fg(theme.accent))
+        .style(Style::default().bg(theme.card_bg))
+        .title(title_line)
+        .title(right_title.alignment(Alignment::Right));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.height < 2 {
+        return;
+    }
+
+    // 1. Phase stepper
     let phases = [
         "Listings",
         "Diffs locaux",
@@ -303,12 +401,11 @@ fn render_phase_stepper(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         "Mise à jour",
         "Terminé",
     ];
-
+    let mut stepper_spans = Vec::new();
     for (i, name) in phases.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::styled(" → ", Style::default().fg(theme.border)));
+            stepper_spans.push(Span::styled(" → ", Style::default().fg(theme.border)));
         }
-
         let (icon, style) = if i < app.live.phase_index {
             ("✓", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
         } else if i == app.live.phase_index {
@@ -316,100 +413,122 @@ fn render_phase_stepper(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         } else {
             ("○", Style::default().fg(theme.text_muted))
         };
-
-        spans.push(Span::styled(format!("{} {}", icon, name), style));
+        stepper_spans.push(Span::styled(format!("{} {}", icon, name), style));
     }
 
-    let p = Paragraph::new(Line::from(spans))
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Plain)
-                .border_style(Style::default().fg(theme.accent))
-                .style(Style::default().bg(theme.card_bg))
-                .title(Line::from(vec![
-                    Span::styled("┌ÉTAPES DE SYNCHRONISATION", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-                    Span::styled("┐", Style::default().fg(theme.border)),
-                ])),
-        );
-    f.render_widget(p, area);
-}
+    // 2. Grille des 7 KPIs de transfert (Parité HTML complète)
+    let done = if app.live.transfer.bytes_done.is_empty() { "—" } else { &app.live.transfer.bytes_done };
+    let total = if app.live.transfer.bytes_total.is_empty() { "—" } else { &app.live.transfer.bytes_total };
+    let pct_str = format!("{}%", app.live.transfer.pct.min(100));
+    let speed = if app.live.transfer.speed.is_empty() { "—" } else { &app.live.transfer.speed };
+    let eta = if app.live.transfer.eta.is_empty() { "—" } else { &app.live.transfer.eta };
+    let checks = format!("{} / {}", app.live.transfer.checks_done, app.live.transfer.checks_total);
+    let files = format!("{} / {}", app.live.transfer.files_done, app.live.transfer.files_total);
 
-fn render_transfer_gauge(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
-    let pct = app.live.transfer.pct.min(100);
-    let speed = if app.live.transfer.speed.is_empty() { "--" } else { &app.live.transfer.speed };
-    let eta = if app.live.transfer.eta.is_empty() { "--" } else { &app.live.transfer.eta };
-    let done = if app.live.transfer.bytes_done.is_empty() { "0 B" } else { &app.live.transfer.bytes_done };
-    let total = if app.live.transfer.bytes_total.is_empty() { "0 B" } else { &app.live.transfer.bytes_total };
+    let kpi_spans = vec![
+        Span::styled("Transféré: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", done), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+        Span::styled("│ Total: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", total), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+        Span::styled("│ Progr.: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", pct_str), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+        Span::styled("│ Vitesse: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled("│ ETA: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", eta), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled("│ Vérifs: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} ", checks), Style::default().fg(theme.text_bright)),
+        Span::styled("│ Fichiers: ", Style::default().fg(theme.text_muted)),
+        Span::styled(files, Style::default().fg(theme.text_bright)),
+    ];
 
-    let label = format!("{}% ({} / {}) · {} · ETA: {}", pct, done, total, speed, eta);
-
-    let gauge = Gauge::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Plain)
-                .border_style(Style::default().fg(theme.accent))
-                .style(Style::default().bg(theme.card_bg))
-                .title(Line::from(vec![
-                    Span::styled("┌Transfert Actif", Style::default().fg(theme.accent)),
-                    Span::styled("┐", Style::default().fg(theme.border)),
-                ])),
-        )
-        .gauge_style(Style::default().fg(theme.accent).bg(theme.border))
-        .percent(pct as u16)
-        .label(Span::styled(label, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
-
-    f.render_widget(gauge, area);
-}
-
-fn render_active_files_bar(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
-    if app.live.active_files.is_empty() {
-        return;
-    }
-
-    let mut spans = Vec::new();
-    spans.push(Span::styled(" En transfert : ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
-
-    for (i, (_key, af)) in app.live.active_files.iter().take(3).enumerate() {
-        if i > 0 {
-            spans.push(Span::styled(" │ ", Style::default().fg(theme.border)));
+    // 3. Changements locaux détectés avec détail précis
+    let mut loc_spans = vec![
+        Span::styled("Changements locaux (Path2) : ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+    ];
+    if app.live.changes_local_details.is_empty() && app.live.changes_local.is_empty() {
+        loc_spans.push(Span::styled("Aucun changement", Style::default().fg(theme.text_muted)));
+    } else if !app.live.changes_local_details.is_empty() {
+        for (i, d) in app.live.changes_local_details.iter().take(3).enumerate() {
+            if i > 0 { loc_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
+            loc_spans.push(Span::styled(format!("• {} ", d.path), Style::default().fg(theme.text_bright)));
+            loc_spans.push(Span::styled(format!("[{}]", d.action), Style::default().fg(theme.cyan)));
         }
-        let bar_width = 8usize;
-        let filled = ((af.pct as usize) * bar_width) / 100;
-        let bar_str = format!("[{}{}]", "█".repeat(filled), "░".repeat(bar_width.saturating_sub(filled)));
-
-        spans.push(Span::styled(format!("{} ", af.name), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
-        spans.push(Span::styled(format!("{} {}% ", bar_str, af.pct), Style::default().fg(theme.accent)));
-        if !af.speed.is_empty() {
-            spans.push(Span::styled(format!("({}) ", af.speed), Style::default().fg(theme.text_muted)));
+        if app.live.changes_local_details.len() > 3 {
+            loc_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_local_details.len() - 3), Style::default().fg(theme.text_muted)));
+        }
+    } else {
+        for (i, f) in app.live.changes_local.iter().take(3).enumerate() {
+            if i > 0 { loc_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
+            loc_spans.push(Span::styled(format!("• {}", f), Style::default().fg(theme.text_bright)));
+        }
+        if app.live.changes_local.len() > 3 {
+            loc_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_local.len() - 3), Style::default().fg(theme.text_muted)));
         }
     }
 
-    let p = Paragraph::new(Line::from(spans))
-        .alignment(Alignment::Left)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Plain)
-                .border_style(Style::default().fg(theme.border))
-                .style(Style::default().bg(theme.card_bg))
-                .title(Line::from(vec![
-                    Span::styled(format!("┌⚡ Fichiers en cours ({})", app.live.active_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-                    Span::styled("┐", Style::default().fg(theme.border)),
-                ])),
-        );
-    f.render_widget(p, area);
+    // 4. Changements distants détectés avec détail précis
+    let mut rem_spans = vec![
+        Span::styled("Changements distants (Path1) : ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+    ];
+    if app.live.changes_remote_details.is_empty() && app.live.changes_remote.is_empty() {
+        rem_spans.push(Span::styled("Aucun changement", Style::default().fg(theme.text_muted)));
+    } else if !app.live.changes_remote_details.is_empty() {
+        for (i, d) in app.live.changes_remote_details.iter().take(3).enumerate() {
+            if i > 0 { rem_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
+            rem_spans.push(Span::styled(format!("• {} ", d.path), Style::default().fg(theme.text_bright)));
+            rem_spans.push(Span::styled(format!("[{}]", d.action), Style::default().fg(theme.yellow)));
+        }
+        if app.live.changes_remote_details.len() > 3 {
+            rem_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_remote_details.len() - 3), Style::default().fg(theme.text_muted)));
+        }
+    } else {
+        for (i, f) in app.live.changes_remote.iter().take(3).enumerate() {
+            if i > 0 { rem_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
+            rem_spans.push(Span::styled(format!("• {}", f), Style::default().fg(theme.text_bright)));
+        }
+        if app.live.changes_remote.len() > 3 {
+            rem_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_remote.len() - 3), Style::default().fg(theme.text_muted)));
+        }
+    }
+
+    let mut content_lines = vec![
+        Line::from(stepper_spans),
+        Line::from(kpi_spans),
+        Line::from(loc_spans),
+        Line::from(rem_spans),
+    ];
+
+    // 5. Si fichier actif en cours de transfert
+    if let Some((_key, af)) = app.live.active_files.iter().next() {
+        if inner.height >= 5 {
+            let active_spans = vec![
+                Span::styled("En transfert: ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("{} ", af.name), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("({}%", af.pct), Style::default().fg(theme.highlight)),
+                Span::styled(if af.speed.is_empty() { ")".to_string() } else { format!(" - {})", af.speed) }, Style::default().fg(theme.text_muted)),
+            ];
+            content_lines.push(Line::from(active_spans));
+        }
+    }
+
+    let p = Paragraph::new(content_lines);
+    f.render_widget(p, inner);
 }
 
 fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let is_focused = app.focused_panel == FocusedPanel::History;
     let border_color = if is_focused { theme.border_focus } else { theme.border_history };
-    let total_runs = app.past_runs.len();
+    let is_syncing = app.live.is_syncing;
+    let total_runs = app.total_history_runs();
     let cur_run = if total_runs > 0 { app.selected_run_idx + 1 } else { 0 };
 
-    let graph_height = if area.height >= 20 { 5 } else if area.height >= 16 { 4 } else { 3 };
+    hitboxes.push(Hitbox {
+        rect: area,
+        action: HitAction::HistoryArea,
+    });
+
+    let graph_height = if area.height >= 20 { 4 } else if area.height >= 16 { 3 } else { 2 };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -424,17 +543,18 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         });
 
     let left_bottom = Line::from(vec![
+        Span::styled("┘", Style::default().fg(border_color)),
         Span::styled("↑ select ↓", Style::default().fg(theme.text_bright)),
-        Span::styled("┘┌", Style::default().fg(border_color)),
+        Span::styled("└┘", Style::default().fg(border_color)),
         Span::styled("détails ", Style::default().fg(theme.text_bright)),
         Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("┘┌", Style::default().fg(border_color)),
-        Span::styled("s", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("top ", Style::default().fg(theme.text_bright)),
-        Span::styled("┘", Style::default().fg(border_color)),
+        Span::styled("└┘", Style::default().fg(border_color)),
+        Span::styled("c", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("ancel", Style::default().fg(theme.text_bright)),
+        Span::styled("└", Style::default().fg(border_color)),
     ]);
     let right_bottom = Line::from(vec![
-        Span::styled(format!("{}/{} ", cur_run, total_runs), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("─ {}/{} ─", cur_run, total_runs), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
 
     let outer_block = Block::default()
@@ -443,11 +563,12 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌history", Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-            Span::styled("┌details ", Style::default().fg(theme.text_bright)),
+            Span::styled("┐", Style::default().fg(border_color)),
+            Span::styled("history", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+            Span::styled("┌┐", Style::default().fg(border_color)),
+            Span::styled("details ", Style::default().fg(theme.text_bright)),
             Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌", Style::default().fg(border_color)),
         ]))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
@@ -464,18 +585,26 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         action: HitAction::ButtonCancel,
     });
 
-    // 1. Graphe de durées multi-lignes (btop++ style) avec hitboxes sur chaque colonne
+    // 1. Graphe de durées multi-lignes (btop style) avec hitboxes sur chaque colonne
+    let past_selected = if is_syncing {
+        if app.selected_run_idx > 0 { Some(app.selected_run_idx - 1) } else { None }
+    } else if !app.past_runs.is_empty() {
+        Some(app.selected_run_idx)
+    } else {
+        None
+    };
     let (lines, col_hitboxes) = crate::ui::sparkline::render_history_graph_multiline(
         &app.past_runs,
         theme,
         chunks[0].width as usize,
         chunks[0].height as usize,
-        if total_runs > 0 { Some(app.selected_run_idx) } else { None },
+        past_selected,
     );
     let bar_p = Paragraph::new(lines);
     f.render_widget(bar_p, chunks[0]);
 
     for (col_x, col_w, orig_idx) in col_hitboxes {
+        let row_idx_target = if is_syncing { orig_idx + 1 } else { orig_idx };
         hitboxes.push(Hitbox {
             rect: Rect {
                 x: chunks[0].x + col_x as u16,
@@ -483,13 +612,13 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
                 width: col_w as u16,
                 height: chunks[0].height.saturating_sub(1),
             },
-            action: HitAction::HistoryRow(orig_idx),
+            action: HitAction::HistoryRow(row_idx_target),
         });
     }
 
     // 2. Tableau des runs avec hitboxes et scroll offset
     let visible_rows = chunks[1].height.saturating_sub(2) as usize;
-    let max_offset = app.past_runs.len().saturating_sub(visible_rows);
+    let max_offset = total_runs.saturating_sub(visible_rows);
     let offset = if app.selected_run_idx < app.history_scroll_offset {
         app.selected_run_idx
     } else if visible_rows > 0 && app.selected_run_idx >= app.history_scroll_offset + visible_rows {
@@ -498,60 +627,78 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         app.history_scroll_offset.min(max_offset)
     };
 
-    let runs_to_show: Vec<(usize, &crate::monitor::PastRun)> = app
-        .past_runs
-        .iter()
-        .enumerate()
-        .skip(offset)
-        .take(visible_rows)
-        .collect();
+    let mut table_rows: Vec<Row> = Vec::new();
+    let mut visible_indices: Vec<usize> = Vec::new();
 
-    let table_rows: Vec<Row> = runs_to_show
-        .iter()
-        .map(|(i, run)| {
-            let is_selected = *i == app.selected_run_idx;
+    for item_idx in offset..(offset + visible_rows).min(total_runs) {
+        visible_indices.push(item_idx);
+        let is_selected = item_idx == app.selected_run_idx;
+        let cursor = if is_selected {
+            Span::styled("▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
+        } else {
+            Span::styled("  ", Style::default())
+        };
 
-            let cursor = if is_selected {
-                Span::styled("▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
-            } else {
-                Span::styled("  ", Style::default())
-            };
+        if is_syncing && item_idx == 0 {
+            // Ligne de la synchronisation en cours
+            let elapsed = if app.live.transfer.elapsed.is_empty() { "0s" } else { &app.live.transfer.elapsed };
+            let time_str = format!("En cours ({})", elapsed);
+            let pct_val = app.live.transfer.pct.min(100);
+            let speed_val = if app.live.transfer.speed.is_empty() { "--" } else { &app.live.transfer.speed };
+            let status_str = format!("● {}% ({})", pct_val, speed_val);
+            let copied_val = if app.live.transfer.bytes_done.is_empty() { "0 B".to_string() } else { app.live.transfer.bytes_done.clone() };
+            let mod_val = if app.live.changes_remote.is_empty() { "0".to_string() } else { format!("{}", app.live.changes_remote.len()) };
+            let chk_val = format!("{}/{}", app.live.transfer.files_done, app.live.transfer.files_total);
+            let eta_val = if app.live.transfer.eta.is_empty() { "--".to_string() } else { format!("ETA:{}", app.live.transfer.eta) };
 
-            let (status_badge, status_color) = match run.status {
-                RunStatus::Success => ("✔ Réussie", theme.green),
-                RunStatus::Failed => ("✗ Erreur", theme.red),
-                RunStatus::Skipped => ("⊘ Ignorée", theme.text_muted),
-                RunStatus::Running => ("▶ En cours", theme.cyan),
-            };
+            table_rows.push(Row::new(vec![
+                Cell::from(Line::from(vec![cursor, Span::styled(time_str, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))])),
+                Cell::from(Span::styled(status_str, Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
+                Cell::from(Span::styled(copied_val, Style::default().fg(theme.green).add_modifier(Modifier::BOLD))),
+                Cell::from(Span::styled(mod_val, Style::default().fg(theme.yellow))),
+                Cell::from(Span::styled(chk_val, Style::default().fg(theme.accent))),
+                Cell::from(Span::styled(elapsed, Style::default().fg(theme.text_bright))),
+                Cell::from(Span::styled(eta_val, Style::default().fg(theme.text_muted))),
+            ]));
+        } else {
+            let past_idx = if is_syncing { item_idx - 1 } else { item_idx };
+            if let Some(run) = app.past_runs.get(past_idx) {
+                let (status_badge, status_color) = match run.status {
+                    RunStatus::Success => ("✔ Réussie", theme.green),
+                    RunStatus::Failed => ("✗ Erreur", theme.red),
+                    RunStatus::Skipped => ("⊘ Ignorée", theme.text_muted),
+                    RunStatus::Running => ("▶ En cours", theme.cyan),
+                };
 
-            let time_short = if run.date == chrono::Local::now().format("%Y-%m-%d").to_string() {
-                format!("Auj. {}", run.time)
-            } else {
-                format!("{} {}", run.date, run.time)
-            };
+                let time_short = if run.date == chrono::Local::now().format("%Y-%m-%d").to_string() {
+                    format!("Auj. {}", run.time)
+                } else {
+                    format!("{} {}", run.date, run.time)
+                };
 
-            let row_style = if is_selected {
-                Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(theme.text_bright)
-            };
+                let row_style = if is_selected {
+                    Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(theme.text_bright)
+                };
 
-            let err_color = if run.errors.is_empty() { theme.text_muted } else { theme.red };
+                let err_color = if run.errors.is_empty() { theme.text_muted } else { theme.red };
 
-            Row::new(vec![
-                Cell::from(Line::from(vec![cursor, Span::styled(time_short, row_style)])),
-                Cell::from(Span::styled(status_badge, Style::default().fg(status_color).add_modifier(Modifier::BOLD))),
-                Cell::from(Span::styled(run.files_copied.len().to_string(), Style::default().fg(theme.green))),
-                Cell::from(Span::styled(run.files_modified.len().to_string(), Style::default().fg(theme.yellow))),
-                Cell::from(Span::styled(run.files_deleted.len().to_string(), Style::default().fg(theme.red))),
-                Cell::from(Span::styled(&run.duration, Style::default().fg(theme.text_muted))),
-                Cell::from(Span::styled(run.errors.len().to_string(), Style::default().fg(err_color))),
-            ])
-        })
-        .collect();
+                table_rows.push(Row::new(vec![
+                    Cell::from(Line::from(vec![cursor, Span::styled(time_short, row_style)])),
+                    Cell::from(Span::styled(status_badge, Style::default().fg(status_color).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(run.files_copied.len().to_string(), Style::default().fg(theme.green))),
+                    Cell::from(Span::styled(run.files_modified.len().to_string(), Style::default().fg(theme.yellow))),
+                    Cell::from(Span::styled(run.files_deleted.len().to_string(), Style::default().fg(theme.red))),
+                    Cell::from(Span::styled(&run.duration, Style::default().fg(theme.text_muted))),
+                    Cell::from(Span::styled(run.errors.len().to_string(), Style::default().fg(err_color))),
+                ]));
+            }
+        }
+    }
 
     // Enregistrer les hitboxes des lignes pour les clics souris
-    for (row_idx, (real_idx, _)) in runs_to_show.iter().enumerate() {
+    for (row_idx, real_idx) in visible_indices.iter().enumerate() {
         let row_y = chunks[1].y + 1 + row_idx as u16;
         if row_y < chunks[1].y + chunks[1].height {
             hitboxes.push(Hitbox {
@@ -585,8 +732,8 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     f.render_widget(table, chunks[1]);
 
-    if app.past_runs.len() > visible_rows {
-        let mut scrollbar_state = ScrollbarState::new(app.past_runs.len())
+    if total_runs > visible_rows {
+        let mut scrollbar_state = ScrollbarState::new(total_runs)
             .position(app.selected_run_idx);
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(Some("▲"))
@@ -619,14 +766,15 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     };
 
     let left_bottom = Line::from(vec![
+        Span::styled("┘", Style::default().fg(border_color)),
         Span::styled("↑ scroll ↓", Style::default().fg(theme.text_bright)),
-        Span::styled("┘┌", Style::default().fg(border_color)),
+        Span::styled("└┘", Style::default().fg(border_color)),
         Span::styled(if app.auto_scroll { "pause " } else { "auto " }, Style::default().fg(theme.text_bright)),
         Span::styled("␣", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("┘", Style::default().fg(border_color)),
+        Span::styled("└", Style::default().fg(border_color)),
     ]);
     let right_bottom = Line::from(vec![
-        Span::styled(format!("{}/{} ", cur_line, total_lines), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("─ {}/{} ─", cur_line, total_lines), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
 
     let outer_block = Block::default()
@@ -635,12 +783,13 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌logs", Style::default().fg(theme.border_logs).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-            Span::styled("┌auto ", Style::default().fg(theme.text_bright)),
+            Span::styled("┐", Style::default().fg(border_color)),
+            Span::styled("logs", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+            Span::styled("┌┐", Style::default().fg(border_color)),
+            Span::styled("auto ", Style::default().fg(theme.text_bright)),
             Span::styled("␣", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled(if app.auto_scroll { " [ON]" } else { " [OFF]" }, Style::default().fg(if app.auto_scroll { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌", Style::default().fg(border_color)),
         ]))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
@@ -738,9 +887,12 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
                 let file_path = std::path::Path::new(path);
                 let (display_path, path_style) = if app.ctrl_mode {
                     let parent = file_path.parent().and_then(|p| p.to_str()).unwrap_or("");
-                    let parent_display = if parent.is_empty() { "./" } else { parent };
-                    let fname = file_path.file_name().and_then(|n| n.to_str()).unwrap_or(path);
-                    let formatted = format!("📁 {}/ ({})", parent_display.trim_end_matches('/'), fname);
+                    let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
+                    let formatted = if parent_clean.is_empty() {
+                        "📁 ./".to_string()
+                    } else {
+                        format!("📁 {}/", parent_clean)
+                    };
                     if is_selected {
                         (formatted, Style::default().fg(theme.yellow).bg(theme.border_focus).add_modifier(Modifier::BOLD))
                     } else {
@@ -779,47 +931,68 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     }
 
     let mut bottom_spans = vec![
+        Span::styled("┘", Style::default().fg(border_color)),
         Span::styled("↑ select ↓", Style::default().fg(theme.text_bright)),
-        Span::styled("┘┌", Style::default().fg(border_color)),
+        Span::styled("└┘", Style::default().fg(border_color)),
         Span::styled("open ", Style::default().fg(theme.text_bright)),
         Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("┘┌", Style::default().fg(border_color)),
-        Span::styled("dossier ", Style::default().fg(theme.text_bright)),
-        Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("┘┌", Style::default().fg(border_color)),
+        Span::styled("└┘", Style::default().fg(border_color)),
     ];
     if app.ctrl_mode {
-        bottom_spans.push(Span::styled("Ctrl", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+        bottom_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
         bottom_spans.push(Span::styled(" dossier [ON]", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)));
     } else {
-        bottom_spans.push(Span::styled("Ctrl", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+        bottom_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
         bottom_spans.push(Span::styled(" dossier", Style::default().fg(theme.text_bright)));
     }
-    bottom_spans.push(Span::styled("┘", Style::default().fg(border_color)));
+    bottom_spans.push(Span::styled("└", Style::default().fg(border_color)));
 
     let left_bottom = Line::from(bottom_spans);
     let right_bottom = Line::from(vec![
-        Span::styled(format!("{}/{} ", cur_file, total_files), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("─ {}/{} ─", cur_file, total_files), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
+
+    let mut top_spans = vec![
+        Span::styled("┐", Style::default().fg(border_color)),
+        Span::styled("recent files", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+        Span::styled("┌┐", Style::default().fg(border_color)),
+    ];
+    if app.is_filtering_recent {
+        top_spans.push(Span::styled("filter: ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
+        top_spans.push(Span::styled(&app.recent_filter, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+        top_spans.push(Span::styled("█", Style::default().fg(theme.highlight)));
+    } else if !app.recent_filter.is_empty() {
+        top_spans.push(Span::styled("filter: ", Style::default().fg(theme.text_muted)));
+        top_spans.push(Span::styled(&app.recent_filter, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+        top_spans.push(Span::styled(" (", Style::default().fg(theme.text_muted)));
+        top_spans.push(Span::styled("f", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+        top_spans.push(Span::styled(")", Style::default().fg(theme.text_muted)));
+    } else {
+        top_spans.push(Span::styled("f", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+        top_spans.push(Span::styled(" filter", Style::default().fg(theme.text_bright)));
+    }
+    top_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
+    top_spans.push(Span::styled("open ", Style::default().fg(theme.text_bright)));
+    top_spans.push(Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),);
+    top_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
+    top_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    top_spans.push(Span::styled(if app.ctrl_mode { " dossier [ON]" } else { " dossier" }, Style::default().fg(if app.ctrl_mode { theme.yellow } else { theme.text_bright }).add_modifier(Modifier::BOLD)));
+    top_spans.push(Span::styled("┌", Style::default().fg(border_color)));
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
-        .title(Line::from(vec![
-            Span::styled("┌recent files", Style::default().fg(theme.border_recent).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-            Span::styled("┌open ", Style::default().fg(theme.text_bright)),
-            Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-            Span::styled("┌", Style::default().fg(theme.border)),
-            Span::styled("Ctrl", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled(if app.ctrl_mode { " dossier [ON]" } else { " dossier" }, Style::default().fg(if app.ctrl_mode { theme.yellow } else { theme.text_bright }).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-        ]))
+        .title(Line::from(top_spans))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
+
+    // Hitbox pour l'onglet filter dans le bandeau supérieur
+    hitboxes.push(Hitbox {
+        rect: Rect { x: area.x + 14, y: area.y, width: 12, height: 1 },
+        action: HitAction::RecentFilterFocus,
+    });
 
     let bottom_y = area.y + area.height.saturating_sub(1);
     hitboxes.push(Hitbox {
@@ -827,11 +1000,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         action: HitAction::RecentFile(app.recent_selected_idx),
     });
     hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 19, y: bottom_y, width: 11, height: 1 },
-        action: HitAction::ToggleCtrlMode,
-    });
-    hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 30, y: bottom_y, width: if app.ctrl_mode { 19 } else { 14 }, height: 1 },
+        rect: Rect { x: area.x + 20, y: bottom_y, width: if app.ctrl_mode { 17 } else { 12 }, height: 1 },
         action: HitAction::ToggleCtrlMode,
     });
 

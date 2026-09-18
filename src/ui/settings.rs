@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
@@ -12,60 +12,153 @@ use crate::ui::theme::ThemePalette;
 pub const SETTINGS_ITEMS_COUNT: usize = 7;
 
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
-    let area = centered_rect(70, 68, f.area());
+    let screen = f.area();
+    let is_wide = screen.width >= 86;
+    let logo_h: u16 = if is_wide { 6 } else { 5 };
+    let show_logo = screen.height >= 28;
+    let box_w = 78.min(screen.width);
+    let box_h = if show_logo {
+        20.min(screen.height.saturating_sub(logo_h + 3))
+    } else {
+        22.min(screen.height.saturating_sub(2))
+    };
+
+    let total_h = if show_logo { logo_h + 1 + box_h } else { box_h };
+    let container_area = centered_fixed_rect(box_w, total_h, screen);
+
+    let area = if show_logo {
+        let v_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(logo_h),
+                Constraint::Length(1),
+                Constraint::Length(box_h),
+            ])
+            .split(container_area);
+        crate::ui::menu::render_btop_logo(f, v_chunks[0]);
+        let ver_line = Line::from(vec![
+            Span::raw("                             "),
+            Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+        ]);
+        f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
+        v_chunks[2]
+    } else {
+        container_area
+    };
+
     f.render_widget(Clear, area);
 
     let cur_opt = app.settings_selected_idx + 1;
 
+    // En-tête btop++ avec coin supérieur gauche ┌[tab]┐
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
-        .border_style(Style::default().fg(theme.border_sys))
+        .border_style(Style::default().fg(theme.red))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌⚙ options", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-            Span::styled("┌sauvegarder: s / ↵", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-            Span::styled("┌fermer: Esc", Style::default().fg(theme.text_muted)),
-            Span::styled("┐", Style::default().fg(theme.border)),
+            Span::styled("┌[", Style::default().fg(theme.red)),
+            Span::styled("tab", Style::default().fg(Color::Rgb(220, 220, 220))),
+            Span::styled("]┐", Style::default().fg(theme.red)),
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" naviguer  ", Style::default().fg(theme.text_muted)),
-                Span::styled("←/→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" modifier  ", Style::default().fg(theme.text_muted)),
-                Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" enregistrer  ", Style::default().fg(theme.text_muted)),
-                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ {}/{} ", cur_opt, SETTINGS_ITEMS_COUNT), Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
+                Span::styled("┘", Style::default().fg(theme.red)),
+                Span::styled("↑ select ↓", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled("└┘", Style::default().fg(theme.red)),
+                Span::styled("← modifier →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled("└┘", Style::default().fg(theme.red)),
+                Span::styled("↵ enregistrer", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+                Span::styled("└┘", Style::default().fg(theme.red)),
+                Span::styled("Esc fermer", Style::default().fg(Color::Rgb(160, 165, 180))),
+                Span::styled("└", Style::default().fg(theme.red)),
+                Span::styled(format!(" ─── {}/{} ", cur_opt, SETTINGS_ITEMS_COUNT), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );
     f.render_widget(outer_block, area);
 
     let inner = Rect {
-        x: area.x + 2,
+        x: area.x + 1,
         y: area.y + 1,
-        width: area.width.saturating_sub(4),
+        width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
 
-    let chunks = Layout::default()
+    if inner.height < 6 || inner.width < 50 {
+        return;
+    }
+
+    // Découpage vertical :
+    // - Ligne 0 : Onglets des catégories btop++
+    // - Ligne 1 : Ligne séparatrice horizontale (div_left + div_up + div_right)
+    // - Reste : Les deux colonnes (options à gauche, aide détaillée à droite)
+    let v_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // Marge haute
-            Constraint::Length(8), // Options (7 lignes)
-            Constraint::Length(2), // Boutons action (Sauvegarder / Fermer)
-            Constraint::Min(3),    // Aide contextuelle
+            Constraint::Length(1), // Onglets
+            Constraint::Length(1), // Séparateur horizontal
+            Constraint::Min(4),    // Contenu 2 colonnes
         ])
         .split(inner);
 
-    // 1. Liste des options avec hitboxes
-    let mut option_lines = Vec::new();
+    let tabs_area = v_chunks[0];
+    let hsep_area = v_chunks[1];
+    let content_area = v_chunks[2];
 
+    // 1. Onglets style btop++ : [general]  2sync  3filet  4réseau
+    let tab_spans = vec![
+        Span::raw(" "),
+        Span::styled("[", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("général", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled("]", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::raw("      "),
+        Span::styled("2", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("sync", Style::default().fg(Color::Rgb(200, 205, 215))),
+        Span::raw("      "),
+        Span::styled("3", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("filet", Style::default().fg(Color::Rgb(200, 205, 215))),
+        Span::raw("      "),
+        Span::styled("4", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("réseau", Style::default().fg(Color::Rgb(200, 205, 215))),
+        Span::raw("      "),
+        Span::styled("5", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("chemins", Style::default().fg(Color::Rgb(200, 205, 215))),
+    ];
+    f.render_widget(Paragraph::new(Line::from(tab_spans)), tabs_area);
+
+    // 2. Séparateur horizontal btop++ :
+    // ├──────── (29 cols) ────────┬──────── (reste) ────────┤
+    let left_col_w = 29u16.min(content_area.width.saturating_sub(10));
+    let right_col_w = content_area.width.saturating_sub(left_col_w + 1);
+
+    let mut hsep_spans = Vec::new();
+    hsep_spans.push(Span::styled("─".repeat(left_col_w as usize), Style::default().fg(theme.border)));
+    hsep_spans.push(Span::styled("┬", Style::default().fg(theme.border)));
+    hsep_spans.push(Span::styled("─".repeat(right_col_w as usize), Style::default().fg(theme.border)));
+    f.render_widget(Paragraph::new(Line::from(hsep_spans)), hsep_area);
+
+    // 3. Découpage horizontal pour le contenu des deux colonnes
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(left_col_w),
+            Constraint::Length(1),
+            Constraint::Min(20),
+        ])
+        .split(content_area);
+
+    let left_area = cols[0];
+    let sep_area = cols[1];
+    let right_area = cols[2];
+
+    // Séparateur vertical btop++
+    let sep_lines: Vec<Line> = (0..content_area.height)
+        .map(|_| Line::from(Span::styled("│", Style::default().fg(theme.border))))
+        .collect();
+    f.render_widget(Paragraph::new(sep_lines), sep_area);
+
+    // Données des réglages
     let full_sync_display = match app.config.full_sync_interval.as_str() {
         "60" => "1h (Recommandé)".to_string(),
         "120" => "2h".to_string(),
@@ -78,133 +171,143 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     };
 
     let settings = [
-        ("Thème de l'interface", app.current_theme.name()),
-        ("Intervalle timer bisync", &app.config.timer_interval),
-        ("Filet de sécurité Cloud", &full_sync_display),
-        ("Limite bande passante", app.config.bwlimit.as_deref().unwrap_or("Désactivé")),
-        ("Fréquence UI", &format!("{} ms", app.config.tick_rate_ms.unwrap_or(250))),
-        ("Dossier local synchronisé", &app.config.local_dir),
-        ("Remote rclone distant", &app.config.remote),
+        ("Color theme", app.current_theme.name().to_string()),
+        ("Intervalle timer bisync", app.config.timer_interval.clone()),
+        ("Filet de sécurité Cloud", full_sync_display),
+        ("Limite bande passante", app.config.bwlimit.as_deref().unwrap_or("Désactivé").to_string()),
+        ("Fréquence UI", format!("{} ms", app.tick_rate_ms_live)),
+        ("Dossier local", app.config.local_dir.clone()),
+        ("Remote distant", app.config.remote.clone()),
     ];
+
+    // Rendu de la colonne gauche
+    let mut left_lines = Vec::new();
+    let row_height = 2; // 1 ligne label + 1 ligne valeur
 
     for (i, (label, val)) in settings.iter().enumerate() {
         let is_selected = i == app.settings_selected_idx;
+        let item_y = left_area.y + (i as u16 * row_height);
 
-        let cursor = if is_selected {
-            Span::styled(" ▶ ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD))
-        } else {
-            Span::styled("   ", Style::default())
-        };
-
-        let label_style = if is_selected {
-            Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(theme.text_muted)
-        };
-
-        let val_style = if is_selected {
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(theme.green)
-        };
-
-        option_lines.push(Line::from(vec![
-            cursor,
-            Span::styled(format!("{:<28}", label), label_style),
-            Span::styled(" :  [◀] ", Style::default().fg(if is_selected { theme.highlight } else { theme.border })),
-            Span::styled(format!("{:<22}", val), val_style),
-            Span::styled(" [▶]", Style::default().fg(if is_selected { theme.highlight } else { theme.border })),
-        ]));
-
-        // Enregistrer la hitbox de la ligne
-        let row_y = chunks[1].y + i as u16;
+        // Hitbox de sélection de la ligne entière
         hitboxes.push(Hitbox {
             rect: Rect {
-                x: chunks[1].x,
-                y: row_y,
-                width: chunks[1].width,
-                height: 1,
+                x: left_area.x,
+                y: item_y,
+                width: left_area.width,
+                height: row_height,
             },
             action: HitAction::SettingOption(i),
         });
 
-        // Hitboxes pour les boutons fléchés spécifiques [◀] et [▶]
-        let left_arrow_x = chunks[1].x + 3 + 28 + 4;
+        // Hitboxes pour les flèches ← et →
+        let arrow_y = item_y + 1;
         hitboxes.push(Hitbox {
-            rect: Rect { x: left_arrow_x, y: row_y, width: 3, height: 1 },
+            rect: Rect { x: left_area.x, y: arrow_y, width: 4, height: 1 },
             action: HitAction::SettingCycle(i, false),
         });
-
-        let right_arrow_x = left_arrow_x + 3 + 1 + 22 + 1;
         hitboxes.push(Hitbox {
-            rect: Rect { x: right_arrow_x, y: row_y, width: 3, height: 1 },
+            rect: Rect { x: left_area.x + left_area.width.saturating_sub(4), y: arrow_y, width: 4, height: 1 },
             action: HitAction::SettingCycle(i, true),
         });
+
+        let w = left_area.width as usize;
+
+        if is_selected {
+            // Bandeau de fond coloré btop++ (brun/rouge profond #5A2222)
+            let highlight_bg = Color::Rgb(90, 32, 32);
+
+            let line1 = Line::from(vec![
+                Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+            ]);
+
+            // Flèche gauche et droite intégrées dans la ligne de valeur style btop++
+            let inner_w = w.saturating_sub(4);
+            let val_centered = format!("{:^width$}", val, width = inner_w);
+            let line2 = Line::from(vec![
+                Span::styled(format!("← {} →", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+            ]);
+
+            left_lines.push(line1);
+            left_lines.push(line2);
+        } else {
+            let line1 = Line::from(vec![
+                Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::Rgb(220, 222, 230))),
+            ]);
+            let line2 = Line::from(vec![
+                Span::styled(format!("{:^width$}", val, width = w), Style::default().fg(Color::Rgb(165, 170, 185))),
+            ]);
+            left_lines.push(line1);
+            left_lines.push(line2);
+        }
     }
 
-    let p_options = Paragraph::new(option_lines);
-    f.render_widget(p_options, chunks[1]);
+    let left_p = Paragraph::new(left_lines);
+    f.render_widget(left_p, left_area);
 
-    // 2. Boutons d'action en bas de modal
-    let btn_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ])
-        .split(chunks[2]);
-
-    hitboxes.push(Hitbox { rect: btn_chunks[0], action: HitAction::SaveSettings });
-    hitboxes.push(Hitbox { rect: btn_chunks[1], action: HitAction::CloseModal });
-
-    let save_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Enregistrer (s) ] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-    ]))
-    .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::ALL).border_type(BorderType::Plain).border_style(Style::default().fg(theme.border_sys)));
-    f.render_widget(save_p, btn_chunks[0]);
-
-    let close_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Fermer (Échap) ] ", Style::default().fg(theme.text_muted)),
-    ]))
-    .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::ALL).border_type(BorderType::Plain).border_style(Style::default().fg(theme.border)));
-    f.render_widget(close_p, btn_chunks[1]);
-
-    // 3. Aide contextuelle
-    let help_text = match app.settings_selected_idx {
-        0 => "Basculez entre les 6 thèmes modernes (Tokyo Night, Catppuccin Mocha, Nord Frost, Gruvbox Dark, Dracula, Monokai Pro).",
-        1 => "Fréquence de vérification du timer rclone-bisync (10min, 15min, 30min, 1h).",
-        2 => "Délai max avant une synchronisation complète avec le cloud même sans modifs locales.",
-        3 => "Limite de bande passante rclone (bwlimit.env).",
-        4 => "Fréquence de boucle TUI en millisecondes (défilement et réactivité).",
-        _ => "Cliquez sur [◀] / [▶] ou appuyez sur ← / → pour modifier, Entrée pour enregistrer.",
+    // Rendu de la colonne droite : Panneau de description style btop++
+    let (desc_title, desc_body) = match app.settings_selected_idx {
+        0 => (
+            "Color theme.",
+            "Définit le jeu de couleurs appliqué à l'ensemble du tableau de bord.\n\nPrend en charge 6 thèmes soignés pour une lisibilité optimale :\n• Tokyo Night\n• Catppuccin Mocha\n• Nord Frost\n• Gruvbox Dark\n• Dracula\n• Monokai Pro\n\nChaque thème adapte dynamiquement les bordures, textes et graphiques à dégradé btop++."
+        ),
+        1 => (
+            "Intervalle timer bisync.",
+            "Fréquence de vérification et de synchronisation automatique par systemd.\n\nConfigure la fréquence à laquelle rclone-bisync.timer se réveille pour inspecter les modifications.\n\nValeurs disponibles : 10m, 15m, 30m, 1h, 2h, 4h.\nRecommandé : 15m pour un équilibre idéal entre rapidité et consommation processeur."
+        ),
+        2 => (
+            "Filet de sécurité Cloud.",
+            "Délai maximal avant d'exécuter une synchronisation bidirectionnelle complète.\n\nMême si aucune modification locale n'a été détectée, ce filet garantit la récupération de tous les fichiers créés ou modifiés depuis un autre poste ou sur le cloud.\n\nOption 'Jamais' disponible pour une synchronisation déclenchée uniquement lors de modifications locales."
+        ),
+        3 => (
+            "Limite de bande passante (bwlimit).",
+            "Vitesse maximale autorisée pour les transferts rclone.\n\nPermet de préserver votre connexion Internet en limitant le débit réseau utilisé par rclone.\n\nParamètre enregistré dans bwlimit.env et injecté dans le service systemd.\nValeur 'Désactivé' pour exploiter 100% de la bande passante."
+        ),
+        4 => (
+            "Fréquence de boucle UI (tick rate).",
+            "Vitesse de rafraîchissement du moteur d'affichage TUI en millisecondes.\n\nContrôle la fluidité du défilement des logs, du calcul des métriques et des micro-animations.\n\nDirectement synchronisé avec les touches [+] et [-] ou clics sur le widget de fréquence."
+        ),
+        5 => (
+            "Dossier local surveillé.",
+            "Chemin vers le répertoire local racine synchronisé avec le stockage cloud.\n\nContient vos données réelles répliquées par bisync.\nConsultez l'explorateur de fichiers (touche 'f') pour explorer son arborescence."
+        ),
+        6 => (
+            "Remote cloud distant.",
+            "Identifiant du stockage distant configuré dans ~/.config/rclone/rclone.conf.\n\nUtilisé pour les requêtes de quota, de listing distant et de synchronisation bidirectionnelle."
+        ),
+        _ => ("Description.", "Sélectionnez un paramètre pour afficher son aide détaillée."),
     };
 
-    let p_help = Paragraph::new(vec![
-        Line::from(Span::styled("┌aide contextuelle┐", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(help_text, Style::default().fg(theme.text_bright))),
-    ])
-    .block(Block::default().borders(Borders::TOP).border_style(Style::default().fg(theme.border)));
-    f.render_widget(p_help, chunks[3]);
+    let desc_inner = Rect {
+        x: right_area.x + 2,
+        y: right_area.y,
+        width: right_area.width.saturating_sub(4),
+        height: right_area.height,
+    };
+
+    let mut desc_lines = vec![
+        Line::from(Span::styled(desc_title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
+        Line::from(""),
+    ];
+
+    for para in desc_body.split('\n') {
+        if para.is_empty() {
+            desc_lines.push(Line::from(""));
+        } else {
+            desc_lines.push(Line::from(Span::styled(para, Style::default().fg(Color::Rgb(185, 190, 205)))));
+        }
+    }
+
+    let right_p = Paragraph::new(desc_lines);
+    f.render_widget(right_p, desc_inner);
 }
 
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
+fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
+    let x = r.x + r.width.saturating_sub(width) / 2;
+    let y = r.y + r.height.saturating_sub(height) / 2;
+    Rect {
+        x,
+        y,
+        width: width.min(r.width),
+        height: height.min(r.height),
+    }
 }

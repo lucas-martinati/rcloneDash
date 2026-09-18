@@ -162,7 +162,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     if !affected_files.is_empty() {
         all_lines.push((Line::from(vec![
             Span::styled(format!(" 📁 FICHIERS AFFECTÉS ({}) :", affected_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::styled("  (Enter: ouvrir fichier, Ctrl+Enter / d: ouvrir dossier)", Style::default().fg(theme.text_muted)),
+            Span::styled("  (Enter: ouvrir, d: dossier, Ctrl+X: mode dossier)", Style::default().fg(theme.text_muted)),
         ]), None));
 
         for (idx, (action, path)) in affected_files.iter().enumerate() {
@@ -180,10 +180,33 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 Style::default().fg(theme.text_bright)
             };
 
+            let display_text = if app.ctrl_mode {
+                let file_path = std::path::Path::new(*path);
+                let parent = file_path.parent().and_then(|p| p.to_str()).unwrap_or("");
+                let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
+                if parent_clean.is_empty() {
+                    "📁 ./".to_string()
+                } else {
+                    format!("📁 {}/", parent_clean)
+                }
+            } else {
+                path.to_string()
+            };
+
+            let path_style = if app.ctrl_mode {
+                if is_selected {
+                    Style::default().fg(theme.yellow).bg(theme.border_focus).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
+                }
+            } else {
+                row_style
+            };
+
             all_lines.push((Line::from(vec![
                 Span::styled(prefix, Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
                 Span::styled(format!(" {:<9} ", badge_icon), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
-                Span::styled(*path, row_style),
+                Span::styled(display_text, path_style),
             ]), Some(idx)));
         }
     } else if run.errors.is_empty() {
@@ -216,9 +239,11 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 Span::styled(" ouvrir  ", Style::default().fg(theme.text_muted)),
                 Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
+                Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" mode dossier  ", Style::default().fg(theme.text_muted)),
                 Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ {}/{} ", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("─ {}/{} ─", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );

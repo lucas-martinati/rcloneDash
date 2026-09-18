@@ -33,13 +33,10 @@ pub fn render_footer(
     }
 
     let items = [
-        CmdItem { prefix: "", key: "q", suffix: "uit", action: HitAction::ButtonQuit },
         CmdItem { prefix: "", key: "s", suffix: "ync", action: HitAction::ButtonSync },
         CmdItem { prefix: "", key: "d", suffix: "ry-run", action: HitAction::ButtonDryRun },
         CmdItem { prefix: "", key: "f", suffix: "iles", action: HitAction::ButtonFiles },
         CmdItem { prefix: "filtr", key: "e", suffix: "s", action: HitAction::ButtonFilters },
-        CmdItem { prefix: "", key: "o", suffix: "ptions", action: HitAction::ButtonSettings },
-        CmdItem { prefix: "", key: "t", suffix: "heme", action: HitAction::ButtonTheme },
         CmdItem { prefix: "", key: "Tab", suffix: " panel", action: HitAction::ButtonPanel },
     ];
 

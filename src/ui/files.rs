@@ -56,7 +56,7 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
                 Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
                 Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ {}/{} ", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("─ {}/{} ─", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );
@@ -98,8 +98,23 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     (Span::styled("[FIC] ", Style::default().fg(theme.text_muted)), theme.text_bright)
                 };
 
+                let display_name = if app.ctrl_mode {
+                    let p = std::path::Path::new(&entry.rel_path);
+                    let parent = p.parent().and_then(|p| p.to_str()).unwrap_or("");
+                    let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
+                    if parent_clean.is_empty() {
+                        "📁 ./".to_string()
+                    } else {
+                        format!("📁 {}/", parent_clean)
+                    }
+                } else {
+                    entry.name.clone()
+                };
+
                 let name_style = if is_selected {
-                    Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
+                    Style::default().fg(if app.ctrl_mode { theme.yellow } else { theme.accent }).add_modifier(Modifier::BOLD)
+                } else if app.ctrl_mode {
+                    Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(name_color)
                 };
@@ -111,7 +126,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                 };
 
                 Row::new(vec![
-                    Cell::from(Line::from(vec![cursor, type_badge, Span::styled(&entry.name, name_style)])),
+                    Cell::from(Line::from(vec![cursor, type_badge, Span::styled(display_name, name_style)])),
                     Cell::from(Span::styled(entry.size_formatted(), Style::default().fg(theme.text_muted))),
                     Cell::from(Span::styled(&entry.mtime, Style::default().fg(theme.text_muted))),
                     Cell::from(Span::styled(status_badge, Style::default().fg(status_color))),
@@ -206,7 +221,7 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
         Span::styled("Ouvrir / Entrer", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [o] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(" [d] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
         Span::styled("Ouvrir dans l'OS (xdg-open)", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![

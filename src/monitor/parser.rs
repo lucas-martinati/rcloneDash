@@ -40,7 +40,7 @@ static RE_SYNCED: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static RE_TRANSFER_BYTES: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"transferred:\s+([\d.]+\s*\S+)\s*/\s*([\d.]+\s*\S+),\s*(\d+)%").unwrap()
+    Regex::new(r"transferred:\s+([\d.]+\s*\S+)\s*/\s*([\d.]+\s*\S+),\s*(\d+|-)\s*%?").unwrap()
 });
 
 static RE_SPEED: LazyLock<Regex> = LazyLock::new(|| {
@@ -101,10 +101,14 @@ pub fn parse_transfer_stats(line: &str, stats: &mut TransferStats) {
 
     if let Some(caps) = RE_TRANSFER_BYTES.captures(&ll) {
         if let (Some(d), Some(t), Some(p)) = (caps.get(1), caps.get(2), caps.get(3)) {
-            stats.bytes_done = d.as_str().to_string();
-            stats.bytes_total = t.as_str().to_string();
-            stats.pct = p.as_str().parse().unwrap_or(0);
+            stats.bytes_done = d.as_str().trim().to_string();
+            stats.bytes_total = t.as_str().trim().to_string();
+            let p_str = p.as_str().trim();
+            stats.pct = if p_str == "-" { 0 } else { p_str.parse().unwrap_or(0) };
         }
+    }
+
+    if (ll.contains("transferred:") || ll.contains("copied") || ll.contains("transferring")) && !ll.contains("checks:") {
         if let Some(sm) = RE_SPEED.captures(line) {
             if let Some(s) = sm.get(1) {
                 stats.speed = s.as_str().to_string();

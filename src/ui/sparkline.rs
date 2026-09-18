@@ -12,6 +12,7 @@ use crate::ui::theme::ThemePalette;
 pub const BLOCKS: [char; 8] = [' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
 /// Render speed sparkline with btop++ gradient colors
+#[allow(dead_code)]
 pub fn render_speed_sparkline(
     f: &mut Frame,
     speed_history: &[u64],

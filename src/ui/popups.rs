@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
@@ -60,6 +60,64 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
         }
         Modal::DryRun => {
             render_dry_run_modal(f, app, theme, hitboxes);
+        }
+        Modal::ConfirmSync => {
+            let area = centered_rect(58, 25, f.area());
+            f.render_widget(Clear, area);
+
+            let text = vec![
+                Line::from(Span::styled("LANCER LA SYNCHRONISATION MAINTENANT ?", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+                Line::from(""),
+                Line::from("Cette action déclenche immédiatement le service rclone-bisync"),
+                Line::from("pour synchroniser tous les changements locaux et distants."),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled(" [O / Entrée] Confirmer ", Style::default().fg(theme.card_bg).bg(theme.green).add_modifier(Modifier::BOLD)),
+                    Span::styled("    ", Style::default()),
+                    Span::styled(" [N / Échap] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+                ]),
+            ];
+
+            let p = Paragraph::new(text)
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .border_style(Style::default().fg(theme.accent))
+                        .style(Style::default().bg(theme.card_bg))
+                        .title(Span::styled(" Synchronisation ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+                );
+            f.render_widget(p, area);
+        }
+        Modal::ConfirmDryRun => {
+            let area = centered_rect(58, 25, f.area());
+            f.render_widget(Clear, area);
+
+            let text = vec![
+                Line::from(Span::styled("LANCER UNE SIMULATION DRY-RUN ?", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+                Line::from(""),
+                Line::from("Exécute une vérification à blanc (--dry-run)."),
+                Line::from("Aucun fichier ne sera copié, modifié ou supprimé."),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled(" [O / Entrée] Démarrer ", Style::default().fg(theme.card_bg).bg(theme.yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled("    ", Style::default()),
+                    Span::styled(" [N / Échap] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+                ]),
+            ];
+
+            let p = Paragraph::new(text)
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .border_style(Style::default().fg(theme.yellow))
+                        .style(Style::default().bg(theme.card_bg))
+                        .title(Span::styled(" Simulation Dry-Run ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+                );
+            f.render_widget(p, area);
         }
         Modal::ConfirmResync => {
             let area = centered_rect(60, 30, f.area());
@@ -149,79 +207,104 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             f.render_widget(p, area);
         }
         Modal::Help => {
-            let area = centered_rect(72, 80, f.area());
-            f.render_widget(Clear, area);
+            let screen = f.area();
+            let is_wide = screen.width >= 86;
+            let logo_h: u16 = if is_wide { 6 } else { 5 };
+            let box_w = 78.min(screen.width);
+            let box_h = 24.min(screen.height.saturating_sub(logo_h + 3));
 
-            let help_chunks = Layout::default()
+            let total_h = logo_h + 1 + box_h;
+            let container_area = crate::ui::menu::centered_fixed_rect(box_w, total_h, screen);
+
+            let v_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Min(16),
-                    Constraint::Length(3),
+                    Constraint::Length(logo_h),
+                    Constraint::Length(1),
+                    Constraint::Length(box_h),
                 ])
-                .split(area);
+                .split(container_area);
 
-            let close_btn_area = Rect {
-                x: help_chunks[1].x + 4,
-                y: help_chunks[1].y,
-                width: help_chunks[1].width.saturating_sub(8),
-                height: 2,
-            };
+            // 1. Logo 3D RCLONEDASH au-dessus de la boîte d'aide
+            crate::ui::menu::render_btop_logo(f, v_chunks[0]);
 
-            hitboxes.push(Hitbox {
-                rect: close_btn_area,
-                action: HitAction::CloseModal,
-            });
+            // Version
+            let ver_line = Line::from(vec![
+                Span::raw("                             "),
+                Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+            ]);
+            f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
 
-            let text = vec![
-                Line::from(Span::styled("Raccourcis clavier & Souris de RcloneDash (btop++ style)", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
-                Line::from(""),
-                shortcut_line("Clic gauche", "Cliquer sur un bouton, un run ou un fichier", theme),
-                shortcut_line("Molette", "Défilement fluide des logs et des listes", theme),
-                shortcut_line("Esc", "Menu principal btop++ / Fermer la modale active", theme),
-                shortcut_line("Tab / Shift+Tab", "Changer de panel actif (Historique / Logs / Récents)", theme),
-                shortcut_line("Entrée", "Inspecter les détails du run sélectionné dans l'historique", theme),
-                shortcut_line("m", "Ouvrir les Paramètres & Options", theme),
-                shortcut_line("f", "Ouvrir l'Explorateur de fichiers local", theme),
-                shortcut_line("e", "Ouvrir l'Éditeur de règles gdrive-filters.txt", theme),
-                shortcut_line("t", "Changer de thème visuel (6 thèmes btop++)", theme),
-                shortcut_line("+ / -", "Ajuster la vitesse de rafraîchissement (100ms - 2000ms)", theme),
-                shortcut_line("s", "Déclencher une synchronisation forcée", theme),
-                shortcut_line("r", "Lancer une resynchronisation complète (--resync)", theme),
-                shortcut_line("c", "Arrêter la synchronisation en cours", theme),
-                shortcut_line("Espace", "Pause / reprise du défilement automatique des logs", theme),
-                shortcut_line("? ou h", "Afficher ou fermer cette aide", theme),
-                shortcut_line("q / Ctrl+C", "Quitter l'application silencieusement", theme),
-                Line::from(""),
+            // 2. Boîte d'aide style btop++
+            let help_box_area = v_chunks[2];
+            f.render_widget(Clear, help_box_area);
+
+            let help_items = [
+                ("Mouse 1", "Clicks buttons and selects in lists/panels."),
+                ("Mouse scroll", "Scrolls any scrollable list/logs under cursor."),
+                ("Esc, m", "Toggles main menu / Closes modal."),
+                ("o", "Shows options / settings panel."),
+                ("F1, ?, h", "Shows this help window."),
+                ("s", "Triggers bisync synchronization (confirmation)."),
+                ("d", "Runs bisync dry-run simulation (confirmation)."),
+                ("c", "Cancels active synchronization run."),
+                ("r", "Forces full resynchronization (--resync)."),
+                ("f", "In Recent files: search filter. Otherwise: file browser."),
+                ("e", "Opens exclusion rules editor (gdrive-filters.txt)."),
+                ("Ctrl+X", "Toggles parent directory mode (shows folder paths)."),
+                ("Enter", "Opens selected file / Validates actions."),
+                ("Ctrl+Enter", "Opens containing folder in system file manager (xdg)."),
+                ("Spacebar", "Pauses / resumes logs auto-scroll."),
+                ("+ , -", "Speeds up / slows down UI tick rate interval."),
+                ("Tab, Shift+Tab", "Cycles active dashboard panel focus."),
+                ("q, ctrl + c", "Quits the program."),
             ];
 
-            let p = Paragraph::new(text)
+            let mut lines = Vec::new();
+            // Ligne d'en-tête
+            lines.push(Line::from(vec![
+                Span::styled("   Key:                 ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled("Description:", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            ]));
+            lines.push(Line::from(""));
+
+            for (k, desc) in help_items {
+                lines.push(Line::from(vec![
+                    Span::styled(format!("   {:20} ", k), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(desc, Style::default().fg(Color::Rgb(215, 220, 230))),
+                ]));
+            }
+
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled("   For bug reporting and project updates, visit:", Style::default().fg(theme.text_muted))));
+            lines.push(Line::from(Span::styled("   https://github.com/lucas-martinati/rcloneDash", Style::default().fg(theme.cyan).add_modifier(Modifier::UNDERLINED))));
+
+            let p = Paragraph::new(lines)
                 .alignment(Alignment::Left)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
-                        .border_style(Style::default().fg(theme.accent))
+                        .border_type(BorderType::Plain)
+                        .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" ❓ Aide & Raccourcis ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
+                        .title(Line::from(vec![
+                            Span::styled("┌[", Style::default().fg(theme.red)),
+                            Span::styled("help", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                            Span::styled("]┐", Style::default().fg(theme.red)),
+                        ]))
+                        .title_bottom(
+                            Line::from(vec![
+                                Span::styled("┘ Esc fermer └", Style::default().fg(theme.red)),
+                            ])
+                            .alignment(Alignment::Right),
+                        ),
                 );
-            f.render_widget(p, area);
-
-            let close_p = Paragraph::new(Line::from(vec![
-                Span::styled(" [ Fermer l'aide (Échap) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
-            ])).alignment(Alignment::Center);
-            f.render_widget(close_p, close_btn_area);
+            f.render_widget(p, help_box_area);
         }
         Modal::None => {}
     }
 }
 
-fn shortcut_line<'a>(keys: &'a str, desc: &'a str, theme: &ThemePalette) -> Line<'a> {
-    Line::from(vec![
-        Span::styled(format!("  {:14}", keys), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-        Span::styled(" : ", Style::default().fg(theme.border)),
-        Span::styled(desc, Style::default().fg(theme.text_bright)),
-    ])
-}
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()

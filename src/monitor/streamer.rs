@@ -20,6 +20,12 @@ pub const PHASES: &[&str] = &[
     "6. Terminé",
 ];
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModifiedFileDetail {
+    pub path: String,
+    pub action: String, // "nouveau", "modifié", "supprimé"
+}
+
 #[derive(Debug, Clone)]
 pub struct StreamerState {
     pub is_syncing: bool,
@@ -32,6 +38,10 @@ pub struct StreamerState {
     pub log_lines: VecDeque<String>,
     pub resync_needed: bool,
     pub speed_history: Vec<u64>,
+    pub changes_local: Vec<String>,
+    pub changes_remote: Vec<String>,
+    pub changes_local_details: Vec<ModifiedFileDetail>,
+    pub changes_remote_details: Vec<ModifiedFileDetail>,
 }
 
 impl Default for StreamerState {
@@ -47,14 +57,50 @@ impl Default for StreamerState {
             log_lines: VecDeque::with_capacity(600),
             resync_needed: false,
             speed_history: vec![0; 40],
+            changes_local: Vec::new(),
+            changes_remote: Vec::new(),
+            changes_local_details: Vec::new(),
+            changes_remote_details: Vec::new(),
         }
     }
 }
 
 pub type SharedStreamer = Arc<RwLock<StreamerState>>;
 
+pub fn get_running_sync_elapsed_seconds() -> Option<u64> {
+    let output = std::process::Command::new("ps")
+        .args(["-eo", "etimes,args"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if line.contains("rclone") && (line.contains("bisync") || line.contains("sync"))
+            && !line.contains("grep") && !line.contains("journalctl") && !line.contains("rclonedash")
+        {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(first) = parts.first() {
+                if let Ok(sec) = first.parse::<u64>() {
+                    return Some(sec);
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn spawn_log_streamer() -> SharedStreamer {
-    let state = Arc::new(RwLock::new(StreamerState::default()));
+    let state = Arc::new(RwLock::new({
+        let mut s = StreamerState::default();
+        if let Some(secs) = get_running_sync_elapsed_seconds() {
+            s.is_syncing = true;
+            s.sync_start = Some(Instant::now() - std::time::Duration::from_secs(secs));
+            s.phase = "En cours".to_string();
+        }
+        s
+    }));
     let state_clone = Arc::clone(&state);
 
     tokio::spawn(async move {
@@ -121,6 +167,10 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
             state.phase_index = 0;
             state.active_files.clear();
             state.synced_files.clear();
+            state.changes_local.clear();
+            state.changes_remote.clear();
+            state.changes_local_details.clear();
+            state.changes_remote_details.clear();
             state.transfer = TransferStats::default();
         }
         return;
@@ -191,6 +241,25 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
         state.resync_needed = true;
     }
 
+    // Changements détectés Path1 (distant) / Path2 (local) avec détail précis
+    if let Some((is_local, detail)) = parse_diff_file(line) {
+        if is_local {
+            if !state.changes_local.contains(&detail.path) {
+                state.changes_local.push(detail.path.clone());
+            }
+            if !state.changes_local_details.iter().any(|d| d.path == detail.path) {
+                state.changes_local_details.push(detail);
+            }
+        } else {
+            if !state.changes_remote.contains(&detail.path) {
+                state.changes_remote.push(detail.path.clone());
+            }
+            if !state.changes_remote_details.iter().any(|d| d.path == detail.path) {
+                state.changes_remote_details.push(detail);
+            }
+        }
+    }
+
     // Fin de synchronisation
     if ll.contains("bisync successful") {
         state.phase = "6. Terminé (Succès)".to_string();
@@ -229,4 +298,41 @@ fn parse_speed_kibs(speed_str: &str) -> u64 {
     } else {
         (val / 1024.0) as u64
     }
+}
+
+fn parse_diff_file(line: &str) -> Option<(bool, ModifiedFileDetail)> {
+    if !line.contains("- Path1") && !line.contains("- Path2") {
+        return None;
+    }
+    // In bisync: Path1 is usually remote, Path2 is local
+    let is_local = line.contains("- Path2");
+    let ll = line.to_lowercase();
+    let action = if ll.contains("file is new") {
+        "nouveau".to_string()
+    } else if ll.contains("modified") {
+        "modifié".to_string()
+    } else if ll.contains("deleted") {
+        "supprimé".to_string()
+    } else if ll.contains("queue copy") {
+        "copié".to_string()
+    } else {
+        "modifié".to_string()
+    };
+
+    let pos = line.rfind(" - ")?;
+    let mut fname = line[pos + 3..].trim();
+    if fname.is_empty() {
+        return None;
+    }
+    // Strip remote prefix if any (e.g. GoogleDrive{...}:/)
+    if let Some(colon_pos) = fname.find("}:/") {
+        fname = &fname[colon_pos + 3..];
+    } else if let Some(colon_pos) = fname.find(":/") {
+        fname = &fname[colon_pos + 2..];
+    }
+
+    Some((is_local, ModifiedFileDetail {
+        path: fname.to_string(),
+        action,
+    }))
 }

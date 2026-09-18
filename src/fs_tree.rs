@@ -136,7 +136,12 @@ pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool
 }
 
 pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
-    let full = base.join(rel_path);
+    let clean = rel_path.trim_start_matches('/');
+    let full = if clean.is_empty() {
+        base.to_path_buf()
+    } else {
+        base.join(clean)
+    };
     Command::new("xdg-open")
         .arg(&full)
         .spawn()
@@ -145,14 +150,38 @@ pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
 }
 
 pub fn open_folder_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
-    let full = base.join(rel_path);
-    let target = if full.is_dir() {
-        full
+    let clean = rel_path.trim_start_matches('/');
+    let full = if clean.is_empty() {
+        base.to_path_buf()
     } else {
-        full.parent().unwrap_or(base).to_path_buf()
+        base.join(clean)
     };
+
+    // Trouver un dossier valide : soit le dossier lui-même, soit le parent existant le plus proche
+    let mut target = if full.is_dir() && full.exists() {
+        full
+    } else if let Some(p) = full.parent() {
+        p.to_path_buf()
+    } else {
+        base.to_path_buf()
+    };
+
+    while !target.exists() {
+        if let Some(p) = target.parent() {
+            if p.starts_with(base) {
+                target = p.to_path_buf();
+            } else {
+                target = base.to_path_buf();
+                break;
+            }
+        } else {
+            target = base.to_path_buf();
+            break;
+        }
+    }
+
     Command::new("xdg-open")
-        .arg(target)
+        .arg(&target)
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())

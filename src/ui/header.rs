@@ -10,6 +10,7 @@ use crate::app::{App, HitAction, Hitbox};
 use crate::systemd::ServiceState;
 use crate::ui::theme::ThemePalette;
 
+#[allow(dead_code)]
 pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     if area.height < 1 {
         return;
@@ -25,14 +26,15 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let mut line1_spans: Vec<Span> = Vec::new();
     let mut cur_x = area.x;
 
-    // 1. Cadran Système sys (sans préfixe)
+    // 1. Cadran Système sys (sans préfixe, pas de raccourci)
     let sys_tab = if is_wide { "┌sys┐" } else { "┌s┐" };
-    line1_spans.push(Span::styled("┌", Style::default().fg(theme.border)));
-    line1_spans.push(Span::styled("s", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    line1_spans.push(Span::styled("┌", Style::default().fg(theme.border_sys)));
     if is_wide {
-        line1_spans.push(Span::styled("ys", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)));
+        line1_spans.push(Span::styled("sys", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)));
+    } else {
+        line1_spans.push(Span::styled("s", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)));
     }
-    line1_spans.push(Span::styled("┐", Style::default().fg(theme.border)));
+    line1_spans.push(Span::styled("┐", Style::default().fg(theme.border_sys)));
     cur_x += sys_tab.chars().count() as u16;
 
     // Horloge digitale centrale & Stepper tick rate à droite
@@ -132,12 +134,6 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     line2_spans.push(Span::styled("│ ", Style::default().fg(theme.border)));
     line2_spans.push(Span::styled("Prochaine: ", Style::default().fg(theme.text_muted)));
     line2_spans.push(Span::styled(format!("{} ", next_sync_str), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
-
-    // Toast message s'il existe
-    if let Some((toast_msg, _)) = &app.toast {
-        line2_spans.push(Span::styled("│ ", Style::default().fg(theme.border)));
-        line2_spans.push(Span::styled(format!(" ★ {} ", toast_msg), Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
-    }
 
     let line2_p = Paragraph::new(Line::from(line2_spans));
     f.render_widget(line2_p, Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 });

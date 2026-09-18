@@ -20,14 +20,23 @@ pub struct PastRun {
 impl PastRun {
     pub fn all_affected_files(&self) -> Vec<(&str, &str)> {
         let mut list = Vec::new();
+        for (act, path, _) in &self.synced_files {
+            list.push((act.as_str(), path.as_str()));
+        }
         for f in &self.files_copied {
-            list.push(("new", f.as_str()));
+            if !list.iter().any(|(_, p)| p == &f.as_str()) {
+                list.push(("new", f.as_str()));
+            }
         }
         for f in &self.files_modified {
-            list.push(("modified", f.as_str()));
+            if !list.iter().any(|(_, p)| p == &f.as_str()) {
+                list.push(("modified", f.as_str()));
+            }
         }
         for f in &self.files_deleted {
-            list.push(("deleted", f.as_str()));
+            if !list.iter().any(|(_, p)| p == &f.as_str()) {
+                list.push(("deleted", f.as_str()));
+            }
         }
         list
     }

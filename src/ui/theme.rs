@@ -258,4 +258,46 @@ impl ThemePalette {
             self.cyan
         }
     }
+
+    /// Convertit l'ensemble des couleurs en nuances de gris (monochrome style btop++)
+    pub fn to_grayscale(&self) -> ThemePalette {
+        let to_gray = |c: Color| -> Color {
+            match c {
+                Color::Rgb(r, g, b) => {
+                    let lum = ((r as u32 * 299 + g as u32 * 587 + b as u32 * 114) / 1000) as u8;
+                    // Léger assombrissement (85%) pour faire ressortir les modales et le menu coloré
+                    let dim = ((lum as u32 * 85) / 100) as u8;
+                    Color::Rgb(dim, dim, dim)
+                }
+                Color::Reset => Color::Reset,
+                _ => Color::DarkGray,
+            }
+        };
+
+        ThemePalette {
+            accent: to_gray(self.accent),
+            blue: to_gray(self.blue),
+            cyan: to_gray(self.cyan),
+            green: to_gray(self.green),
+            yellow: to_gray(self.yellow),
+            orange: to_gray(self.orange),
+            red: to_gray(self.red),
+            purple: to_gray(self.purple),
+            border: to_gray(self.border),
+            border_focus: to_gray(self.border_focus),
+            border_sys: to_gray(self.border_sys),
+            border_storage: to_gray(self.border_storage),
+            border_history: to_gray(self.border_history),
+            border_logs: to_gray(self.border_logs),
+            border_recent: to_gray(self.border_recent),
+            card_bg: self.card_bg,
+            bg_main: self.bg_main,
+            header_bg: self.header_bg,
+            footer_bg: self.footer_bg,
+            highlight: to_gray(self.highlight),
+            separator: to_gray(self.separator),
+            text_bright: to_gray(self.text_bright),
+            text_muted: to_gray(self.text_muted),
+        }
+    }
 }

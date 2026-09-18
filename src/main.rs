@@ -10,7 +10,11 @@ use std::panic;
 use std::time::Duration;
 
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream},
+    event::{
+        DisableMouseCapture, EnableMouseCapture, Event, EventStream,
+        KeyboardEnhancementFlags, KeyModifiers, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -26,14 +30,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let default_panic_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), DisableMouseCapture, LeaveAlternateScreen);
+        let _ = execute!(
+            io::stdout(),
+            PopKeyboardEnhancementFlags,
+            DisableMouseCapture,
+            LeaveAlternateScreen
+        );
         default_panic_hook(panic_info);
     }));
 
-    // 2. Initialisation du terminal avec capture souris (btop++ style)
+    // 2. Initialisation du terminal avec capture souris et clavier enrichi (btop++ style)
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let _ = execute!(
+        stdout,
+        EnterAlternateScreen,
+        EnableMouseCapture,
+        PushKeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        )
+    );
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
@@ -60,12 +77,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(Ok(event)) = maybe_event {
                     match event {
                         Event::Key(key) => {
+                            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                                app.ctrl_mode = true;
+                            } else if key.kind == crossterm::event::KeyEventKind::Release {
+                                app.ctrl_mode = false;
+                            }
+
                             if key.kind == crossterm::event::KeyEventKind::Press {
                                 let action = app.handle_key(key);
                                 if action == app::Action::OpenEditor {
                                     // Suspendre temporairement le TUI et la souris pour l'éditeur
                                     disable_raw_mode()?;
-                                    execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
+                                    execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags, DisableMouseCapture, LeaveAlternateScreen)?;
                                     terminal.show_cursor()?;
 
                                     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
@@ -73,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     let _ = std::process::Command::new(&editor).arg(&path).status();
 
                                     enable_raw_mode()?;
-                                    execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture)?;
+                                    execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture, PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES))?;
                                     terminal.clear()?;
 
                                     app.filters = config::read_filters();
@@ -81,9 +104,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     app.set_toast("✔ Fichier gdrive-filters.txt rechargé !");
                                 }
                                 terminal.draw(|f| ui::render(f, &mut app))?;
+                            } else if key.kind == crossterm::event::KeyEventKind::Release {
+                                terminal.draw(|f| ui::render(f, &mut app))?;
                             }
                         }
                         Event::Mouse(mouse) => {
+                            if mouse.modifiers.contains(KeyModifiers::CONTROL) {
+                                app.ctrl_mode = true;
+                            }
                             let action = app.handle_mouse(mouse);
                             if action == app::Action::OpenEditor {
                                 // Cas où un clic déclencherait l'éditeur

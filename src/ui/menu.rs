@@ -1,216 +1,226 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    symbols::border,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::ui::theme::ThemePalette;
 
-const ASCII_BORDER: border::Set = border::Set {
-    top_left: "┌",
-    top_right: "┐",
-    bottom_left: "└",
-    bottom_right: "┘",
-    vertical_left: "│",
-    vertical_right: "│",
-    horizontal_top: "─",
-    horizontal_bottom: "─",
-};
-
-const ASCII_OPTIONS_5: [&str; 5] = [
-    r"  ___  ____ _____ ___ ___  _   _ ____  ",
-    r" / _ \|  _ \_   _|_ _/ _ \| \ | / ___| ",
-    r"| | | | |_) || |  | | | | |  \| \___ \ ",
-    r"| |_| |  __/ | |  | | |_| | |\  |___) |",
-    r" \___/|_|    |_| |___|\___/|_| \_|____/ ",
+// Logo standard ANSI Shadow pour RCLONEDASH (style exact btop)
+pub const LOGO_RCLONEDASH: [(Color, &str); 6] = [
+    (Color::Rgb(230, 37, 37), "██████╗  ██████╗██╗      ██████╗ ███╗   ██╗███████╗██████╗  █████╗ ███████╗██╗  ██╗"),
+    (Color::Rgb(205, 33, 33), "██╔══██╗██╔════╝██║     ██╔═══██╗████╗  ██║██╔════╝██╔══██╗██╔══██╗██╔════╝██║  ██║"),
+    (Color::Rgb(179, 29, 29), "██████╔╝██║     ██║     ██║   ██║██╔██╗ ██║█████╗  ██║  ██║███████║███████╗███████║"),
+    (Color::Rgb(154, 25, 25), "██╔══██╗██║     ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║  ██║██╔══██║╚════██║██╔══██║"),
+    (Color::Rgb(128, 20, 20), "██║  ██║╚██████╗███████╗╚██████╔╝██║ ╚████║███████╗██████╔╝██║  ██║███████║██║  ██║"),
+    (Color::Rgb(80, 15, 15),  "╚═╝  ╚═╝ ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝"),
 ];
 
-const ASCII_HELP_5: [&str; 5] = [
-    r" _   _  _____  _     ____  ",
-    r"| | | || ____|| |   |  _ \ ",
-    r"| |_| ||  _|  | |   | |_) |",
-    r"|  _  || |___ | |___|  __/ ",
-    r"|_| |_||_____||_____|_|    ",
+// Version compacte standard (Slant, 64 colonnes) pour les terminaux < 85 colonnes
+pub const LOGO_RCLONEDASH_COMPACT: [(Color, &str); 5] = [
+    (Color::Rgb(230, 37, 37), "    ____  ________    ____  _   ____________  ___   _____ __  __"),
+    (Color::Rgb(205, 33, 33), "   / __ \\/ ____/ /   / __ \\/ | / / ____/ __ \\/   | / ___// / / /"),
+    (Color::Rgb(179, 29, 29), "  / /_/ / /   / /   / / / /  |/ / __/ / / / / /| | \\__ \\/ /_/ / "),
+    (Color::Rgb(154, 25, 25), " / _, _/ /___/ /___/ /_/ / /|  / /___/ /_/ / ___ |___/ / __  /  "),
+    (Color::Rgb(128, 20, 20), "/_/ |_|\\____/_____/\\____/_/ |_/_____/_____/_/  |_/____/_/ /_/   "),
 ];
 
-const ASCII_QUIT_5: [&str; 5] = [
-    r"  ___   _   _  ___  _____ ",
-    r" / _ \ | | | ||_ _||_   _|",
-    r"| | | || | | | | |   | |  ",
-    r"| |_| || |_| | | |   | |  ",
-    r" \__\_| \___/ |___|  |_|  ",
+// Boutons du menu btop++ en état normal (simple trait fin)
+const MENU_NORMAL: [[&str; 3]; 3] = [
+    [
+        "┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐",
+        "│ │├─┘ │ ││ ││││└─┐",
+        "└─┘┴   ┴ ┴└─┘┘└┘└─┘",
+    ],
+    [
+        "┬ ┬┌─┐┬  ┌─┐",
+        "├─┤├┤ │  ├─┘",
+        "┴ ┴└─┘┴─┘┴  ",
+    ],
+    [
+        "┌─┐ ┬ ┬ ┬┌┬┐",
+        "│─┼┐│ │ │ │ ",
+        "└─┘└└─┘ ┴ ┴ ",
+    ],
 ];
 
-const ASCII_OPTIONS_3: [&str; 3] = [
-    r"  ___  ___ _____ ___ ___  _  _ ___ ",
-    r" / _ \| _ \_   _|_ _/ _ \| \| / __|",
-    r" \___/|  _/ | |  | | \___/|_|\_|___/",
+// Boutons du menu btop++ en état sélectionné (double trait 3D)
+const MENU_SELECTED: [[&str; 3]; 3] = [
+    [
+        "╔═╗╔═╗╔╦╗╦╔═╗╔╗╔╔═╗",
+        "║ ║╠═╝ ║ ║║ ║║║║╚═╗",
+        "╚═╝╩   ╩ ╩╚═╝╝╚╝╚═╝",
+    ],
+    [
+        "╦ ╦╔═╗╦  ╔═╗",
+        "╠═╣╠╣ ║  ╠═╝",
+        "╩ ╩╚═╝╩═╝╩  ",
+    ],
+    [
+        "╔═╗ ╦ ╦ ╦╔╦╗ ",
+        "║═╬╗║ ║ ║ ║  ",
+        "╚═╝╚╚═╝ ╩ ╩  ",
+    ],
 ];
 
-const ASCII_HELP_3: [&str; 3] = [
-    r"  _  _ ___ _    ___ ",
-    r" | || | __| |  | _ \",
-    r" |_||_|___|____|  _/",
+const BUTTON_WIDTHS: [u16; 3] = [19, 12, 12];
+
+const COLORS_SELECTED: [Color; 3] = [
+    Color::Rgb(230, 37, 37),
+    Color::Rgb(179, 29, 29),
+    Color::Rgb(128, 20, 20),
 ];
 
-const ASCII_QUIT_3: [&str; 3] = [
-    r"  ___  _   _ ___ _____ ",
-    r" / _ \| | | |_ _|_   _|",
-    r" \__\_\\___/|___| |_|  ",
+const COLORS_NORMAL: [Color; 3] = [
+    Color::Rgb(204, 204, 204),
+    Color::Rgb(170, 170, 170),
+    Color::Rgb(128, 128, 128),
 ];
 
-pub fn render_menu_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
+pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let screen = f.area();
-    let is_compact = screen.height < 24 || screen.width < 58;
 
-    let width = if is_compact { 48.min(screen.width) } else { 54.min(screen.width) };
-    let height = if is_compact { 15.min(screen.height) } else { 22.min(screen.height) };
+    // Largeur dynamique : 85 si grand écran, sinon 66
+    let is_wide = screen.width >= 86;
+    let logo_height: u16 = if is_wide { 6 } else { 5 };
+    let width = if is_wide { 85 } else { 66.min(screen.width) };
+    let height = (logo_height + 13).min(screen.height);
 
     let area = centered_fixed_rect(width, height, screen);
-    f.render_widget(Clear, area);
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_set(ASCII_BORDER)
-        .border_style(Style::default().fg(theme.accent))
-        .style(Style::default().bg(theme.card_bg))
-        .title(Line::from(vec![
-            Span::styled("┌", Style::default().fg(theme.border)),
-            Span::styled("menu", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::styled("┐", Style::default().fg(theme.border)),
-        ]))
-        .title_bottom(
-            Line::from(vec![
-                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" fermer ─ ", Style::default().fg(theme.border)),
-            ])
-            .alignment(Alignment::Right),
-        );
+    // Découpage vertical sans conteneur noir : flotte librement au-dessus du dashboard grisé
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(logo_height), // 1. Grand titre RCLONEDASH 3D
+            Constraint::Length(1),           // 2. Version
+            Constraint::Length(1),           // Espace
+            Constraint::Length(3),           // 3. OPTIONS (3 lignes)
+            Constraint::Length(1),           // Espace
+            Constraint::Length(3),           // 4. HELP (3 lignes)
+            Constraint::Length(1),           // Espace
+            Constraint::Length(3),           // 5. QUIT (3 lignes)
+            Constraint::Min(0),
+        ])
+        .split(area);
 
-    let inner = block.inner(area);
-    f.render_widget(block, area);
+    // 1. Rendu du logo sans fond noir
+    render_btop_logo(f, chunks[0]);
 
-    if is_compact {
-        render_compact_ascii_menu(f, inner, app, theme, hitboxes);
+    // 2. Version alignée
+    let ver_line = Line::from(vec![
+        Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+    ]);
+    let ver_p = Paragraph::new(ver_line).alignment(Alignment::Center);
+    f.render_widget(ver_p, chunks[1]);
+
+    // 3. Les 3 boutons ASCII — dimensionnés exactement à leur largeur pour supprimer les barres noires
+    let items = [
+        (0, chunks[3]),
+        (1, chunks[5]),
+        (2, chunks[7]),
+    ];
+
+    for (idx, row_area) in items {
+        let is_selected = app.menu_selected_idx == idx;
+        let btn_w = BUTTON_WIDTHS[idx];
+        let btn_x = row_area.x + (row_area.width.saturating_sub(btn_w)) / 2;
+        let btn_area = Rect {
+            x: btn_x,
+            y: row_area.y,
+            width: btn_w,
+            height: 3,
+        };
+
+        hitboxes.push(Hitbox {
+            rect: btn_area,
+            action: HitAction::MenuOption(idx),
+        });
+
+        render_ascii_button(f, btn_area, idx, is_selected);
+    }
+}
+
+pub fn render_btop_logo(f: &mut Frame, area: Rect) {
+    let is_wide = area.width >= 85;
+
+    if is_wide {
+        let mut header_lines = Vec::new();
+        for (z, (fg, line_str)) in LOGO_RCLONEDASH.iter().enumerate() {
+            let bg_val = (120u32).saturating_sub((z as u32) * 12) as u8;
+            let bg_color = Color::Rgb(bg_val, bg_val, bg_val);
+            let mut spans = Vec::new();
+            for ch in line_str.chars() {
+                if ch == '█' {
+                    spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).add_modifier(Modifier::BOLD)));
+                } else if ch != ' ' {
+                    spans.push(Span::styled(ch.to_string(), Style::default().fg(bg_color)));
+                } else {
+                    spans.push(Span::raw(" "));
+                }
+            }
+            header_lines.push(Line::from(spans));
+        }
+        let header_p = Paragraph::new(header_lines).alignment(Alignment::Center);
+        f.render_widget(header_p, area);
     } else {
-        render_standard_ascii_menu(f, inner, app, theme, hitboxes);
+        let mut header_lines = Vec::new();
+        for (_z, (fg, line_str)) in LOGO_RCLONEDASH_COMPACT.iter().enumerate() {
+            let mut spans = Vec::new();
+            for ch in line_str.chars() {
+                if ch != ' ' {
+                    spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).add_modifier(Modifier::BOLD)));
+                } else {
+                    spans.push(Span::raw(" "));
+                }
+            }
+            header_lines.push(Line::from(spans));
+        }
+        let header_p = Paragraph::new(header_lines).alignment(Alignment::Center);
+        f.render_widget(header_p, area);
     }
 }
 
-fn render_standard_ascii_menu(f: &mut Frame, area: Rect, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5), // 1. OPTIONS
-            Constraint::Length(1), // Espace
-            Constraint::Length(5), // 2. HELP
-            Constraint::Length(1), // Espace
-            Constraint::Length(5), // 3. QUIT
-            Constraint::Min(1),    // Navigation
-        ])
-        .split(area);
-
-    let items = [
-        (0, &ASCII_OPTIONS_5[..], theme.highlight),
-        (1, &ASCII_HELP_5[..], theme.green),
-        (2, &ASCII_QUIT_5[..], theme.red),
-    ];
-
-    for (idx, ascii_art, accent_color) in items {
-        let chunk_idx = idx * 2;
-        let item_area = chunks[chunk_idx];
-        let is_selected = app.menu_selected_idx == idx;
-
-        hitboxes.push(Hitbox {
-            rect: item_area,
-            action: HitAction::MenuOption(idx),
-        });
-
-        render_ascii_item(f, item_area, ascii_art, is_selected, accent_color, theme);
-    }
-
-    let nav_line = Line::from(vec![
-        Span::styled("↑/↓ ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("naviguer  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("↵ ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("valider  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("Esc ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("fermer", Style::default().fg(theme.text_muted)),
-    ]);
-    let nav_p = Paragraph::new(nav_line).alignment(Alignment::Center);
-    f.render_widget(nav_p, chunks[5]);
-}
-
-fn render_compact_ascii_menu(f: &mut Frame, area: Rect, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // 1. OPTIONS
-            Constraint::Length(1), // Espace
-            Constraint::Length(3), // 2. HELP
-            Constraint::Length(1), // Espace
-            Constraint::Length(3), // 3. QUIT
-            Constraint::Min(1),    // Navigation
-        ])
-        .split(area);
-
-    let items = [
-        (0, &ASCII_OPTIONS_3[..], theme.highlight),
-        (1, &ASCII_HELP_3[..], theme.green),
-        (2, &ASCII_QUIT_3[..], theme.red),
-    ];
-
-    for (idx, ascii_art, accent_color) in items {
-        let chunk_idx = idx * 2;
-        let item_area = chunks[chunk_idx];
-        let is_selected = app.menu_selected_idx == idx;
-
-        hitboxes.push(Hitbox {
-            rect: item_area,
-            action: HitAction::MenuOption(idx),
-        });
-
-        render_ascii_item(f, item_area, ascii_art, is_selected, accent_color, theme);
-    }
-
-    let nav_line = Line::from(vec![
-        Span::styled("↑/↓ ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("naviguer  ", Style::default().fg(theme.text_muted)),
-        Span::styled("↵ ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("valider", Style::default().fg(theme.text_muted)),
-    ]);
-    let nav_p = Paragraph::new(nav_line).alignment(Alignment::Center);
-    f.render_widget(nav_p, chunks[5]);
-}
-
-fn render_ascii_item(
+fn render_ascii_button(
     f: &mut Frame,
     area: Rect,
-    lines: &[&str],
+    idx: usize,
     is_selected: bool,
-    active_color: Color,
-    theme: &ThemePalette,
 ) {
-    let style = if is_selected {
-        Style::default().fg(active_color).add_modifier(Modifier::BOLD)
+    let lines = if is_selected {
+        MENU_SELECTED[idx]
     } else {
-        Style::default().fg(theme.separator)
+        MENU_NORMAL[idx]
     };
 
-    let paragraph_lines: Vec<Line> = lines
+    let colors = if is_selected {
+        COLORS_SELECTED
+    } else {
+        COLORS_NORMAL
+    };
+
+    let p_lines: Vec<Line> = lines
         .iter()
-        .map(|line| Line::from(Span::styled(*line, style)))
+        .enumerate()
+        .map(|(row, line)| {
+            let color = colors.get(row).copied().unwrap_or(Color::White);
+            Line::from(Span::styled(
+                *line,
+                Style::default()
+                    .fg(color)
+                    .add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() }),
+            ))
+        })
         .collect();
 
-    let p = Paragraph::new(paragraph_lines).alignment(Alignment::Center);
+    let p = Paragraph::new(p_lines);
     f.render_widget(p, area);
 }
 
-fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
+pub fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
     let x = r.x + r.width.saturating_sub(width) / 2;
     let y = r.y + r.height.saturating_sub(height) / 2;
     Rect {
