@@ -44,6 +44,55 @@ pub struct StreamerState {
     pub changes_remote_details: Vec<ModifiedFileDetail>,
 }
 
+impl StreamerState {
+    pub fn overall_progress_pct(&self) -> u8 {
+        if !self.is_syncing {
+            return 0;
+        }
+        if self.phase_index >= 5 {
+            return 100;
+        }
+        // 1. Pourcentage réel rapporté par rclone pour les données transférées
+        if self.transfer.pct > 0 {
+            return self.transfer.pct.min(99);
+        }
+        // 2. Pourcentage basé sur les fichiers transférés
+        if self.transfer.files_total > 0 && self.transfer.files_done > 0 {
+            let file_pct = ((self.transfer.files_done as f64 / self.transfer.files_total as f64) * 100.0) as u8;
+            if file_pct > 0 {
+                return file_pct.clamp(1, 99);
+            }
+        }
+        // 3. Pourcentage d'un fichier actif individuel
+        if let Some((_, af)) = self.active_files.iter().find(|(_, f)| f.pct > 0) {
+            return af.pct.clamp(1, 99);
+        }
+        // 4. Avancement dynamique selon la phase du pipeline bisync
+        match self.phase_index {
+            0 => {
+                if let Some(start) = self.sync_start {
+                    let secs = start.elapsed().as_secs();
+                    (10 + secs.min(10)).min(20) as u8
+                } else {
+                    10
+                }
+            }
+            1 => 25,
+            2 => {
+                if self.transfer.checks_total > 0 && self.transfer.checks_done > 0 {
+                    let check_ratio = self.transfer.checks_done as f64 / self.transfer.checks_total as f64;
+                    (40.0 + check_ratio * 20.0).round() as u8
+                } else {
+                    50
+                }
+            }
+            3 => 70,
+            4 => 95,
+            _ => 100,
+        }
+    }
+}
+
 impl Default for StreamerState {
     fn default() -> Self {
         Self {
@@ -261,17 +310,18 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
     }
 
     // Fin de synchronisation
-    if ll.contains("bisync successful") {
-        state.phase = "6. Terminé (Succès)".to_string();
+    let is_finished = ll.contains("bisync successful")
+        || (ll.contains("systemd") && (ll.contains("finished") || ll.contains("stopped") || ll.contains("deactivated")) && ll.contains("rclone-bisync"))
+        || (ll.contains("rclone-bisync-guard") && ll.contains("aucun changement"))
+        || (ll.contains("systemd") && ll.contains("failed") && ll.contains("rclone-bisync"))
+        || ll.contains("bisync error:")
+        || ll.contains("bisync aborted");
+
+    if is_finished {
+        state.is_syncing = false;
+        state.phase = "6. Terminé".to_string();
         state.phase_index = 5;
-        state.is_syncing = false;
-        state.active_files.clear();
-    } else if (ll.contains("systemd") && ll.contains("finished") && ll.contains("rclone-bisync"))
-        || (ll.contains("rclone-bisync-guard") && ll.contains("aucun changement")) {
-        state.is_syncing = false;
-        state.active_files.clear();
-    } else if ll.contains("systemd") && ll.contains("failed") && ll.contains("rclone-bisync") {
-        state.is_syncing = false;
+        state.transfer = TransferStats::default();
         state.active_files.clear();
     }
 

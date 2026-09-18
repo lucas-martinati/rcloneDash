@@ -340,9 +340,13 @@ impl App {
             self.live = st.clone();
         }
 
-        if self.last_systemd_check.elapsed().as_secs() >= 2 {
+        if self.last_systemd_check.elapsed().as_secs() >= 1 {
             self.service_info = get_service_info();
             self.last_systemd_check = Instant::now();
+            if self.service_info.state == ServiceState::Idle || self.service_info.state == ServiceState::Failed {
+                self.live.is_syncing = false;
+                self.live.transfer = crate::monitor::parser::TransferStats::default();
+            }
         }
 
         if self.last_history_check.elapsed().as_secs() >= 6 {
@@ -515,8 +519,13 @@ impl App {
         }
     }
 
+    pub fn is_syncing(&self) -> bool {
+        (self.live.is_syncing || self.service_info.state == ServiceState::Active)
+            && self.live.phase_index < 5
+    }
+
     pub fn total_history_runs(&self) -> usize {
-        if self.live.is_syncing {
+        if self.is_syncing() {
             self.past_runs.len() + 1
         } else {
             self.past_runs.len()
@@ -528,7 +537,7 @@ impl App {
             Modal::HistoryDetails(idx) => idx,
             _ => {
                 let cur = self.selected_run_idx.unwrap_or(0);
-                if self.live.is_syncing { cur.saturating_sub(1) } else { cur }
+                if self.is_syncing() { cur.saturating_sub(1) } else { cur }
             }
         };
         let path_opt = self.past_runs.get(run_idx).and_then(|r| {
@@ -544,7 +553,7 @@ impl App {
             Modal::HistoryDetails(idx) => idx,
             _ => {
                 let cur = self.selected_run_idx.unwrap_or(0);
-                if self.live.is_syncing { cur.saturating_sub(1) } else { cur }
+                if self.is_syncing() { cur.saturating_sub(1) } else { cur }
             }
         };
         let path_opt = self.past_runs.get(run_idx).and_then(|r| {
@@ -2143,34 +2152,45 @@ impl App {
                 },
                 Modal::HistoryDetails(run_idx) => {
                     let run_idx_val = *run_idx;
+                    let (has_errors, files_len) = self.past_runs.get(run_idx_val)
+                        .map(|r| (!r.errors.is_empty(), r.all_affected_files().len()))
+                        .unwrap_or((false, 0));
                     match key.code {
                         KeyCode::Esc | KeyCode::Char('q') => {
                             self.modal = Modal::None;
                         }
                         KeyCode::Up | KeyCode::Char('k') => {
-                            if self.history_selected_file_idx > 0 {
-                                self.history_selected_file_idx -= 1;
-                            }
-                            if self.history_selected_file_idx < self.history_details_scroll {
-                                self.history_details_scroll = self.history_selected_file_idx;
+                            if files_len > 0 {
+                                if self.history_selected_file_idx > 0 {
+                                    self.history_selected_file_idx -= 1;
+                                }
+                                if self.history_selected_file_idx < self.history_details_scroll {
+                                    self.history_details_scroll = self.history_selected_file_idx;
+                                }
+                            } else {
+                                self.history_details_scroll = self.history_details_scroll.saturating_sub(1);
                             }
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
-                            let files_len = self.past_runs.get(run_idx_val).map(|r| r.all_affected_files().len()).unwrap_or(0);
-                            if files_len > 0 && self.history_selected_file_idx < files_len - 1 {
-                                self.history_selected_file_idx += 1;
-                            }
-                            if self.history_selected_file_idx >= self.history_details_scroll + 15 {
-                                self.history_details_scroll = self.history_selected_file_idx.saturating_sub(14);
+                            if files_len > 0 {
+                                if self.history_selected_file_idx < files_len - 1 {
+                                    self.history_selected_file_idx += 1;
+                                }
+                                if self.history_selected_file_idx >= self.history_details_scroll + 15 {
+                                    self.history_details_scroll = self.history_selected_file_idx.saturating_sub(14);
+                                }
+                            } else {
+                                self.history_details_scroll = self.history_details_scroll.saturating_add(1);
                             }
                         }
                         KeyCode::PageUp => {
                             self.history_details_scroll = self.history_details_scroll.saturating_sub(10);
-                            self.history_selected_file_idx = self.history_selected_file_idx.saturating_sub(10);
+                            if files_len > 0 {
+                                self.history_selected_file_idx = self.history_selected_file_idx.saturating_sub(10);
+                            }
                         }
                         KeyCode::PageDown => {
                             self.history_details_scroll = self.history_details_scroll.saturating_add(10);
-                            let files_len = self.past_runs.get(run_idx_val).map(|r| r.all_affected_files().len()).unwrap_or(0);
                             if files_len > 0 {
                                 self.history_selected_file_idx = (self.history_selected_file_idx + 10).min(files_len - 1);
                             }
@@ -2180,34 +2200,41 @@ impl App {
                             self.history_selected_file_idx = 0;
                         }
                         KeyCode::End => {
-                            let files_len = self.past_runs.get(run_idx_val).map(|r| r.all_affected_files().len()).unwrap_or(0);
                             if files_len > 0 {
                                 self.history_selected_file_idx = files_len - 1;
                             }
                         }
                         KeyCode::Enter => {
-                            if self.ctrl_mode || key.modifiers.contains(KeyModifiers::CONTROL) {
-                                self.open_history_folder(self.history_selected_file_idx);
-                            } else {
-                                self.open_history_file(self.history_selected_file_idx);
+                            if files_len > 0 {
+                                if self.ctrl_mode || key.modifiers.contains(KeyModifiers::CONTROL) {
+                                    self.open_history_folder(self.history_selected_file_idx);
+                                } else {
+                                    self.open_history_file(self.history_selected_file_idx);
+                                }
                             }
                         }
                         KeyCode::Char('d') => {
-                            self.open_history_folder(self.history_selected_file_idx);
+                            if files_len > 0 {
+                                self.open_history_folder(self.history_selected_file_idx);
+                            }
                         }
                         KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            self.ctrl_mode = !self.ctrl_mode;
-                            if self.ctrl_mode {
-                                self.set_toast("📁 Mode dossier actif (chemins des dossiers affichés)");
-                            } else {
-                                self.set_toast("📄 Mode fichier actif (chemins des fichiers affichés)");
+                            if files_len > 0 {
+                                self.ctrl_mode = !self.ctrl_mode;
+                                if self.ctrl_mode {
+                                    self.set_toast("📁 Mode dossier actif (chemins des dossiers affichés)");
+                                } else {
+                                    self.set_toast("📄 Mode fichier actif (chemins des fichiers affichés)");
+                                }
                             }
                         }
                         KeyCode::Char('o') => {
                             self.modal = Modal::Settings;
                         }
                         KeyCode::Char('y') | KeyCode::Char('c') => {
-                            self.copy_history_errors(run_idx_val);
+                            if has_errors || files_len > 0 {
+                                self.copy_history_errors(run_idx_val);
+                            }
                         }
                         _ => {}
                     }
@@ -3538,6 +3565,94 @@ mod tests {
         assert_eq!(action_dash_y, Action::None);
         let (msg, _) = app.toast.as_ref().unwrap();
         assert!(msg.contains("lignes de logs copiées"));
+    }
+
+    #[tokio::test]
+    async fn test_sync_progress_and_history_details_states() {
+        let mut app = App::new();
+
+        // 1. Test overall_progress_pct
+        app.live.is_syncing = true;
+        app.live.phase_index = 0; // Listings
+        assert_eq!(app.live.overall_progress_pct(), 10);
+        app.live.phase_index = 1; // Diffs locaux
+        assert_eq!(app.live.overall_progress_pct(), 25);
+        app.live.phase_index = 2; // Diffs distants
+        assert_eq!(app.live.overall_progress_pct(), 50);
+        app.live.phase_index = 3; // Application (sans transfer stats: 70)
+        assert_eq!(app.live.overall_progress_pct(), 70);
+        app.live.transfer.pct = 85;
+        // With explicit rclone transfer percentage:
+        assert_eq!(app.live.overall_progress_pct(), 85);
+        app.live.transfer.pct = 0;
+        app.live.phase_index = 4; // Mise à jour
+        assert_eq!(app.live.overall_progress_pct(), 95);
+        app.live.phase_index = 5; // Terminé
+        assert_eq!(app.live.overall_progress_pct(), 100);
+
+        // 2. Test is_syncing and panel hiding
+        app.live.is_syncing = true;
+        app.live.phase_index = 2;
+        assert!(app.is_syncing());
+
+        // When phase reaches 5 (Terminé), is_syncing must be false
+        app.live.phase_index = 5;
+        assert!(!app.is_syncing());
+
+        // When systemd service is Idle, on_tick resets is_syncing and transfer
+        app.live.is_syncing = true;
+        app.live.phase_index = 3;
+        app.live.transfer.pct = 50;
+        app.service_info.state = crate::systemd::ServiceState::Idle;
+        app.on_tick().await;
+        assert!(!app.is_syncing());
+        assert_eq!(app.live.transfer.pct, 0);
+
+        // 3. Test HistoryDetails modal command availability
+        // Run with NO errors and NO files
+        app.past_runs = vec![crate::monitor::history::PastRun {
+            id: 1,
+            date: "2026-09-18".into(),
+            time: "14:00:00".into(),
+            duration: "5s".into(),
+            status: crate::monitor::history::RunStatus::Success,
+            files_copied: vec![],
+            files_modified: vec![],
+            files_deleted: vec![],
+            synced_files: vec![],
+            errors: vec![],
+            summary: "0 changement".into(),
+        }];
+
+        app.toast = None;
+        app.modal = Modal::HistoryDetails(0);
+
+        // Keys y/c should NOT copy anything (disabled / unusable)
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(app.toast.is_none());
+
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('c'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(app.toast.is_none());
+
+        // Key d and Enter should NOT attempt to open files
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('d'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(app.toast.is_none());
+
+        // Key q closes the modal
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('q'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(app.modal, Modal::None);
     }
 }
 

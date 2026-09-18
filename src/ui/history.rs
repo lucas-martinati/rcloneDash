@@ -150,8 +150,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     // Erreurs
     if !run.errors.is_empty() {
         all_lines.push((Line::from(vec![
-            Span::styled(format!(" 🚨 ERREURS DÉTECTÉES ({}) : ", run.errors.len()), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("[y / c : Copier erreurs]", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(" 🚨 ERREURS DÉTECTÉES ({}) :", run.errors.len()), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         ]), None));
 
         let max_err_width = (area.width.saturating_sub(6) as usize).max(30);
@@ -181,7 +180,6 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     if !affected_files.is_empty() {
         all_lines.push((Line::from(vec![
             Span::styled(format!(" 📁 FICHIERS AFFECTÉS ({}) :", affected_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::styled("  (Enter: ouvrir, d: dossier, Ctrl+X: mode dossier)", Style::default().fg(theme.text_muted)),
         ]), None));
 
         for (idx, (action, path)) in affected_files.iter().enumerate() {
@@ -247,21 +245,10 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         .title(Line::from(vec![
             Span::styled("┌🔍 détails run", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
             Span::styled(format!(": #{} ({} {})┐", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
-            Span::styled("┌copier: y / c┐", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled("┌fermer: Esc, q┐", Style::default().fg(theme.text_muted)),
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" défiler  ", Style::default().fg(theme.text_muted)),
-                Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" ouvrir  ", Style::default().fg(theme.text_muted)),
-                Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" dossier  ", Style::default().fg(theme.text_muted)),
-                Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" mode dossier  ", Style::default().fg(theme.text_muted)),
-                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" fermer ", Style::default().fg(theme.text_muted)),
                 Span::styled(format!("─ {}/{} ─", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
@@ -306,36 +293,68 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let p = Paragraph::new(display_lines);
     f.render_widget(p, layout[0]);
 
-    let copy_label = if !run.errors.is_empty() { "Copier erreurs" } else { "Copier détails" };
-    let footer_line = Line::from(vec![
-        Span::styled("[Enter] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Ouvrir fichier  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("[d] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Dossier parent  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{}  │  ", copy_label), Style::default().fg(theme.text_bright)),
-        Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("[Esc] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Fermer", Style::default().fg(theme.text_muted)),
-    ]);
+    let has_errors = !run.errors.is_empty();
+    let has_files = !affected_files.is_empty();
+
+    let footer_line = if has_errors && !has_files {
+        // Uniquement des erreurs : seul le bouton de copie + défilement + fermer
+        Line::from(vec![
+            Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("Copier erreurs  │  ", Style::default().fg(theme.text_bright)),
+            Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled("Fermer", Style::default().fg(theme.text_muted)),
+        ])
+    } else if has_files {
+        // Des éléments présents : mêmes règles que le dashboard
+        let copy_label = if has_errors { "Copier erreurs" } else { "Copier détails" };
+        let mode_label = if app.ctrl_mode { "Mode fichier" } else { "Mode dossier" };
+        Line::from(vec![
+            Span::styled("[Enter] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled("Ouvrir  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[d] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled("Dossier parent  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[Ctrl+X] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{}  │  ", mode_label), Style::default().fg(theme.text_muted)),
+            Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{}  │  ", copy_label), Style::default().fg(theme.text_bright)),
+            Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled("Défiler  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled("Fermer", Style::default().fg(theme.text_muted)),
+        ])
+    } else {
+        // Rien : boutons grisés et inutilisables
+        Line::from(vec![
+            Span::styled("[Enter] Ouvrir  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[d] Dossier parent  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[Ctrl+X] Mode dossier  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[y / c] Copier  │  ", Style::default().fg(theme.text_muted)),
+            Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+            Span::styled("Fermer", Style::default().fg(theme.text_muted)),
+        ])
+    };
     let footer_p = Paragraph::new(footer_line).alignment(ratatui::layout::Alignment::Center);
     f.render_widget(footer_p, layout[1]);
 
+    // Hitbox pour fermer la modale (bouton fermer en haut à droite)
     hitboxes.push(Hitbox {
         rect: Rect {
-            x: area.x + 18,
+            x: area.x + area.width.saturating_sub(18),
             y: area.y,
-            width: 16,
+            width: 17,
             height: 1,
         },
-        action: HitAction::CopyHistoryErrors(run_idx),
+        action: HitAction::CloseModal,
     });
 
-    hitboxes.push(Hitbox {
-        rect: layout[1],
-        action: HitAction::CopyHistoryErrors(run_idx),
-    });
+    if has_errors || has_files {
+        hitboxes.push(Hitbox {
+            rect: layout[1],
+            action: HitAction::CopyHistoryErrors(run_idx),
+        });
+    }
 
     crate::ui::render_btop_scrollbar(
         f,

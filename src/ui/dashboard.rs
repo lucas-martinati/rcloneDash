@@ -15,7 +15,7 @@ use crate::ui::theme::ThemePalette;
 pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let alerts = app.active_alerts();
     let show_alert = !alerts.is_empty();
-    let show_active_sync = app.live.is_syncing || app.live.transfer.pct > 0;
+    let show_active_sync = app.is_syncing();
 
     let mut constraints = Vec::new();
     // 1. Cadran Stockage & Métriques (6 lignes pour intégrer horloge, fréquence, quota et KPIs)
@@ -450,9 +450,8 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
     // 2. Grille des 7 KPIs de transfert (Parité HTML complète)
     let done = if app.live.transfer.bytes_done.is_empty() { "—" } else { &app.live.transfer.bytes_done };
     let total = if app.live.transfer.bytes_total.is_empty() { "—" } else { &app.live.transfer.bytes_total };
-    let pct_str = format!("{}%", app.live.transfer.pct.min(100));
+    let pct_str = format!("{}%", app.live.overall_progress_pct());
     let speed = if app.live.transfer.speed.is_empty() { "—" } else { &app.live.transfer.speed };
-    let eta = if app.live.transfer.eta.is_empty() { "—" } else { &app.live.transfer.eta };
     let checks = format!("{} / {}", app.live.transfer.checks_done, app.live.transfer.checks_total);
     let files = format!("{} / {}", app.live.transfer.files_done, app.live.transfer.files_total);
 
@@ -465,8 +464,6 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
         Span::styled(format!("{} ", pct_str), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         Span::styled("│ Vitesse: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled("│ ETA: ", Style::default().fg(theme.text_muted)),
-        Span::styled(format!("{} ", eta), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
         Span::styled("│ Vérifs: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", checks), Style::default().fg(theme.text_bright)),
         Span::styled("│ Fichiers: ", Style::default().fg(theme.text_muted)),
@@ -512,9 +509,14 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
             loc_lines.push(Line::from(Span::styled("  Aucun changement", Style::default().fg(theme.text_muted))));
         } else if !app.live.changes_local_details.is_empty() {
             for d in app.live.changes_local_details.iter().take(2) {
+                let (badge_text, badge_color) = match d.action.to_lowercase().as_str() {
+                    "new" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Ajouté", theme.green),
+                    "deleted" | "supprimé" | "supprime" => ("● Supprimé", theme.red),
+                    _ => ("● Modifié", theme.yellow),
+                };
                 loc_lines.push(Line::from(vec![
                     Span::styled(format!("  • {} ", d.path), Style::default().fg(theme.text_bright)),
-                    Span::styled(format!("[{}]", d.action), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(badge_text, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
                 ]));
             }
             if app.live.changes_local_details.len() > 2 {
@@ -538,9 +540,14 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
             rem_lines.push(Line::from(Span::styled("  Aucun changement", Style::default().fg(theme.text_muted))));
         } else if !app.live.changes_remote_details.is_empty() {
             for d in app.live.changes_remote_details.iter().take(2) {
+                let (badge_text, badge_color) = match d.action.to_lowercase().as_str() {
+                    "new" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Ajouté", theme.green),
+                    "deleted" | "supprimé" | "supprime" => ("● Supprimé", theme.red),
+                    _ => ("● Modifié", theme.yellow),
+                };
                 rem_lines.push(Line::from(vec![
                     Span::styled(format!("  • {} ", d.path), Style::default().fg(theme.text_bright)),
-                    Span::styled(format!("[{}]", d.action), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(badge_text, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
                 ]));
             }
             if app.live.changes_remote_details.len() > 2 {
@@ -561,7 +568,7 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
 fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let is_focused = app.focused_panel == FocusedPanel::History;
     let border_color = if is_focused { theme.border_focus } else { theme.border_history };
-    let is_syncing = app.live.is_syncing;
+    let is_syncing = app.is_syncing();
     let total_runs = app.total_history_runs();
     let cur_run = if let Some(sel) = app.selected_run_idx { sel + 1 } else { 0 };
 
@@ -704,14 +711,16 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         if is_syncing && item_idx == 0 {
             // Ligne de la synchronisation en cours
             let elapsed = if app.live.transfer.elapsed.is_empty() { "0s" } else { &app.live.transfer.elapsed };
-            let time_str = format!("En cours ({})", elapsed);
-            let pct_val = app.live.transfer.pct.min(100);
-            let speed_val = if app.live.transfer.speed.is_empty() { "--" } else { &app.live.transfer.speed };
-            let status_str = format!("● {}% ({})", pct_val, speed_val);
-            let copied_val = if app.live.transfer.bytes_done.is_empty() { "0 B".to_string() } else { app.live.transfer.bytes_done.clone() };
-            let mod_val = if app.live.changes_remote.is_empty() { "0".to_string() } else { format!("{}", app.live.changes_remote.len()) };
-            let chk_val = format!("{}/{}", app.live.transfer.files_done, app.live.transfer.files_total);
-            let eta_val = if app.live.transfer.eta.is_empty() { "--".to_string() } else { format!("ETA:{}", app.live.transfer.eta) };
+            let time_str = "En cours";
+            let pct_val = app.live.overall_progress_pct();
+            let status_str = format!("● {}%", pct_val);
+            let copied_count = app.live.synced_files.iter().filter(|f| f.action == "new" || f.action == "copied").count() + app.live.transfer.files_done as usize;
+            let copied_val = copied_count.to_string();
+            let mod_count = app.live.synced_files.iter().filter(|f| f.action == "modified").count();
+            let mod_val = mod_count.to_string();
+            let del_count = app.live.synced_files.iter().filter(|f| f.action == "deleted").count();
+            let del_val = del_count.to_string();
+            let err_val = "0";
 
             if is_selected {
                 let cursor = Span::styled("▶ ", Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
@@ -720,9 +729,9 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
                     Cell::from(Span::styled(status_str, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(copied_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(mod_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
-                    Cell::from(Span::styled(chk_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(del_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(elapsed, Style::default().fg(ratatui::style::Color::White))),
-                    Cell::from(Span::styled(eta_val, Style::default().fg(ratatui::style::Color::White))),
+                    Cell::from(Span::styled(err_val, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD))),
                 ]).style(Style::default().bg(highlight_bg)));
             } else {
                 let cursor = Span::styled("  ", Style::default());
@@ -731,9 +740,9 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
                     Cell::from(Span::styled(status_str, Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(copied_val, Style::default().fg(theme.green).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(mod_val, Style::default().fg(theme.yellow))),
-                    Cell::from(Span::styled(chk_val, Style::default().fg(theme.accent))),
+                    Cell::from(Span::styled(del_val, Style::default().fg(theme.red))),
                     Cell::from(Span::styled(elapsed, Style::default().fg(theme.text_bright))),
-                    Cell::from(Span::styled(eta_val, Style::default().fg(theme.text_muted))),
+                    Cell::from(Span::styled(err_val, Style::default().fg(theme.text_muted))),
                 ]));
             }
         } else {

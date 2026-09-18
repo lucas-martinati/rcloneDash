@@ -59,17 +59,17 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     let dash_area = chunks[0];
     let show_alert = !app.active_alerts().is_empty();
-    let show_active_sync = app.live.is_syncing || app.live.transfer.pct > 0;
+    let show_active_sync = app.is_syncing();
 
     let mut dash_constraints = Vec::new();
-    dash_constraints.push(Constraint::Length(5)); // Stockage & Métriques compact (style btop++)
+    dash_constraints.push(Constraint::Length(6)); // Stockage & Métriques
     if show_alert {
         dash_constraints.push(Constraint::Length(3));
     }
     if show_active_sync {
-        dash_constraints.push(Constraint::Length(5)); // Synchronisation en cours compacte
+        dash_constraints.push(Constraint::Length(7)); // Synchronisation en cours
     }
-    dash_constraints.push(Constraint::Percentage(52)); // Historique + Logs
+    dash_constraints.push(Constraint::Percentage(55)); // Historique + Logs
     dash_constraints.push(Constraint::Min(6)); // Fichiers récents
 
     let dash_chunks = Layout::default()
