@@ -287,18 +287,31 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                         .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Line::from(vec![
-                            Span::styled("┌[", Style::default().fg(theme.red)),
-                            Span::styled("help", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-                            Span::styled("]┐", Style::default().fg(theme.red)),
+                            Span::styled("┐", Style::default().fg(theme.red)),
+                            Span::styled("help", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                            Span::styled("┌", Style::default().fg(theme.red)),
                         ]))
-                        .title_bottom(
+                        .title(
                             Line::from(vec![
-                                Span::styled("┘ Esc fermer └", Style::default().fg(theme.red)),
+                                Span::styled("┐", Style::default().fg(theme.red)),
+                                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                                Span::styled(" fermer", Style::default().fg(theme.text_bright)),
+                                Span::styled("┌", Style::default().fg(theme.red)),
                             ])
                             .alignment(Alignment::Right),
                         ),
                 );
             f.render_widget(p, help_box_area);
+
+            hitboxes.push(Hitbox {
+                rect: Rect {
+                    x: help_box_area.x + help_box_area.width.saturating_sub(14),
+                    y: help_box_area.y,
+                    width: 12,
+                    height: 1,
+                },
+                action: HitAction::CloseModal,
+            });
         }
         Modal::None => {}
     }

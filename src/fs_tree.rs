@@ -14,21 +14,24 @@ pub struct FileEntry {
     pub ignored: bool,
 }
 
+pub fn format_bytes(b: u64) -> String {
+    if b >= 1024 * 1024 * 1024 {
+        format!("{:.1} Go", b as f64 / (1024.0 * 1024.0 * 1024.0))
+    } else if b >= 1024 * 1024 {
+        format!("{:.1} Mo", b as f64 / (1024.0 * 1024.0))
+    } else if b >= 1024 {
+        format!("{:.1} Ko", b as f64 / 1024.0)
+    } else {
+        format!("{} o", b)
+    }
+}
+
 impl FileEntry {
     pub fn size_formatted(&self) -> String {
         if self.is_dir {
             return "<REP>".to_string();
         }
-        let b = self.size;
-        if b >= 1024 * 1024 * 1024 {
-            format!("{:.1} Go", b as f64 / (1024.0 * 1024.0 * 1024.0))
-        } else if b >= 1024 * 1024 {
-            format!("{:.1} Mo", b as f64 / (1024.0 * 1024.0))
-        } else if b >= 1024 {
-            format!("{:.1} Ko", b as f64 / 1024.0)
-        } else {
-            format!("{} o", b)
-        }
+        format_bytes(self.size)
     }
 }
 

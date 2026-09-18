@@ -22,7 +22,7 @@ pub fn render_history(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         .split(area);
 
     render_run_list(f, app, theme, chunks[0]);
-    render_run_details(f, app, app.selected_run_idx, theme, chunks[1], &mut Vec::new());
+    render_run_details(f, app, app.selected_run_idx.unwrap_or(0), theme, chunks[1], &mut Vec::new());
 }
 
 fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
@@ -35,7 +35,7 @@ fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
             .iter()
             .enumerate()
             .map(|(i, run)| {
-                let is_selected = i == app.selected_run_idx;
+                let is_selected = app.selected_run_idx == Some(i);
 
                 let (status_badge, status_color) = match run.status {
                     RunStatus::Success => ("✔", theme.green),
@@ -86,7 +86,7 @@ fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
     f.render_widget(list, area);
 
     let visible_height = area.height.saturating_sub(3) as usize;
-    crate::ui::render_btop_scrollbar(f, area, app.past_runs.len(), app.selected_run_idx, visible_height, theme);
+    crate::ui::render_btop_scrollbar(f, area, app.past_runs.len(), app.selected_run_idx.unwrap_or(0), visible_height, theme);
 }
 
 pub fn render_history_details_modal(f: &mut Frame, app: &App, run_idx: usize, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {

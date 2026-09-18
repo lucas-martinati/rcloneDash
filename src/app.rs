@@ -135,7 +135,7 @@ pub struct App {
     pub streamer: SharedStreamer,
     pub live: StreamerState,
     pub past_runs: Vec<PastRun>,
-    pub selected_run_idx: usize,
+    pub selected_run_idx: Option<usize>,
     pub filters: Vec<String>,
     pub selected_filter_idx: usize,
     pub logs_scroll: usize,
@@ -179,7 +179,7 @@ pub struct App {
 
     // Sélection d'éléments interactifs
     pub history_selected_file_idx: usize,
-    pub recent_selected_idx: usize,
+    pub recent_selected_idx: Option<usize>,
 
     // Registre précis des hitboxes cliquables (au pixel près)
     pub hitboxes: Vec<Hitbox>,
@@ -226,7 +226,7 @@ impl App {
             streamer,
             live: StreamerState::default(),
             past_runs,
-            selected_run_idx: 0,
+            selected_run_idx: None,
             filters,
             selected_filter_idx: 0,
             logs_scroll: 0,
@@ -264,7 +264,7 @@ impl App {
             dry_run_rx: None,
 
             history_selected_file_idx: 0,
-            recent_selected_idx: 0,
+            recent_selected_idx: None,
 
             hitboxes: Vec::with_capacity(64),
 
@@ -443,6 +443,14 @@ impl App {
         }
     }
 
+    pub fn can_dec_tick_rate(&self) -> bool {
+        self.tick_rate_ms_live > TICK_RATE_STEPS[0]
+    }
+
+    pub fn can_inc_tick_rate(&self) -> bool {
+        self.tick_rate_ms_live < TICK_RATE_STEPS[TICK_RATE_STEPS.len() - 1]
+    }
+
     pub fn next_theme(&mut self) {
         self.current_theme = self.current_theme.next();
         self.config.theme = Some(self.current_theme);
@@ -487,7 +495,10 @@ impl App {
     pub fn open_history_file(&mut self, file_idx: usize) {
         let run_idx = match self.modal {
             Modal::HistoryDetails(idx) => idx,
-            _ => if self.live.is_syncing { self.selected_run_idx.saturating_sub(1) } else { self.selected_run_idx },
+            _ => {
+                let cur = self.selected_run_idx.unwrap_or(0);
+                if self.live.is_syncing { cur.saturating_sub(1) } else { cur }
+            }
         };
         let path_opt = self.past_runs.get(run_idx).and_then(|r| {
             r.all_affected_files().get(file_idx).map(|(_, p)| p.to_string())
@@ -500,7 +511,10 @@ impl App {
     pub fn open_history_folder(&mut self, file_idx: usize) {
         let run_idx = match self.modal {
             Modal::HistoryDetails(idx) => idx,
-            _ => if self.live.is_syncing { self.selected_run_idx.saturating_sub(1) } else { self.selected_run_idx },
+            _ => {
+                let cur = self.selected_run_idx.unwrap_or(0);
+                if self.live.is_syncing { cur.saturating_sub(1) } else { cur }
+            }
         };
         let path_opt = self.past_runs.get(run_idx).and_then(|r| {
             r.all_affected_files().get(file_idx).map(|(_, p)| p.to_string())
@@ -544,6 +558,17 @@ impl App {
         if list.len() > 100 {
             list.truncate(100);
         }
+
+        let base = std::path::PathBuf::from(config::expand_tilde(&self.config.local_dir));
+        for item in list.iter_mut() {
+            let full = base.join(&item.1);
+            if let Ok(meta) = std::fs::metadata(&full) {
+                item.2 = fs_tree::format_bytes(meta.len());
+            } else {
+                item.2 = "--".to_string();
+            }
+        }
+
         list
     }
 
@@ -688,10 +713,12 @@ impl App {
     #[allow(dead_code)]
     pub fn ensure_history_visible(&mut self, viewport_height: usize) {
         if viewport_height == 0 { return; }
-        if self.selected_run_idx < self.history_scroll_offset {
-            self.history_scroll_offset = self.selected_run_idx;
-        } else if self.selected_run_idx >= self.history_scroll_offset + viewport_height {
-            self.history_scroll_offset = self.selected_run_idx - viewport_height + 1;
+        if let Some(idx) = self.selected_run_idx {
+            if idx < self.history_scroll_offset {
+                self.history_scroll_offset = idx;
+            } else if idx >= self.history_scroll_offset + viewport_height {
+                self.history_scroll_offset = idx - viewport_height + 1;
+            }
         }
     }
 
@@ -718,10 +745,130 @@ impl App {
     /// Ensure recent files scroll offset keeps selected file visible
     pub fn ensure_recent_visible(&mut self, viewport_height: usize) {
         if viewport_height == 0 { return; }
-        if self.recent_selected_idx < self.recent_scroll_offset {
-            self.recent_scroll_offset = self.recent_selected_idx;
-        } else if self.recent_selected_idx >= self.recent_scroll_offset + viewport_height {
-            self.recent_scroll_offset = self.recent_selected_idx - viewport_height + 1;
+        if let Some(idx) = self.recent_selected_idx {
+            if idx < self.recent_scroll_offset {
+                self.recent_scroll_offset = idx;
+            } else if idx >= self.recent_scroll_offset + viewport_height {
+                self.recent_scroll_offset = idx - viewport_height + 1;
+            }
+        }
+    }
+
+    pub fn scroll_recent_down(&mut self, viewport_height: usize) {
+        let total = self.get_recent_files_list().len();
+        if total == 0 {
+            return;
+        }
+        let vp = viewport_height.max(1);
+        let max_offset = total.saturating_sub(vp);
+
+        match self.recent_selected_idx {
+            None => {
+                self.recent_selected_idx = Some(self.recent_scroll_offset.min(total - 1));
+            }
+            Some(mut idx) => {
+                if idx < self.recent_scroll_offset {
+                    idx = self.recent_scroll_offset;
+                } else if idx >= self.recent_scroll_offset + vp {
+                    idx = (self.recent_scroll_offset + vp).saturating_sub(1);
+                }
+
+                if self.recent_scroll_offset < max_offset {
+                    self.recent_scroll_offset += 1;
+                    self.recent_selected_idx = Some((idx + 1).min(total - 1));
+                } else if idx < total - 1 {
+                    self.recent_selected_idx = Some(idx + 1);
+                }
+            }
+        }
+    }
+
+    pub fn scroll_recent_up(&mut self, viewport_height: usize) {
+        let total = self.get_recent_files_list().len();
+        if total == 0 {
+            return;
+        }
+        let vp = viewport_height.max(1);
+
+        match self.recent_selected_idx {
+            None => {}
+            Some(mut idx) => {
+                if idx == 0 && self.recent_scroll_offset == 0 {
+                    self.recent_selected_idx = None;
+                    return;
+                }
+                if idx < self.recent_scroll_offset {
+                    idx = self.recent_scroll_offset;
+                } else if idx >= self.recent_scroll_offset + vp {
+                    idx = (self.recent_scroll_offset + vp).saturating_sub(1);
+                }
+
+                if self.recent_scroll_offset > 0 {
+                    self.recent_scroll_offset -= 1;
+                    self.recent_selected_idx = Some(idx.saturating_sub(1));
+                } else if idx > 0 {
+                    self.recent_selected_idx = Some(idx - 1);
+                }
+            }
+        }
+    }
+
+    pub fn scroll_history_down(&mut self, viewport_height: usize) {
+        let total = self.total_history_runs();
+        if total == 0 {
+            return;
+        }
+        let vp = viewport_height.max(1);
+        let max_offset = total.saturating_sub(vp);
+
+        match self.selected_run_idx {
+            None => {
+                self.selected_run_idx = Some(self.history_scroll_offset.min(total - 1));
+            }
+            Some(mut idx) => {
+                if idx < self.history_scroll_offset {
+                    idx = self.history_scroll_offset;
+                } else if idx >= self.history_scroll_offset + vp {
+                    idx = (self.history_scroll_offset + vp).saturating_sub(1);
+                }
+
+                if self.history_scroll_offset < max_offset {
+                    self.history_scroll_offset += 1;
+                    self.selected_run_idx = Some((idx + 1).min(total - 1));
+                } else if idx < total - 1 {
+                    self.selected_run_idx = Some(idx + 1);
+                }
+            }
+        }
+    }
+
+    pub fn scroll_history_up(&mut self, viewport_height: usize) {
+        let total = self.total_history_runs();
+        if total == 0 {
+            return;
+        }
+        let vp = viewport_height.max(1);
+
+        match self.selected_run_idx {
+            None => {}
+            Some(mut idx) => {
+                if idx == 0 && self.history_scroll_offset == 0 {
+                    self.selected_run_idx = None;
+                    return;
+                }
+                if idx < self.history_scroll_offset {
+                    idx = self.history_scroll_offset;
+                } else if idx >= self.history_scroll_offset + vp {
+                    idx = (self.history_scroll_offset + vp).saturating_sub(1);
+                }
+
+                if self.history_scroll_offset > 0 {
+                    self.history_scroll_offset -= 1;
+                    self.selected_run_idx = Some(idx.saturating_sub(1));
+                } else if idx > 0 {
+                    self.selected_run_idx = Some(idx - 1);
+                }
+            }
         }
     }
 
@@ -730,6 +877,7 @@ impl App {
             MouseEventKind::ScrollDown => {
                 let col = mouse.column;
                 let row = mouse.row;
+                let mut handled = false;
                 for hb in self.hitboxes.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
@@ -737,38 +885,42 @@ impl App {
                         match hb.action {
                             HitAction::LogsArea => {
                                 self.focused_panel = FocusedPanel::Logs;
-                                self.logs_scroll = self.logs_scroll.saturating_sub(1);
-                                if self.logs_scroll == 0 {
-                                    self.auto_scroll = true;
+                                if self.logs_scroll > 0 {
+                                    self.logs_scroll = self.logs_scroll.saturating_sub(1);
+                                    if self.logs_scroll == 0 {
+                                        self.auto_scroll = true;
+                                    }
                                 }
-                                return Action::None;
+                                handled = true;
+                                break;
                             }
                             HitAction::HistoryArea | HitAction::HistoryRow(_) => {
                                 self.focused_panel = FocusedPanel::History;
-                                let total = self.total_history_runs();
-                                if total > 0 && self.selected_run_idx < total - 1 {
-                                    self.selected_run_idx = (self.selected_run_idx + 1).min(total - 1);
-                                }
                                 let vp = self.history_viewport_height.max(3);
-                                self.ensure_history_visible(vp);
-                                return Action::None;
+                                self.scroll_history_down(vp);
+                                handled = true;
+                                break;
                             }
                             HitAction::HistoryFile(_) => {
-                                let past_idx = if self.live.is_syncing { self.selected_run_idx.saturating_sub(1) } else { self.selected_run_idx };
+                                let past_idx = if self.live.is_syncing {
+                                    self.selected_run_idx.map(|i| i.saturating_sub(1)).unwrap_or(0)
+                                } else {
+                                    self.selected_run_idx.unwrap_or(0)
+                                };
                                 let total_files = self.past_runs.get(past_idx).map(|r| r.all_affected_files().len()).unwrap_or(0);
                                 let max_scroll = total_files.saturating_sub(5);
-                                self.history_details_scroll = (self.history_details_scroll + 1).min(max_scroll);
-                                return Action::None;
+                                if self.history_details_scroll < max_scroll {
+                                    self.history_details_scroll += 1;
+                                }
+                                handled = true;
+                                break;
                             }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
-                                let list_len = self.get_recent_files_list().len();
-                                if list_len > 0 && self.recent_selected_idx < list_len - 1 {
-                                    self.recent_selected_idx = (self.recent_selected_idx + 1).min(list_len - 1);
-                                }
                                 let vp = self.recent_viewport_height.max(3);
-                                self.ensure_recent_visible(vp);
-                                return Action::None;
+                                self.scroll_recent_down(vp);
+                                handled = true;
+                                break;
                             }
                             HitAction::FileEntry(_) => {
                                 if !self.file_entries.is_empty() && self.file_selected_idx < self.file_entries.len() - 1 {
@@ -778,7 +930,8 @@ impl App {
                                         self.file_scroll_offset = self.file_selected_idx - vp + 1;
                                     }
                                 }
-                                return Action::None;
+                                handled = true;
+                                break;
                             }
                             HitAction::FilterArea | HitAction::FilterRow(_) => {
                                 if !self.filters.is_empty() {
@@ -787,27 +940,28 @@ impl App {
                                     let vp = self.filter_viewport_height;
                                     self.ensure_filter_visible(vp);
                                 }
-                                return Action::None;
+                                handled = true;
+                                break;
                             }
                             _ => {}
                         }
                     }
                 }
-                if self.modal == Modal::DryRun {
-                    let max_dry = self.dry_run_logs.len().saturating_sub(5);
-                    self.dry_run_scroll = (self.dry_run_scroll + 1).min(max_dry);
+                if handled {
                     return Action::None;
                 }
-                // Défilement par défaut (logs)
-                self.focused_panel = FocusedPanel::Logs;
-                self.logs_scroll = self.logs_scroll.saturating_sub(1);
-                if self.logs_scroll == 0 {
-                    self.auto_scroll = true;
+                if self.modal == Modal::DryRun {
+                    let max_dry = self.dry_run_logs.len().saturating_sub(5);
+                    if self.dry_run_scroll < max_dry {
+                        self.dry_run_scroll += 1;
+                    }
+                    return Action::None;
                 }
             }
             MouseEventKind::ScrollUp => {
                 let col = mouse.column;
                 let row = mouse.row;
+                let mut handled = false;
                 for hb in self.hitboxes.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
@@ -815,28 +969,35 @@ impl App {
                         match hb.action {
                             HitAction::LogsArea => {
                                 self.focused_panel = FocusedPanel::Logs;
-                                self.auto_scroll = false;
-                                let max_scroll = self.live.log_lines.len().saturating_sub(self.logs_viewport_height.max(3));
-                                self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
-                                return Action::None;
+                                let visible_height = self.logs_viewport_height.max(3);
+                                let max_scroll = self.live.log_lines.len().saturating_sub(visible_height);
+                                if max_scroll > 0 && self.logs_scroll < max_scroll {
+                                    self.auto_scroll = false;
+                                    self.logs_scroll += 1;
+                                }
+                                handled = true;
+                                break;
                             }
                             HitAction::HistoryArea | HitAction::HistoryRow(_) => {
                                 self.focused_panel = FocusedPanel::History;
-                                self.selected_run_idx = self.selected_run_idx.saturating_sub(1);
                                 let vp = self.history_viewport_height.max(3);
-                                self.ensure_history_visible(vp);
-                                return Action::None;
+                                self.scroll_history_up(vp);
+                                handled = true;
+                                break;
                             }
                             HitAction::HistoryFile(_) => {
-                                self.history_details_scroll = self.history_details_scroll.saturating_sub(1);
-                                return Action::None;
+                                if self.history_details_scroll > 0 {
+                                    self.history_details_scroll -= 1;
+                                }
+                                handled = true;
+                                break;
                             }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
-                                self.recent_selected_idx = self.recent_selected_idx.saturating_sub(1);
                                 let vp = self.recent_viewport_height.max(3);
-                                self.ensure_recent_visible(vp);
-                                return Action::None;
+                                self.scroll_recent_up(vp);
+                                handled = true;
+                                break;
                             }
                             HitAction::FileEntry(_) => {
                                 if self.file_selected_idx > 0 {
@@ -845,17 +1006,22 @@ impl App {
                                         self.file_scroll_offset = self.file_scroll_offset.saturating_sub(1);
                                     }
                                 }
-                                return Action::None;
+                                handled = true;
+                                break;
                             }
                             HitAction::FilterArea | HitAction::FilterRow(_) => {
                                 self.selected_filter_idx = self.selected_filter_idx.saturating_sub(1);
                                 let vp = self.filter_viewport_height;
                                 self.ensure_filter_visible(vp);
-                                return Action::None;
+                                handled = true;
+                                break;
                             }
                             _ => {}
                         }
                     }
+                }
+                if handled {
+                    return Action::None;
                 }
                 if self.modal == Modal::DryRun {
                     self.dry_run_scroll = self.dry_run_scroll.saturating_sub(1);
@@ -930,7 +1096,7 @@ impl App {
                             }
                             HitAction::SparklinePoint(idx) => {
                                 if idx < self.past_runs.len() {
-                                    self.selected_run_idx = idx;
+                                    self.selected_run_idx = Some(idx);
                                     let run = &self.past_runs[idx];
                                     let st = match run.status {
                                         RunStatus::Success => "✓ Réussie",
@@ -981,7 +1147,7 @@ impl App {
                                 self.focused_panel = FocusedPanel::History;
                                 let total = self.total_history_runs();
                                 if idx < total {
-                                    if self.selected_run_idx == idx {
+                                    if self.selected_run_idx == Some(idx) {
                                         if self.live.is_syncing && idx == 0 {
                                             self.set_toast("ℹ Synchronisation active - Détails affichés ci-dessus");
                                         } else {
@@ -993,7 +1159,7 @@ impl App {
                                             }
                                         }
                                     } else {
-                                        self.selected_run_idx = idx;
+                                        self.selected_run_idx = Some(idx);
                                     }
                                 }
                                 return Action::None;
@@ -1009,14 +1175,14 @@ impl App {
                             }
                             HitAction::RecentFile(idx) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
-                                if self.recent_selected_idx == idx {
+                                if self.recent_selected_idx == Some(idx) {
                                     if self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL) {
                                         self.open_recent_folder(idx);
                                     } else {
                                         self.open_recent_file(idx);
                                     }
                                 } else {
-                                    self.recent_selected_idx = idx;
+                                    self.recent_selected_idx = Some(idx);
                                 }
                                 return Action::None;
                             }
@@ -1100,8 +1266,19 @@ impl App {
                 self.reload_files();
             } else {
                 let base = config::expand_tilde(&self.config.local_dir);
-                match fs_tree::open_with_xdg(&base, &entry.rel_path) {
-                    Ok(_) => self.set_toast(format!("✔ Ouverture de {}", entry.name)),
+                let res = if self.ctrl_mode {
+                    fs_tree::open_folder_with_xdg(&base, &entry.rel_path)
+                } else {
+                    fs_tree::open_with_xdg(&base, &entry.rel_path)
+                };
+                match res {
+                    Ok(_) => {
+                        if self.ctrl_mode {
+                            self.set_toast(format!("✔ Dossier ouvert pour {}", entry.name));
+                        } else {
+                            self.set_toast(format!("✔ Ouverture de {}", entry.name));
+                        }
+                    }
                     Err(e) => self.set_toast(format!("✗ Erreur : {}", e)),
                 }
             }
@@ -1194,7 +1371,7 @@ impl App {
                 KeyCode::Esc => {
                     self.recent_filter.clear();
                     self.is_filtering_recent = false;
-                    self.recent_selected_idx = 0;
+                    self.recent_selected_idx = None;
                     self.recent_scroll_offset = 0;
                     return Action::None;
                 }
@@ -1204,13 +1381,13 @@ impl App {
                 }
                 KeyCode::Backspace => {
                     self.recent_filter.pop();
-                    self.recent_selected_idx = 0;
+                    self.recent_selected_idx = if self.get_recent_files_list().is_empty() { None } else { Some(0) };
                     self.recent_scroll_offset = 0;
                     return Action::None;
                 }
                 KeyCode::Char(c) => {
                     self.recent_filter.push(c);
-                    self.recent_selected_idx = 0;
+                    self.recent_selected_idx = if self.get_recent_files_list().is_empty() { None } else { Some(0) };
                     self.recent_scroll_offset = 0;
                     return Action::None;
                 }
@@ -1582,10 +1759,10 @@ impl App {
                     FocusedPanel::History => {
                         let total = self.total_history_runs();
                         if total > 0 {
-                            if self.live.is_syncing && self.selected_run_idx == 0 {
+                            if self.live.is_syncing && self.selected_run_idx == Some(0) {
                                 self.set_toast("ℹ Synchronisation active - Détails affichés ci-dessus");
-                            } else {
-                                let past_idx = if self.live.is_syncing { self.selected_run_idx.saturating_sub(1) } else { self.selected_run_idx };
+                            } else if let Some(sel) = self.selected_run_idx {
+                                let past_idx = if self.live.is_syncing { sel.saturating_sub(1) } else { sel };
                                 if past_idx < self.past_runs.len() {
                                     self.history_details_scroll = 0;
                                     self.history_selected_file_idx = 0;
@@ -1596,10 +1773,12 @@ impl App {
                         }
                     }
                     FocusedPanel::RecentFiles => {
-                        if key.modifiers.contains(KeyModifiers::CONTROL) || self.ctrl_mode {
-                            self.open_recent_folder(self.recent_selected_idx);
-                        } else {
-                            self.open_recent_file(self.recent_selected_idx);
+                        if let Some(idx) = self.recent_selected_idx {
+                            if key.modifiers.contains(KeyModifiers::CONTROL) || self.ctrl_mode {
+                                self.open_recent_folder(idx);
+                            } else {
+                                self.open_recent_file(idx);
+                            }
                         }
                         return Action::None;
                     }
@@ -1707,11 +1886,8 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => {
                 match self.focused_panel {
                     FocusedPanel::History => {
-                        if self.selected_run_idx > 0 {
-                            self.selected_run_idx -= 1;
-                        }
                         let vp = self.history_viewport_height.max(3);
-                        self.ensure_history_visible(vp);
+                        self.scroll_history_up(vp);
                     }
                     FocusedPanel::Logs => {
                         self.auto_scroll = false;
@@ -1719,23 +1895,16 @@ impl App {
                         self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
                     }
                     FocusedPanel::RecentFiles => {
-                        if self.recent_selected_idx > 0 {
-                            self.recent_selected_idx -= 1;
-                        }
                         let vp = self.recent_viewport_height.max(3);
-                        self.ensure_recent_visible(vp);
+                        self.scroll_recent_up(vp);
                     }
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 match self.focused_panel {
                     FocusedPanel::History => {
-                        let total = self.total_history_runs();
-                        if total > 0 && self.selected_run_idx < total - 1 {
-                            self.selected_run_idx += 1;
-                        }
                         let vp = self.history_viewport_height.max(3);
-                        self.ensure_history_visible(vp);
+                        self.scroll_history_down(vp);
                     }
                     FocusedPanel::Logs => {
                         if self.logs_scroll > 0 {
@@ -1746,21 +1915,19 @@ impl App {
                         }
                     }
                     FocusedPanel::RecentFiles => {
-                        let total = self.get_recent_files_list().len();
-                        if total > 0 && self.recent_selected_idx < total - 1 {
-                            self.recent_selected_idx += 1;
-                        }
                         let vp = self.recent_viewport_height.max(3);
-                        self.ensure_recent_visible(vp);
+                        self.scroll_recent_down(vp);
                     }
                 }
             }
             KeyCode::PageUp => {
                 match self.focused_panel {
                     FocusedPanel::History => {
-                        self.selected_run_idx = self.selected_run_idx.saturating_sub(10);
-                        let vp = self.history_viewport_height.max(3);
-                        self.ensure_history_visible(vp);
+                        if let Some(idx) = self.selected_run_idx {
+                            self.selected_run_idx = Some(idx.saturating_sub(10));
+                            let vp = self.history_viewport_height.max(3);
+                            self.ensure_history_visible(vp);
+                        }
                     }
                     FocusedPanel::Logs => {
                         self.auto_scroll = false;
@@ -1768,9 +1935,11 @@ impl App {
                         self.logs_scroll = (self.logs_scroll + 10).min(max_scroll);
                     }
                     FocusedPanel::RecentFiles => {
-                        self.recent_selected_idx = self.recent_selected_idx.saturating_sub(10);
-                        let vp = self.recent_viewport_height.max(3);
-                        self.ensure_recent_visible(vp);
+                        if let Some(idx) = self.recent_selected_idx {
+                            self.recent_selected_idx = Some(idx.saturating_sub(10));
+                            let vp = self.recent_viewport_height.max(3);
+                            self.ensure_recent_visible(vp);
+                        }
                     }
                 }
             }
@@ -1779,10 +1948,11 @@ impl App {
                     FocusedPanel::History => {
                         let total = self.total_history_runs();
                         if total > 0 {
-                            self.selected_run_idx = (self.selected_run_idx + 10).min(total - 1);
+                            let cur = self.selected_run_idx.unwrap_or(0);
+                            self.selected_run_idx = Some((cur + 10).min(total - 1));
+                            let vp = self.history_viewport_height.max(3);
+                            self.ensure_history_visible(vp);
                         }
-                        let vp = self.history_viewport_height.max(3);
-                        self.ensure_history_visible(vp);
                     }
                     FocusedPanel::Logs => {
                         self.logs_scroll = self.logs_scroll.saturating_sub(10);
@@ -1793,17 +1963,20 @@ impl App {
                     FocusedPanel::RecentFiles => {
                         let total = self.get_recent_files_list().len();
                         if total > 0 {
-                            self.recent_selected_idx = (self.recent_selected_idx + 10).min(total - 1);
+                            let cur = self.recent_selected_idx.unwrap_or(0);
+                            self.recent_selected_idx = Some((cur + 10).min(total - 1));
+                            let vp = self.recent_viewport_height.max(3);
+                            self.ensure_recent_visible(vp);
                         }
-                        let vp = self.recent_viewport_height.max(3);
-                        self.ensure_recent_visible(vp);
                     }
                 }
             }
             KeyCode::Home => {
                 match self.focused_panel {
                     FocusedPanel::History => {
-                        self.selected_run_idx = 0;
+                        if self.total_history_runs() > 0 {
+                            self.selected_run_idx = Some(0);
+                        }
                         self.history_scroll_offset = 0;
                     }
                     FocusedPanel::Logs => {
@@ -1813,7 +1986,9 @@ impl App {
                     }
                     FocusedPanel::RecentFiles => {
                         self.recent_scroll_offset = 0;
-                        self.recent_selected_idx = 0;
+                        if !self.get_recent_files_list().is_empty() {
+                            self.recent_selected_idx = Some(0);
+                        }
                     }
                 }
             }
@@ -1822,10 +1997,10 @@ impl App {
                     FocusedPanel::History => {
                         let total = self.total_history_runs();
                         if total > 0 {
-                            self.selected_run_idx = total - 1;
+                            self.selected_run_idx = Some(total - 1);
+                            let vp = self.history_viewport_height.max(3);
+                            self.ensure_history_visible(vp);
                         }
-                        let vp = self.history_viewport_height.max(3);
-                        self.ensure_history_visible(vp);
                     }
                     FocusedPanel::Logs => {
                         self.logs_scroll = 0;
@@ -1834,10 +2009,10 @@ impl App {
                     FocusedPanel::RecentFiles => {
                         let total = self.get_recent_files_list().len();
                         if total > 0 {
-                            self.recent_selected_idx = total - 1;
+                            self.recent_selected_idx = Some(total - 1);
+                            let vp = self.recent_viewport_height.max(3);
+                            self.ensure_recent_visible(vp);
                         }
-                        let vp = self.recent_viewport_height.max(3);
-                        self.ensure_recent_visible(vp);
                     }
                 }
             }
@@ -2397,4 +2572,88 @@ mod tests {
             panic!("Expected RGB color");
         }
     }
+
+    #[tokio::test]
+    async fn test_initial_unselected_and_btop_scroll() {
+        let mut app = App::new();
+        assert_eq!(app.recent_selected_idx, None);
+        assert_eq!(app.selected_run_idx, None);
+
+        // Add 5 past runs
+        app.past_runs.clear();
+        for i in 0..5 {
+            app.past_runs.push(crate::monitor::PastRun {
+                id: i,
+                date: "2026-09-18".into(),
+                time: format!("10:0{}", i),
+                duration: "2s".into(),
+                status: RunStatus::Success,
+                summary: String::new(),
+                files_copied: vec![],
+                files_modified: vec![],
+                files_deleted: vec![],
+                errors: vec![],
+                synced_files: vec![],
+            });
+        }
+
+        // Viewport of 3 items
+        app.history_viewport_height = 3;
+        app.focused_panel = FocusedPanel::History;
+
+        // Down from None -> Some(0)
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_run_idx, Some(0));
+        assert_eq!(app.history_scroll_offset, 0);
+
+        // Up from 0 -> None (disappears)
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.selected_run_idx, None);
+
+        // Down again -> Some(0)
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_run_idx, Some(0));
+
+        // Down: content remains below (max_offset = 5 - 3 = 2), so scroll_offset increments and selected_idx increments
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.history_scroll_offset, 1);
+        assert_eq!(app.selected_run_idx, Some(1));
+        // Visual position = 1 - 1 = 0 (fixed at the top of the viewport!)
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.history_scroll_offset, 2);
+        assert_eq!(app.selected_run_idx, Some(2));
+        // Visual position = 2 - 2 = 0 (still fixed!)
+
+        // Now max_offset (2) is reached. Down moves the cursor towards the end
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.history_scroll_offset, 2);
+        assert_eq!(app.selected_run_idx, Some(3));
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.history_scroll_offset, 2);
+        assert_eq!(app.selected_run_idx, Some(4));
+
+        // Clamped at end (cannot scroll past 4)
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.history_scroll_offset, 2);
+        assert_eq!(app.selected_run_idx, Some(4));
+    }
+
+    #[tokio::test]
+    async fn test_tick_rate_boundaries() {
+        let mut app = App::new();
+        app.tick_rate_ms_live = 100;
+        assert!(!app.can_dec_tick_rate());
+        assert!(app.can_inc_tick_rate());
+
+        app.tick_rate_ms_live = 10000;
+        assert!(app.can_dec_tick_rate());
+        assert!(!app.can_inc_tick_rate());
+
+        app.tick_rate_ms_live = 1000;
+        assert!(app.can_dec_tick_rate());
+        assert!(app.can_inc_tick_rate());
+    }
 }
+

@@ -28,7 +28,7 @@ pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     // 3. Barre de sync active (Phase stepper + 7 KPIs + Fichiers modifiés précis)
     if show_active_sync {
-        constraints.push(Constraint::Length(6));
+        constraints.push(Constraint::Length(7));
     }
 
     // 4. Zone centrale (Historique + Logs)
@@ -216,18 +216,20 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
             Span::styled(clock_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
             Span::styled(" ──", Style::default().fg(theme.border_sys)),
         ]))
-        .title(
+        .title({
+            let dec_col = if app.can_dec_tick_rate() { theme.red } else { theme.text_muted };
+            let inc_col = if app.can_inc_tick_rate() { theme.red } else { theme.text_muted };
             Line::from(vec![
                 Span::styled("┐", Style::default().fg(theme.border_sys)),
-                Span::styled("-", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("-", Style::default().fg(dec_col).add_modifier(Modifier::BOLD)),
                 Span::styled(" ", Style::default().fg(theme.border_sys)),
                 Span::styled(tick_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
                 Span::styled(" ", Style::default().fg(theme.border_sys)),
-                Span::styled("+", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled("+", Style::default().fg(inc_col).add_modifier(Modifier::BOLD)),
                 Span::styled("┌", Style::default().fg(theme.border_sys)),
             ])
-            .alignment(Alignment::Right),
-        );
+            .alignment(Alignment::Right)
+        });
     f.render_widget(outer_block, area);
 
     let inner = Rect {
@@ -424,7 +426,7 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
     let checks = format!("{} / {}", app.live.transfer.checks_done, app.live.transfer.checks_total);
     let files = format!("{} / {}", app.live.transfer.files_done, app.live.transfer.files_total);
 
-    let kpi_spans = vec![
+    let mut kpi_spans = vec![
         Span::styled("Transféré: ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", done), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
         Span::styled("│ Total: ", Style::default().fg(theme.text_muted)),
@@ -441,78 +443,89 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
         Span::styled(files, Style::default().fg(theme.text_bright)),
     ];
 
-    // 3. Changements locaux détectés avec détail précis
-    let mut loc_spans = vec![
-        Span::styled("Changements locaux (Path2) : ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-    ];
-    if app.live.changes_local_details.is_empty() && app.live.changes_local.is_empty() {
-        loc_spans.push(Span::styled("Aucun changement", Style::default().fg(theme.text_muted)));
-    } else if !app.live.changes_local_details.is_empty() {
-        for (i, d) in app.live.changes_local_details.iter().take(3).enumerate() {
-            if i > 0 { loc_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
-            loc_spans.push(Span::styled(format!("• {} ", d.path), Style::default().fg(theme.text_bright)));
-            loc_spans.push(Span::styled(format!("[{}]", d.action), Style::default().fg(theme.cyan)));
-        }
-        if app.live.changes_local_details.len() > 3 {
-            loc_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_local_details.len() - 3), Style::default().fg(theme.text_muted)));
-        }
-    } else {
-        for (i, f) in app.live.changes_local.iter().take(3).enumerate() {
-            if i > 0 { loc_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
-            loc_spans.push(Span::styled(format!("• {}", f), Style::default().fg(theme.text_bright)));
-        }
-        if app.live.changes_local.len() > 3 {
-            loc_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_local.len() - 3), Style::default().fg(theme.text_muted)));
-        }
-    }
-
-    // 4. Changements distants détectés avec détail précis
-    let mut rem_spans = vec![
-        Span::styled("Changements distants (Path1) : ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-    ];
-    if app.live.changes_remote_details.is_empty() && app.live.changes_remote.is_empty() {
-        rem_spans.push(Span::styled("Aucun changement", Style::default().fg(theme.text_muted)));
-    } else if !app.live.changes_remote_details.is_empty() {
-        for (i, d) in app.live.changes_remote_details.iter().take(3).enumerate() {
-            if i > 0 { rem_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
-            rem_spans.push(Span::styled(format!("• {} ", d.path), Style::default().fg(theme.text_bright)));
-            rem_spans.push(Span::styled(format!("[{}]", d.action), Style::default().fg(theme.yellow)));
-        }
-        if app.live.changes_remote_details.len() > 3 {
-            rem_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_remote_details.len() - 3), Style::default().fg(theme.text_muted)));
-        }
-    } else {
-        for (i, f) in app.live.changes_remote.iter().take(3).enumerate() {
-            if i > 0 { rem_spans.push(Span::styled(" · ", Style::default().fg(theme.border))); }
-            rem_spans.push(Span::styled(format!("• {}", f), Style::default().fg(theme.text_bright)));
-        }
-        if app.live.changes_remote.len() > 3 {
-            rem_spans.push(Span::styled(format!(" (+{} autres)", app.live.changes_remote.len() - 3), Style::default().fg(theme.text_muted)));
-        }
-    }
-
-    let mut content_lines = vec![
-        Line::from(stepper_spans),
-        Line::from(kpi_spans),
-        Line::from(loc_spans),
-        Line::from(rem_spans),
-    ];
-
-    // 5. Si fichier actif en cours de transfert
+    // Fichier actif en cours de transfert (intégré dans les KPIs)
     if let Some((_key, af)) = app.live.active_files.iter().next() {
-        if inner.height >= 5 {
-            let active_spans = vec![
-                Span::styled("En transfert: ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("{} ", af.name), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("({}%", af.pct), Style::default().fg(theme.highlight)),
-                Span::styled(if af.speed.is_empty() { ")".to_string() } else { format!(" - {})", af.speed) }, Style::default().fg(theme.text_muted)),
-            ];
-            content_lines.push(Line::from(active_spans));
-        }
+        kpi_spans.push(Span::styled("│ Actif: ", Style::default().fg(theme.text_muted)));
+        kpi_spans.push(Span::styled(format!("{} ({}%)", af.name, af.pct), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
     }
 
-    let p = Paragraph::new(content_lines);
-    f.render_widget(p, inner);
+    // Découpage vertical :
+    // 1. Stepper de phase (1 ligne)
+    // 2. Grille KPIs (1 ligne)
+    // 3. Changements locaux & distants côte à côte sur deux colonnes (Path2 à gauche, Path1 à droite)
+    let v_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // Stepper
+            Constraint::Length(1), // KPIs
+            Constraint::Min(2),    // Changements côte à côte
+        ])
+        .split(inner);
+
+    f.render_widget(Paragraph::new(Line::from(stepper_spans)), v_chunks[0]);
+    f.render_widget(Paragraph::new(Line::from(kpi_spans)), v_chunks[1]);
+
+    if v_chunks[2].height > 0 {
+        let h_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
+            ])
+            .split(v_chunks[2]);
+
+        // Colonne gauche : Changements locaux (Path2)
+        let mut loc_lines = vec![
+            Line::from(Span::styled("Changements locaux (Path2) :", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
+        ];
+        if app.live.changes_local_details.is_empty() && app.live.changes_local.is_empty() {
+            loc_lines.push(Line::from(Span::styled("  Aucun changement", Style::default().fg(theme.text_muted))));
+        } else if !app.live.changes_local_details.is_empty() {
+            for d in app.live.changes_local_details.iter().take(2) {
+                loc_lines.push(Line::from(vec![
+                    Span::styled(format!("  • {} ", d.path), Style::default().fg(theme.text_bright)),
+                    Span::styled(format!("[{}]", d.action), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+            if app.live.changes_local_details.len() > 2 {
+                loc_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_local_details.len() - 2), Style::default().fg(theme.text_muted))));
+            }
+        } else {
+            for f in app.live.changes_local.iter().take(2) {
+                loc_lines.push(Line::from(Span::styled(format!("  • {}", f), Style::default().fg(theme.text_bright))));
+            }
+            if app.live.changes_local.len() > 2 {
+                loc_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_local.len() - 2), Style::default().fg(theme.text_muted))));
+            }
+        }
+        f.render_widget(Paragraph::new(loc_lines), h_chunks[0]);
+
+        // Colonne droite : Changements distants (Path1)
+        let mut rem_lines = vec![
+            Line::from(Span::styled("Changements distants (Path1) :", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+        ];
+        if app.live.changes_remote_details.is_empty() && app.live.changes_remote.is_empty() {
+            rem_lines.push(Line::from(Span::styled("  Aucun changement", Style::default().fg(theme.text_muted))));
+        } else if !app.live.changes_remote_details.is_empty() {
+            for d in app.live.changes_remote_details.iter().take(2) {
+                rem_lines.push(Line::from(vec![
+                    Span::styled(format!("  • {} ", d.path), Style::default().fg(theme.text_bright)),
+                    Span::styled(format!("[{}]", d.action), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+            if app.live.changes_remote_details.len() > 2 {
+                rem_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_remote_details.len() - 2), Style::default().fg(theme.text_muted))));
+            }
+        } else {
+            for f in app.live.changes_remote.iter().take(2) {
+                rem_lines.push(Line::from(Span::styled(format!("  • {}", f), Style::default().fg(theme.text_bright))));
+            }
+            if app.live.changes_remote.len() > 2 {
+                rem_lines.push(Line::from(Span::styled(format!("  (+{} autre(s))", app.live.changes_remote.len() - 2), Style::default().fg(theme.text_muted))));
+            }
+        }
+        f.render_widget(Paragraph::new(rem_lines), h_chunks[1]);
+    }
 }
 
 fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
@@ -520,7 +533,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     let border_color = if is_focused { theme.border_focus } else { theme.border_history };
     let is_syncing = app.live.is_syncing;
     let total_runs = app.total_history_runs();
-    let cur_run = if total_runs > 0 { app.selected_run_idx + 1 } else { 0 };
+    let cur_run = if let Some(sel) = app.selected_run_idx { sel + 1 } else { 0 };
 
     hitboxes.push(Hitbox {
         rect: area,
@@ -543,15 +556,17 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     let (up_col, down_col) = if total_runs <= 1 {
         (theme.text_muted, theme.text_muted)
-    } else if app.selected_run_idx == 0 {
-        (theme.text_muted, theme.red)
-    } else if app.selected_run_idx >= total_runs.saturating_sub(1) {
-        (theme.red, theme.text_muted)
     } else {
-        (theme.red, theme.red)
+        match app.selected_run_idx {
+            None => (theme.text_muted, theme.red),
+            Some(0) => (theme.text_muted, if total_runs > 1 { theme.red } else { theme.text_muted }),
+            Some(i) if i >= total_runs.saturating_sub(1) => (theme.red, theme.text_muted),
+            Some(_) => (theme.red, theme.red),
+        }
     };
 
-    let (det_col, key_col) = if total_runs == 0 {
+    let is_running_sync_selected = is_syncing && app.selected_run_idx == Some(0);
+    let (det_col, key_col) = if total_runs == 0 || app.selected_run_idx.is_none() || is_running_sync_selected {
         (theme.text_muted, theme.text_muted)
     } else {
         (theme.text_bright, theme.red)
@@ -585,20 +600,29 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         .title_bottom(right_bottom.alignment(Alignment::Right));
     f.render_widget(outer_block, area);
 
-    // Hitbox pour le bouton détails du bas du panneau historique
-    let bottom_y = area.y + area.height.saturating_sub(1);
-    hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 11, y: bottom_y, width: 11, height: 1 },
-        action: HitAction::HistoryRow(app.selected_run_idx),
-    });
+    // Hitbox pour le bouton détails du bas du panneau historique (actif uniquement si run passé sélectionné)
+    if let Some(idx) = app.selected_run_idx {
+        if !(is_syncing && idx == 0) {
+            let bottom_y = area.y + area.height.saturating_sub(1);
+            hitboxes.push(Hitbox {
+                rect: Rect { x: area.x + 11, y: bottom_y, width: 11, height: 1 },
+                action: HitAction::HistoryRow(idx),
+            });
+        }
+    }
 
     // 1. Graphe de durées multi-lignes (btop style) avec hitboxes sur chaque colonne
-    let past_selected = if is_syncing {
-        if app.selected_run_idx > 0 { Some(app.selected_run_idx - 1) } else { None }
-    } else if !app.past_runs.is_empty() {
-        Some(app.selected_run_idx)
-    } else {
-        None
+    let past_selected = match app.selected_run_idx {
+        Some(idx) => {
+            if is_syncing {
+                if idx > 0 { Some(idx - 1) } else { None }
+            } else if !app.past_runs.is_empty() {
+                Some(idx)
+            } else {
+                None
+            }
+        }
+        None => None,
     };
     let (lines, col_hitboxes) = crate::ui::sparkline::render_history_graph_multiline(
         &app.past_runs,
@@ -626,12 +650,17 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     // 2. Tableau des runs avec hitboxes et scroll offset
     let visible_rows = chunks[1].height.saturating_sub(2) as usize;
     let max_offset = total_runs.saturating_sub(visible_rows);
-    let offset = if app.selected_run_idx < app.history_scroll_offset {
-        app.selected_run_idx
-    } else if visible_rows > 0 && app.selected_run_idx >= app.history_scroll_offset + visible_rows {
-        app.selected_run_idx.saturating_sub(visible_rows) + 1
-    } else {
-        app.history_scroll_offset.min(max_offset)
+    let offset = match app.selected_run_idx {
+        Some(sel) => {
+            if sel < app.history_scroll_offset {
+                sel
+            } else if visible_rows > 0 && sel >= app.history_scroll_offset + visible_rows {
+                sel.saturating_sub(visible_rows) + 1
+            } else {
+                app.history_scroll_offset.min(max_offset)
+            }
+        }
+        None => app.history_scroll_offset.min(max_offset),
     };
 
     let mut table_rows: Vec<Row> = Vec::new();
@@ -639,7 +668,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     for item_idx in offset..(offset + visible_rows).min(total_runs) {
         visible_indices.push(item_idx);
-        let is_selected = item_idx == app.selected_run_idx;
+        let is_selected = app.selected_run_idx == Some(item_idx);
         let highlight_bg = ratatui::style::Color::Rgb(90, 32, 32);
 
         if is_syncing && item_idx == 0 {
@@ -757,7 +786,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     f.render_widget(table, chunks[1]);
 
-    crate::ui::render_btop_scrollbar(f, area, total_runs, app.selected_run_idx, visible_rows, theme);
+    crate::ui::render_btop_scrollbar(f, area, total_runs, app.selected_run_idx.unwrap_or(0), visible_rows, theme);
 }
 
 fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
@@ -864,7 +893,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     let files_to_display = app.get_all_recent_files();
 
     let total_files = files_to_display.len();
-    let cur_file = if total_files > 0 { app.recent_selected_idx + 1 } else { 0 };
+    let cur_file = if let Some(sel) = app.recent_selected_idx { sel + 1 } else { 0 };
 
     let max_show = area.height.saturating_sub(3) as usize;
     let offset = if !files_to_display.is_empty() && max_show > 0 {
@@ -880,6 +909,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
             Cell::from(Span::styled(" Aucun fichier récemment synchronisé", Style::default().fg(theme.text_muted))),
             Cell::from(""),
             Cell::from(""),
+            Cell::from(""),
         ])]
     } else {
         files_to_display
@@ -887,8 +917,8 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
             .enumerate()
             .skip(offset)
             .take(max_show)
-            .map(|(real_idx, (action, path, _size, time))| {
-                let is_selected = real_idx == app.recent_selected_idx;
+            .map(|(real_idx, (action, path, size, time))| {
+                let is_selected = app.recent_selected_idx == Some(real_idx);
                 let (badge_text, badge_color) = match action.as_str() {
                     "new" => ("● Ajouté", theme.green),
                     "deleted" => ("● Supprimé", theme.red),
@@ -912,11 +942,13 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
                     let cursor = Span::styled("▶ ", Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
                     let badge = Span::styled(format!("{} ", badge_text), Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
                     let path_span = Span::styled(display_path, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
+                    let size_span = Span::styled(size, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
                     let time_span = Span::styled(time, Style::default().fg(ratatui::style::Color::White).add_modifier(Modifier::BOLD));
 
                     Row::new(vec![
                         Cell::from(Line::from(vec![cursor, badge])),
                         Cell::from(path_span),
+                        Cell::from(size_span),
                         Cell::from(time_span),
                     ])
                     .style(Style::default().bg(highlight_bg))
@@ -928,11 +960,13 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
                     } else {
                         Span::styled(display_path, Style::default().fg(theme.text_bright))
                     };
+                    let size_span = Span::styled(size, Style::default().fg(theme.text_muted));
                     let time_span = Span::styled(time, Style::default().fg(theme.text_muted));
 
                     Row::new(vec![
                         Cell::from(Line::from(vec![cursor, badge])),
                         Cell::from(path_span),
+                        Cell::from(size_span),
                         Cell::from(time_span),
                     ])
                 }
@@ -958,15 +992,16 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     let (up_col, down_col) = if total_files <= 1 {
         (theme.text_muted, theme.text_muted)
-    } else if app.recent_selected_idx == 0 {
-        (theme.text_muted, theme.red)
-    } else if app.recent_selected_idx >= total_files.saturating_sub(1) {
-        (theme.red, theme.text_muted)
     } else {
-        (theme.red, theme.red)
+        match app.recent_selected_idx {
+            None => (theme.text_muted, theme.red),
+            Some(0) => (theme.text_muted, if total_files > 1 { theme.red } else { theme.text_muted }),
+            Some(i) if i >= total_files.saturating_sub(1) => (theme.red, theme.text_muted),
+            Some(_) => (theme.red, theme.red),
+        }
     };
 
-    let (opn_col, key_col) = if total_files == 0 {
+    let (opn_col, key_col) = if app.recent_selected_idx.is_none() || total_files == 0 {
         (theme.text_muted, theme.text_muted)
     } else {
         (theme.text_bright, theme.red)
@@ -1043,23 +1078,26 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         action: HitAction::ToggleCtrlMode,
     });
 
-    let bottom_y = area.y + area.height.saturating_sub(1);
-    hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 11, y: bottom_y, width: 8, height: 1 },
-        action: HitAction::RecentFile(app.recent_selected_idx),
-    });
+    if let Some(idx) = app.recent_selected_idx {
+        let bottom_y = area.y + area.height.saturating_sub(1);
+        hitboxes.push(Hitbox {
+            rect: Rect { x: area.x + 11, y: bottom_y, width: 8, height: 1 },
+            action: HitAction::RecentFile(idx),
+        });
+    }
 
     let header_title = if app.ctrl_mode { "DOSSIER PARENT (MODE CTRL ACTIF)" } else { "CHEMIN DU FICHIER" };
     let table = Table::new(
         rows,
         [
             Constraint::Percentage(16),
-            Constraint::Percentage(68),
-            Constraint::Percentage(16),
+            Constraint::Percentage(56),
+            Constraint::Percentage(14),
+            Constraint::Percentage(14),
         ],
     )
     .header(
-        Row::new(vec!["ACTION", header_title, "HEURE"])
+        Row::new(vec!["ACTION", header_title, "TAILLE", "HEURE"])
             .style(Style::default().fg(if app.ctrl_mode { theme.yellow } else { theme.text_muted }).add_modifier(Modifier::BOLD)),
     )
     .block(outer_block);

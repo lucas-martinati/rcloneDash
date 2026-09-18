@@ -57,17 +57,26 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         (theme.red, theme.red)
     };
 
-    // En-tête btop++ avec coin supérieur gauche ┌[options]┐
+    // En-tête btop++ uniforme : ┐options┌ à gauche, ┐Esc fermer┌ à droite
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
         .border_style(Style::default().fg(theme.red))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌[", Style::default().fg(theme.red)),
-            Span::styled("options", Style::default().fg(Color::Rgb(220, 220, 220))),
-            Span::styled("]┐", Style::default().fg(theme.red)),
+            Span::styled("┐", Style::default().fg(theme.red)),
+            Span::styled("options", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled("┌", Style::default().fg(theme.red)),
         ]))
+        .title(
+            Line::from(vec![
+                Span::styled("┐", Style::default().fg(theme.red)),
+                Span::styled("Esc", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" fermer", Style::default().fg(theme.text_bright)),
+                Span::styled("┌", Style::default().fg(theme.red)),
+            ])
+            .alignment(Alignment::Right),
+        )
         .title_bottom(
             Line::from(vec![
                 Span::styled("┘", Style::default().fg(theme.red)),
@@ -78,14 +87,27 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 Span::styled("← modifier →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
                 Span::styled("└┘", Style::default().fg(theme.red)),
                 Span::styled("↵ enregistrer", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-                Span::styled("└┘", Style::default().fg(theme.red)),
-                Span::styled("Esc fermer", Style::default().fg(Color::Rgb(160, 165, 180))),
                 Span::styled("└", Style::default().fg(theme.red)),
-                Span::styled(format!(" ─── {}/{} ", cur_opt, SETTINGS_ITEMS_COUNT), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            ])
+            .alignment(Alignment::Left),
+        )
+        .title_bottom(
+            Line::from(vec![
+                Span::styled(format!("─ {}/{} ─", cur_opt, SETTINGS_ITEMS_COUNT), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );
     f.render_widget(outer_block, area);
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x + area.width.saturating_sub(14),
+            y: area.y,
+            width: 12,
+            height: 1,
+        },
+        action: HitAction::CloseModal,
+    });
 
     let inner = Rect {
         x: area.x + 1,

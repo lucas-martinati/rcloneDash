@@ -112,7 +112,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     (Span::styled("[FIC] ", Style::default().fg(theme.text_muted)), theme.text_bright)
                 };
 
-                let display_name = if app.ctrl_mode {
+                let display_name = if app.ctrl_mode && !entry.is_dir {
                     let p = std::path::Path::new(&entry.rel_path);
                     let parent = p.parent().and_then(|p| p.to_str()).unwrap_or("");
                     let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
@@ -146,7 +146,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     ])
                     .style(Style::default().bg(highlight_bg))
                 } else {
-                    let name_style = if app.ctrl_mode {
+                    let name_style = if app.ctrl_mode && !entry.is_dir {
                         Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(name_color)
