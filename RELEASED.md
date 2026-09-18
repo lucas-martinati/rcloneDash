@@ -66,8 +66,16 @@ Cette version 1.0.0 marque une étape charnière : la réécriture complète du 
 
 ### 📦 Installation et Mise à jour
 
-#### Option 1 — Script d'installation automatique
-Téléchargez l'archive de la release ou clonez le dépôt, puis lancez simplement :
+#### Option 1 — Paquet Debian / Ubuntu (.deb)
+Téléchargez le fichier `.deb` depuis les assets de cette release et installez-le avec `apt` :
+```bash
+sudo apt install ./rclonedash_1.0.0-1_amd64.deb
+```
+- Lancez ensuite directement : `rclonedash`
+- Pour configurer la synchronisation automatique systemd en arrière-plan : `rclonedash-setup`
+
+#### Option 2 — Script d'installation automatique (.tar.gz ou Git)
+Téléchargez l'archive `.tar.gz` de la release ou clonez le dépôt, puis lancez simplement :
 ```bash
 ./install.sh
 ```
@@ -77,11 +85,9 @@ Le script configure automatiquement :
 - Les services et timers systemd utilisateur dans `~/.config/systemd/user/`
 - Les fichiers de configuration par défaut dans `~/.config/rclone/`
 
-#### Option 2 — Désinstallation propre
-Pour désinstaller complètement l'application et ses services systemd :
-```bash
-./uninstall.sh
-```
+#### Option 3 — Désinstallation propre
+- Si installé via paquet `.deb` : `sudo apt remove rclonedash`
+- Si installé via script : `./uninstall.sh`
 
 ---
 

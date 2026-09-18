@@ -69,8 +69,12 @@ trap 'on_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 banner
 
-# Répertoire du script d'installation
+# Répertoire du script d'installation et détection des modèles
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE_DIR="$SCRIPT_DIR/services"
+if [ ! -f "$TEMPLATE_DIR/rclone-bisync-guard.sh.template" ] && [ -d "/usr/share/rclonedash" ]; then
+    TEMPLATE_DIR="/usr/share/rclonedash"
+fi
 
 # --------------------------------------------------------------------------- #
 #  Vérification des prérequis
@@ -102,6 +106,8 @@ if [ -f "$SCRIPT_DIR/rclonedash" ] && [ -x "$SCRIPT_DIR/rclonedash" ]; then
     BIN_SRC="$SCRIPT_DIR/rclonedash"
 elif [ -f "$SCRIPT_DIR/target/release/rclonedash" ] && [ -x "$SCRIPT_DIR/target/release/rclonedash" ]; then
     BIN_SRC="$SCRIPT_DIR/target/release/rclonedash"
+elif [ -x "/usr/bin/rclonedash" ]; then
+    BIN_SRC="/usr/bin/rclonedash"
 elif command -v cargo >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/Cargo.toml" ]; then
     info "Compilation du binaire release avec Cargo (optimisations LTO activées)..."
     (cd "$SCRIPT_DIR" && cargo build --release >> "$LOG_FILE" 2>&1)
@@ -116,16 +122,20 @@ if [ -z "$BIN_SRC" ] || [ ! -f "$BIN_SRC" ]; then
 fi
 
 INSTALL_BIN_DIR="$HOME/.local/bin"
-mkdir -p "$INSTALL_BIN_DIR"
-install -m 755 "$BIN_SRC" "$INSTALL_BIN_DIR/rclonedash"
-ok "Binaire installé dans $INSTALL_BIN_DIR/rclonedash"
+if [ "$BIN_SRC" = "/usr/bin/rclonedash" ]; then
+    ok "Binaire système détecté dans /usr/bin/rclonedash"
+else
+    mkdir -p "$INSTALL_BIN_DIR"
+    install -m 755 "$BIN_SRC" "$INSTALL_BIN_DIR/rclonedash"
+    ok "Binaire installé dans $INSTALL_BIN_DIR/rclonedash"
 
-# Vérification du PATH
-if [[ ":$PATH:" != *":$INSTALL_BIN_DIR:"* ]]; then
-    warn "$INSTALL_BIN_DIR n'est pas dans votre variable PATH !"
-    detail "Pour lancer 'rclonedash' directement depuis n'importe où, ajoutez la ligne suivante"
-    detail "dans votre fichier ~/.bashrc ou ~/.zshrc :"
-    detail "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    # Vérification du PATH
+    if [[ ":$PATH:" != *":$INSTALL_BIN_DIR:"* ]]; then
+        warn "$INSTALL_BIN_DIR n'est pas dans votre variable PATH !"
+        detail "Pour lancer 'rclonedash' directement depuis n'importe où, ajoutez la ligne suivante"
+        detail "dans votre fichier ~/.bashrc ou ~/.zshrc :"
+        detail "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
 fi
 
 # --------------------------------------------------------------------------- #
@@ -136,12 +146,12 @@ step 2 "Installation du script de garde rclone-bisync"
 DATA_DIR="$HOME/.local/share/RcloneDash"
 mkdir -p "$DATA_DIR"
 
-if [ -f "$SCRIPT_DIR/services/rclone-bisync-guard.sh.template" ]; then
-    sed -e "s|__HOME__|$HOME|g" "$SCRIPT_DIR/services/rclone-bisync-guard.sh.template" > "$DATA_DIR/rclone-bisync-guard.sh"
+if [ -f "$TEMPLATE_DIR/rclone-bisync-guard.sh.template" ]; then
+    sed -e "s|__HOME__|$HOME|g" "$TEMPLATE_DIR/rclone-bisync-guard.sh.template" > "$DATA_DIR/rclone-bisync-guard.sh"
     chmod +x "$DATA_DIR/rclone-bisync-guard.sh"
     ok "Script de garde configuré dans $DATA_DIR/rclone-bisync-guard.sh"
 else
-    err "Modèle 'services/rclone-bisync-guard.sh.template' introuvable."
+    err "Modèle 'rclone-bisync-guard.sh.template' introuvable dans $TEMPLATE_DIR."
     exit 1
 fi
 
@@ -155,8 +165,8 @@ mkdir -p "$RCLONE_CONF_DIR"
 
 # gdrive-filters.txt
 if [ ! -f "$RCLONE_CONF_DIR/gdrive-filters.txt" ]; then
-    if [ -f "$SCRIPT_DIR/services/gdrive-filters.txt" ]; then
-        cp "$SCRIPT_DIR/services/gdrive-filters.txt" "$RCLONE_CONF_DIR/gdrive-filters.txt"
+    if [ -f "$TEMPLATE_DIR/gdrive-filters.txt" ]; then
+        cp "$TEMPLATE_DIR/gdrive-filters.txt" "$RCLONE_CONF_DIR/gdrive-filters.txt"
         ok "Fichier de filtres par défaut installé ($RCLONE_CONF_DIR/gdrive-filters.txt)"
     fi
 else
@@ -206,15 +216,15 @@ step 4 "Installation et activation des services Systemd utilisateur"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 mkdir -p "$SYSTEMD_USER_DIR"
 
-if [ -f "$SCRIPT_DIR/services/rclone-bisync.service.template" ]; then
-    sed -e "s|__HOME__|$HOME|g" "$SCRIPT_DIR/services/rclone-bisync.service.template" > "$SYSTEMD_USER_DIR/rclone-bisync.service"
+if [ -f "$TEMPLATE_DIR/rclone-bisync.service.template" ]; then
+    sed -e "s|__HOME__|$HOME|g" "$TEMPLATE_DIR/rclone-bisync.service.template" > "$SYSTEMD_USER_DIR/rclone-bisync.service"
 else
-    err "Modèle 'services/rclone-bisync.service.template' introuvable."
+    err "Modèle 'rclone-bisync.service.template' introuvable dans $TEMPLATE_DIR."
     exit 1
 fi
 
-if [ -f "$SCRIPT_DIR/services/rclone-bisync.timer" ]; then
-    cp "$SCRIPT_DIR/services/rclone-bisync.timer" "$SYSTEMD_USER_DIR/rclone-bisync.timer"
+if [ -f "$TEMPLATE_DIR/rclone-bisync.timer" ]; then
+    cp "$TEMPLATE_DIR/rclone-bisync.timer" "$SYSTEMD_USER_DIR/rclone-bisync.timer"
     
     # Ajuster l'intervalle si configuré dans dash-config.json
     if command -v python3 >/dev/null 2>&1 && [ -f "$CONFIG_FILE" ]; then

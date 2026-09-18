@@ -102,8 +102,36 @@ Construit avec **[Ratatui](https://ratatui.rs/)**, **[Crossterm](https://github.
 
 ### 🚀 Installation et Démarrage
 
-#### Méthode 1 : Installation automatique (Recommandée)
-Que vous utilisiez une archive pré-compilée issue des **Releases GitHub** ou le dépôt cloné, lancez simplement le script d'installation :
+#### Méthode 1 : Paquet Debian / Ubuntu (.deb) — Le plus simple
+Téléchargez le fichier `.deb` depuis la page des [Releases GitHub](https://github.com/lucas-martinati/rcloneDash/releases/latest) et installez-le en une seule commande avec `apt` :
+
+```bash
+sudo apt install ./rclonedash_*_amd64.deb
+```
+
+> **Astuce — Téléchargement et installation directe :**
+> ```bash
+> wget https://github.com/lucas-martinati/rcloneDash/releases/latest/download/rclonedash_1.0.0-1_amd64.deb
+> sudo apt install ./rclonedash_1.0.0-1_amd64.deb
+> ```
+
+Une fois installé :
+- **Lancer l'interface TUI :**
+  ```bash
+  rclonedash
+  ```
+- **Configurer la synchronisation automatique systemd & filtres** *(optionnel, exécuter dans votre session utilisateur sans `sudo`)* :
+  ```bash
+  rclonedash-setup
+  ```
+
+Pour désinstaller à tout moment :
+```bash
+sudo apt remove rclonedash
+```
+
+#### Méthode 2 : Installation automatique sans root (Archive release ou Git)
+Que vous utilisiez une archive `.tar.gz` issue des **Releases GitHub** ou le dépôt cloné, lancez simplement le script d'installation utilisateur :
 
 ```bash
 ./install.sh
@@ -120,12 +148,12 @@ Pour désinstaller proprement à tout moment :
 ./uninstall.sh
 ```
 
-#### Méthode 2 : Lancement en mode développement
+#### Méthode 3 : Lancement en mode développement
 ```bash
 cargo run
 ```
 
-#### Méthode 3 : Compilation manuelle
+#### Méthode 4 : Compilation manuelle
 ```bash
 cargo build --release
 ./target/release/rclonedash

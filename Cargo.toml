@@ -3,6 +3,7 @@ name = "rclonedash"
 version = "1.0.0"
 edition = "2021"
 authors = ["Lucas Martinati"]
+license = "MIT"
 description = "Terminal User Interface (TUI) élégante et réactive pour surveiller rclone bisync"
 
 [dependencies]
@@ -23,3 +24,23 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[package.metadata.deb]
+maintainer = "Lucas Martinati <lucasm54800@gmail.com>"
+copyright = "2026 Lucas Martinati"
+license-file = []
+extended-description = """\
+Interactive, blazing fast TUI and monitoring dashboard for rclone bisync with btop-inspired UI."""
+depends = "$auto"
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/rclonedash", "usr/bin/rclonedash", "755"],
+    ["install.sh", "usr/bin/rclonedash-setup", "755"],
+    ["services/rclone-bisync-guard.sh.template", "usr/share/rclonedash/rclone-bisync-guard.sh.template", "644"],
+    ["services/rclone-bisync.service.template", "usr/share/rclonedash/rclone-bisync.service.template", "644"],
+    ["services/rclone-bisync.timer", "usr/share/rclonedash/rclone-bisync.timer", "644"],
+    ["services/gdrive-filters.txt", "usr/share/rclonedash/gdrive-filters.txt", "644"],
+    ["README.md", "usr/share/doc/rclonedash/README.md", "644"],
+]
+

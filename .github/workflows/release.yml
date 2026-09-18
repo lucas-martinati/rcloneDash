@@ -24,8 +24,22 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo-deb
+        uses: taiki-e/install-action@cargo-deb
+
       - name: Build release binary
         run: cargo build --release
+
+      - name: Build Debian package (.deb)
+        id: deb_package
+        run: |
+          cargo deb --no-build
+          DEB_FILE=$(ls target/debian/*.deb | head -n 1)
+          DEB_NAME=$(basename "$DEB_FILE")
+          cp "$DEB_FILE" "./${DEB_NAME}"
+          sha256sum "${DEB_NAME}" > "${DEB_NAME}.sha256"
+          echo "deb=${DEB_NAME}" >> "$GITHUB_OUTPUT"
+          echo "checksum=${DEB_NAME}.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release archive
         id: package
@@ -59,5 +73,8 @@ jobs:
           files: |
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.checksum }}
+            ${{ steps.deb_package.outputs.deb }}
+            ${{ steps.deb_package.outputs.checksum }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
