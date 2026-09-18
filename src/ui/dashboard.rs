@@ -92,7 +92,7 @@ fn render_system_cadrans(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
 fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border_storage))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
@@ -221,7 +221,7 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border_sys))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
@@ -382,7 +382,7 @@ fn render_alert_banner(f: &mut Frame, alert: &Alert, theme: &ThemePalette, area:
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Plain)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(border_color))
                 .style(Style::default().bg(theme.card_bg)),
         );
@@ -410,7 +410,7 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.accent))
         .style(Style::default().bg(theme.card_bg))
         .title(title_line)
@@ -625,7 +625,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
@@ -705,7 +705,8 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     for item_idx in offset..(offset + visible_rows).min(total_runs) {
         visible_indices.push(item_idx);
-        let is_selected = app.selected_run_idx == Some(item_idx);
+        let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::History);
+        let is_selected = !is_dragging && app.selected_run_idx == Some(item_idx);
         let highlight_bg = ratatui::style::Color::Rgb(90, 32, 32);
 
         if is_syncing && item_idx == 0 {
@@ -887,7 +888,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
@@ -897,9 +898,6 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
             Span::styled(if app.auto_scroll { "pause " } else { "auto " }, Style::default().fg(theme.text_bright)),
             Span::styled("␣", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled(if app.auto_scroll { " [ON]" } else { " [OFF]" }, Style::default().fg(if app.auto_scroll { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD)),
-            Span::styled("┌┐", Style::default().fg(border_color)),
-            Span::styled("copier ", Style::default().fg(theme.text_bright)),
-            Span::styled("y", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("┌", Style::default().fg(border_color)),
         ]))
         .title_bottom(left_bottom.alignment(Alignment::Left))
@@ -908,11 +906,6 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     hitboxes.push(Hitbox {
         rect: Rect { x: area.x + 7, y: area.y, width: 14, height: 1 },
         action: HitAction::ToggleLogsAuto,
-    });
-
-    hitboxes.push(Hitbox {
-        rect: Rect { x: area.x + 23, y: area.y, width: 9, height: 1 },
-        action: HitAction::CopyLogs,
     });
 
     let skip_count = if app.auto_scroll {
@@ -994,7 +987,8 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
             .skip(offset)
             .take(max_show)
             .map(|(real_idx, (action, path, size, time))| {
-                let is_selected = app.recent_selected_idx == Some(real_idx);
+                let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::RecentFiles);
+                let is_selected = !is_dragging && app.recent_selected_idx == Some(real_idx);
                 let (badge_text, badge_color) = match action.as_str() {
                     "new" => ("● Ajouté", theme.green),
                     "deleted" => ("● Supprimé", theme.red),
@@ -1135,7 +1129,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(top_spans))
@@ -1157,7 +1151,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     if let Some(idx) = app.recent_selected_idx {
         let bottom_y = area.y + area.height.saturating_sub(1);
         hitboxes.push(Hitbox {
-            rect: Rect { x: area.x + 11, y: bottom_y, width: 8, height: 1 },
+            rect: Rect { x: area.x + 13, y: bottom_y, width: 8, height: 1 },
             action: HitAction::RecentFile(idx),
         });
     }

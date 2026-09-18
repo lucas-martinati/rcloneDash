@@ -88,7 +88,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     // En-tête btop++ uniforme : ┐options┌ à gauche, ┐Esc fermer┌ à droite
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.red))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![

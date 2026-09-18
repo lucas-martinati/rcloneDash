@@ -183,7 +183,8 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         ]), None));
 
         for (idx, (action, path)) in affected_files.iter().enumerate() {
-            let is_selected = idx == app.history_selected_file_idx;
+            let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::HistoryDetails(run_idx));
+            let is_selected = !is_dragging && idx == app.history_selected_file_idx;
             let (badge_icon, badge_color) = match *action {
                 "new" => ("[+] Copié", theme.green),
                 "deleted" => ("[-] Suppr", theme.red),
@@ -239,7 +240,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border_history))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
@@ -313,8 +314,6 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         Line::from(vec![
             Span::styled("[Enter] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
             Span::styled("Ouvrir  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[d] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Dossier parent  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[Ctrl+X] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{}  │  ", mode_label), Style::default().fg(theme.text_muted)),
             Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
@@ -328,7 +327,6 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         // Rien : boutons grisés et inutilisables
         Line::from(vec![
             Span::styled("[Enter] Ouvrir  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[d] Dossier parent  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[Ctrl+X] Mode dossier  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[y / c] Copier  │  ", Style::default().fg(theme.text_muted)),
             Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
@@ -349,7 +347,47 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         action: HitAction::CloseModal,
     });
 
-    if has_errors || has_files {
+    let footer_w = layout[1].width;
+    let footer_y = layout[1].y;
+    if has_files {
+        let copy_label = if has_errors { "Copier erreurs" } else { "Copier détails" };
+        let mode_label = if app.ctrl_mode { "Mode fichier" } else { "Mode dossier" };
+        let s_open = "[Enter] Ouvrir  │  ";
+        let s_mode = format!("[Ctrl+X] {}  │  ", mode_label);
+        let s_copy = format!("[y / c] {}  │  ", copy_label);
+        let s_scroll = "[↑↓] Défiler  │  ";
+        let s_close = "[Esc, q] Fermer";
+        let total_chars = (s_open.chars().count() + s_mode.chars().count() + s_copy.chars().count() + s_scroll.chars().count() + s_close.chars().count()) as u16;
+        let start_x = layout[1].x + footer_w.saturating_sub(total_chars) / 2;
+
+        let mut cur_x = start_x;
+        let w_open = s_open.chars().count() as u16;
+        hitboxes.push(Hitbox {
+            rect: Rect { x: cur_x, y: footer_y, width: w_open, height: 1 },
+            action: HitAction::HistoryFile(app.history_selected_file_idx),
+        });
+        cur_x += w_open;
+
+        let w_mode = s_mode.chars().count() as u16;
+        hitboxes.push(Hitbox {
+            rect: Rect { x: cur_x, y: footer_y, width: w_mode, height: 1 },
+            action: HitAction::ToggleCtrlMode,
+        });
+        cur_x += w_mode;
+
+        let w_copy = s_copy.chars().count() as u16;
+        hitboxes.push(Hitbox {
+            rect: Rect { x: cur_x, y: footer_y, width: w_copy, height: 1 },
+            action: HitAction::CopyHistoryErrors(run_idx),
+        });
+        cur_x += w_copy + s_scroll.chars().count() as u16;
+
+        let w_close = s_close.chars().count() as u16;
+        hitboxes.push(Hitbox {
+            rect: Rect { x: cur_x, y: footer_y, width: w_close, height: 1 },
+            action: HitAction::CloseModal,
+        });
+    } else if has_errors {
         hitboxes.push(Hitbox {
             rect: layout[1],
             action: HitAction::CopyHistoryErrors(run_idx),

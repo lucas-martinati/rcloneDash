@@ -71,11 +71,11 @@ impl ThemeChoice {
                 purple: Color::Rgb(187, 154, 247),       // Lavender
                 border: Color::Rgb(70, 75, 95),          // Subtle Slate Grey
                 border_focus: Color::Rgb(224, 175, 104), // Warm Amber / Gold
-                border_sys: Color::Rgb(115, 218, 202),   // Cyan / Teal
-                border_storage: Color::Rgb(187, 154, 247), // Lavender
-                border_history: Color::Rgb(122, 162, 247), // Tokyo Blue
-                border_logs: Color::Rgb(247, 118, 142),    // Coral / Salmon
-                border_recent: Color::Rgb(158, 206, 106),  // Green
+                border_sys: Color::Rgb(72, 130, 135),    // Teal tint
+                border_storage: Color::Rgb(100, 90, 148),// Purple/blue tint
+                border_history: Color::Rgb(85, 100, 145),// Blue tint
+                border_logs: Color::Rgb(95, 88, 108),    // Warm slate
+                border_recent: Color::Rgb(82, 125, 95),  // Green tint
                 card_bg: Color::Reset,                   // Transparent / Terminal Black
                 bg_main: Color::Reset,
                 header_bg: Color::Reset,
@@ -96,11 +96,11 @@ impl ThemeChoice {
                 purple: Color::Rgb(203, 166, 247),       // Mauve
                 border: Color::Rgb(75, 78, 100),         // Surface1
                 border_focus: Color::Rgb(249, 226, 175), // Catppuccin Yellow / Gold
-                border_sys: Color::Rgb(148, 226, 213),
-                border_storage: Color::Rgb(203, 166, 247),
-                border_history: Color::Rgb(137, 180, 250),
-                border_logs: Color::Rgb(243, 139, 168),
-                border_recent: Color::Rgb(166, 227, 161),
+                border_sys: Color::Rgb(76, 132, 138),    // Teal tint
+                border_storage: Color::Rgb(105, 92, 152),// Purple tint
+                border_history: Color::Rgb(85, 105, 148),// Blue tint
+                border_logs: Color::Rgb(98, 88, 112),    // Warm slate
+                border_recent: Color::Rgb(85, 128, 100), // Green tint
                 card_bg: Color::Reset,
                 bg_main: Color::Reset,
                 header_bg: Color::Reset,
@@ -121,11 +121,11 @@ impl ThemeChoice {
                 purple: Color::Rgb(180, 142, 173),       // Aurora Purple
                 border: Color::Rgb(76, 86, 106),         // Polar Night 3
                 border_focus: Color::Rgb(235, 203, 139), // Aurora Yellow / Amber
-                border_sys: Color::Rgb(143, 188, 187),
-                border_storage: Color::Rgb(180, 142, 173),
-                border_history: Color::Rgb(129, 161, 193),
-                border_logs: Color::Rgb(191, 97, 106),
-                border_recent: Color::Rgb(163, 190, 140),
+                border_sys: Color::Rgb(78, 130, 132),    // Teal tint
+                border_storage: Color::Rgb(95, 95, 142), // Purple tint
+                border_history: Color::Rgb(82, 105, 140),// Blue tint
+                border_logs: Color::Rgb(92, 90, 118),    // Warm slate
+                border_recent: Color::Rgb(85, 122, 108), // Green tint
                 card_bg: Color::Reset,
                 bg_main: Color::Reset,
                 header_bg: Color::Reset,
@@ -146,11 +146,11 @@ impl ThemeChoice {
                 purple: Color::Rgb(211, 134, 155),       // Purple
                 border: Color::Rgb(80, 73, 69),          // Dark 2 subtle grey
                 border_focus: Color::Rgb(250, 189, 47),  // Gruvbox Bright Yellow / Gold
-                border_sys: Color::Rgb(142, 192, 124),   // Aqua
-                border_storage: Color::Rgb(211, 134, 155),// Purple
-                border_history: Color::Rgb(131, 165, 152),// Blue
-                border_logs: Color::Rgb(251, 73, 52),    // Red
-                border_recent: Color::Rgb(184, 187, 38),  // Green
+                border_sys: Color::Rgb(82, 118, 95),     // Aqua tint
+                border_storage: Color::Rgb(108, 88, 95), // Purple tint
+                border_history: Color::Rgb(95, 102, 98), // Blue tint
+                border_logs: Color::Rgb(100, 82, 74),    // Warm tone
+                border_recent: Color::Rgb(85, 112, 65),  // Green tint
                 card_bg: Color::Reset,                   // Pure black terminal
                 bg_main: Color::Reset,
                 header_bg: Color::Reset,
@@ -171,11 +171,11 @@ impl ThemeChoice {
                 purple: Color::Rgb(255, 121, 198),       // Pink
                 border: Color::Rgb(80, 85, 110),         // Current Line grey
                 border_focus: Color::Rgb(241, 250, 140), // Dracula Yellow
-                border_sys: Color::Rgb(139, 233, 253),
-                border_storage: Color::Rgb(255, 121, 198),
-                border_history: Color::Rgb(139, 233, 253),// Cyan
-                border_logs: Color::Rgb(255, 85, 85),
-                border_recent: Color::Rgb(80, 250, 123),
+                border_sys: Color::Rgb(82, 135, 145),    // Teal tint
+                border_storage: Color::Rgb(110, 95, 158),// Purple tint
+                border_history: Color::Rgb(88, 115, 155),// Blue/cyan tint
+                border_logs: Color::Rgb(98, 90, 120),    // Warm slate
+                border_recent: Color::Rgb(82, 135, 118), // Green tint
                 card_bg: Color::Reset,
                 bg_main: Color::Reset,
                 header_bg: Color::Reset,
@@ -196,11 +196,11 @@ impl ThemeChoice {
                 purple: Color::Rgb(171, 157, 242),       // Purple
                 border: Color::Rgb(75, 72, 82),
                 border_focus: Color::Rgb(255, 216, 102), // Monokai Pro Yellow / Gold
-                border_sys: Color::Rgb(120, 220, 232),
-                border_storage: Color::Rgb(171, 157, 242),
-                border_history: Color::Rgb(120, 220, 232),
-                border_logs: Color::Rgb(255, 97, 136),
-                border_recent: Color::Rgb(169, 220, 103),
+                border_sys: Color::Rgb(78, 118, 112),    // Teal tint
+                border_storage: Color::Rgb(98, 82, 125), // Purple tint
+                border_history: Color::Rgb(85, 92, 118), // Blue tint
+                border_logs: Color::Rgb(92, 78, 90),     // Warm slate
+                border_recent: Color::Rgb(85, 112, 82),  // Green tint
                 card_bg: Color::Reset,
                 bg_main: Color::Reset,
                 header_bg: Color::Reset,

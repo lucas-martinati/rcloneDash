@@ -214,6 +214,30 @@ pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool
     false
 }
 
+fn spawn_open_cmd(path: &Path) -> Result<(), String> {
+    let res = Command::new("xdg-open")
+        .arg(path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+
+    match res {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            Command::new("gio")
+                .arg("open")
+                .arg(path)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(|_| e.to_string())?;
+            Ok(())
+        }
+    }
+}
+
 pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
     let clean = rel_path.trim_start_matches('/');
     let full = if clean.is_empty() {
@@ -224,14 +248,7 @@ pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
     if !full.exists() {
         return Err("Fichier supprimé ou introuvable".to_string());
     }
-    Command::new("xdg-open")
-        .arg(&full)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    spawn_open_cmd(&full)
 }
 
 pub fn open_folder_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
@@ -265,14 +282,7 @@ pub fn open_folder_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
         }
     }
 
-    Command::new("xdg-open")
-        .arg(&target)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    spawn_open_cmd(&target)
 }
 
 pub fn add_exclude_rule(rel_path: &str, is_dir: bool) -> Result<(), String> {

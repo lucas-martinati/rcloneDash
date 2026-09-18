@@ -30,7 +30,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border_storage))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
@@ -106,7 +106,8 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
             .take(visible_height)
             .map(|(i, rule)| {
                 let trimmed = rule.trim();
-                let is_selected = i == app.selected_filter_idx;
+                let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::Filters);
+                let is_selected = !is_dragging && i == app.selected_filter_idx;
 
                 let (color, prefix) = if trimmed.starts_with('+') {
                     (theme.green, "[INCLUDE]")

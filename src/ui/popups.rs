@@ -15,33 +15,7 @@ use crate::ui::settings::render_settings_modal;
 use crate::ui::theme::ThemePalette;
 
 pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
-    // 1. Toast notification flottant
-    if let Some((msg, _)) = &app.toast {
-        let area = f.area();
-        let toast_width = (msg.len() as u16 + 6).min(area.width.saturating_sub(4));
-        let toast_area = Rect {
-            x: area.width.saturating_sub(toast_width + 2),
-            y: 1,
-            width: toast_width,
-            height: 3,
-        };
-
-        f.render_widget(Clear, toast_area);
-        let toast_p = Paragraph::new(Line::from(vec![
-            Span::styled(" ", Style::default()),
-            Span::styled(msg, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(theme.accent))
-                .style(Style::default().bg(theme.card_bg)),
-        );
-        f.render_widget(toast_p, toast_area);
-    }
-
-    // 2. Modales
+    // 1. Modales
     match &app.modal {
         Modal::Menu => {
             render_menu_modal(f, app, theme, hitboxes);
@@ -287,7 +261,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Plain)
+                        .border_type(BorderType::Rounded)
                         .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Line::from(vec![
@@ -318,6 +292,32 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             });
         }
         Modal::None => {}
+    }
+
+    // 2. Toast notification flottant (rendu AU-DESSUS des modales pour être toujours visible)
+    if let Some((msg, _)) = &app.toast {
+        let area = f.area();
+        let toast_width = (msg.len() as u16 + 6).min(area.width.saturating_sub(4));
+        let toast_area = Rect {
+            x: area.width.saturating_sub(toast_width + 2),
+            y: 1,
+            width: toast_width,
+            height: 3,
+        };
+
+        f.render_widget(Clear, toast_area);
+        let toast_p = Paragraph::new(Line::from(vec![
+            Span::styled(" ", Style::default()),
+            Span::styled(msg, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+        ]))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(theme.accent))
+                .style(Style::default().bg(theme.card_bg)),
+        );
+        f.render_widget(toast_p, toast_area);
     }
 }
 

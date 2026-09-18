@@ -54,7 +54,7 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border_history))
         .style(Style::default().bg(theme.card_bg))
         .title(title_line)
@@ -102,7 +102,8 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
             .enumerate()
             .map(|(rel_i, entry)| {
                 let actual_i = start_idx + rel_i;
-                let is_selected = actual_i == app.file_selected_idx;
+                let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::Files);
+                let is_selected = !is_dragging && actual_i == app.file_selected_idx;
 
                 let cursor = if is_selected {
                     Span::styled("▶ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))

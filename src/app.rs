@@ -984,6 +984,14 @@ impl App {
         }
     }
 
+    pub fn is_dragging_scrollbar(&self, target: ScrollbarTarget) -> bool {
+        if let Some((t, _, _, _, _)) = &self.active_scrollbar_drag {
+            *t == target
+        } else {
+            false
+        }
+    }
+
     pub fn commit_setting_edit(&mut self) {
         if !self.is_editing_setting {
             return;
@@ -996,7 +1004,11 @@ impl App {
                     self.reload_files();
                     self.save_current_settings();
                     self.set_toast(format!("✔ Dossier local mis à jour : {}", self.config.local_dir));
+                } else {
+                    self.set_toast("✔ Dossier local conservé");
                 }
+            } else {
+                self.set_toast("ℹ Valeur vide : conservation du dossier précédent");
             }
         } else if self.settings_selected_idx == 6 {
             if !trimmed.is_empty() {
@@ -1004,7 +1016,11 @@ impl App {
                     self.config.remote = trimmed;
                     self.save_current_settings();
                     self.set_toast(format!("✔ Remote distant mis à jour : {}", self.config.remote));
+                } else {
+                    self.set_toast("✔ Remote distant conservé");
                 }
+            } else {
+                self.set_toast("ℹ Valeur vide : conservation du remote précédent");
             }
         }
         self.is_editing_setting = false;
@@ -1131,44 +1147,65 @@ impl App {
             }
             ScrollbarTarget::History => {
                 self.focused_panel = FocusedPanel::History;
-                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
-                self.selected_run_idx = Some(target_idx);
                 let vp = self.history_viewport_height.max(2);
-                if target_idx < self.history_scroll_offset {
-                    self.history_scroll_offset = target_idx;
-                } else if target_idx >= self.history_scroll_offset + vp {
-                    self.history_scroll_offset = target_idx + 1 - vp;
+                let max_offset = total.saturating_sub(vp);
+                let old_offset = self.history_scroll_offset;
+                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
+                self.history_scroll_offset = new_offset;
+                if new_offset > old_offset || ratio >= 0.5 {
+                    self.selected_run_idx = Some((new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1)));
+                } else {
+                    self.selected_run_idx = Some(new_offset.min(total.saturating_sub(1)));
                 }
             }
             ScrollbarTarget::RecentFiles => {
                 self.focused_panel = FocusedPanel::RecentFiles;
-                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
-                self.recent_selected_idx = Some(target_idx);
                 let vp = self.recent_viewport_height.max(1);
-                if target_idx < self.recent_scroll_offset {
-                    self.recent_scroll_offset = target_idx;
-                } else if target_idx >= self.recent_scroll_offset + vp {
-                    self.recent_scroll_offset = target_idx + 1 - vp;
+                let max_offset = total.saturating_sub(vp);
+                let old_offset = self.recent_scroll_offset;
+                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
+                self.recent_scroll_offset = new_offset;
+                if new_offset > old_offset || ratio >= 0.5 {
+                    self.recent_selected_idx = Some((new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1)));
+                } else {
+                    self.recent_selected_idx = Some(new_offset.min(total.saturating_sub(1)));
                 }
             }
-            ScrollbarTarget::HistoryDetails(_) => {
+            ScrollbarTarget::HistoryDetails(run_idx) => {
                 self.history_details_scroll = ((ratio * max_scroll as f64).round() as usize).min(max_scroll);
+                let total_files = self.past_runs.get(run_idx).map(|r| r.all_affected_files().len()).unwrap_or(0);
+                if total_files > 0 {
+                    let vp = visible.max(1);
+                    if ratio >= 0.5 {
+                        self.history_selected_file_idx = (self.history_details_scroll + vp.saturating_sub(1)).min(total_files.saturating_sub(1));
+                    } else {
+                        self.history_selected_file_idx = self.history_details_scroll.min(total_files.saturating_sub(1));
+                    }
+                }
             }
             ScrollbarTarget::Files => {
-                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
-                self.file_selected_idx = target_idx;
-                let vp = self.file_viewport_height;
-                if target_idx < self.file_scroll_offset {
-                    self.file_scroll_offset = target_idx;
-                } else if target_idx >= self.file_scroll_offset + vp {
-                    self.file_scroll_offset = target_idx + 1 - vp;
+                let vp = self.file_viewport_height.max(1);
+                let max_offset = total.saturating_sub(vp);
+                let old_offset = self.file_scroll_offset;
+                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
+                self.file_scroll_offset = new_offset;
+                if new_offset > old_offset || ratio >= 0.5 {
+                    self.file_selected_idx = (new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1));
+                } else {
+                    self.file_selected_idx = new_offset.min(total.saturating_sub(1));
                 }
             }
             ScrollbarTarget::Filters => {
-                let target_idx = ((ratio * total.saturating_sub(1) as f64).round() as usize).min(total.saturating_sub(1));
-                self.selected_filter_idx = target_idx;
-                let vp = self.filter_viewport_height;
-                self.ensure_filter_visible(vp);
+                let vp = self.filter_viewport_height.max(1);
+                let max_offset = total.saturating_sub(vp);
+                let old_offset = self.filter_scroll_offset;
+                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
+                self.filter_scroll_offset = new_offset;
+                if new_offset > old_offset || ratio >= 0.5 {
+                    self.selected_filter_idx = (new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1));
+                } else {
+                    self.selected_filter_idx = new_offset.min(total.saturating_sub(1));
+                }
             }
             ScrollbarTarget::DryRun => {
                 self.dry_run_scroll = ((ratio * max_scroll as f64).round() as usize).min(max_scroll);
@@ -1206,7 +1243,7 @@ impl App {
                                 break;
                             }
                             HitAction::HistoryFile(_) => {
-                                let past_idx = if self.live.is_syncing {
+                                let past_idx = if self.is_syncing() {
                                     self.selected_run_idx.map(|i| i.saturating_sub(1)).unwrap_or(0)
                                 } else {
                                     self.selected_run_idx.unwrap_or(0)
@@ -1453,10 +1490,10 @@ impl App {
                                 let total = self.total_history_runs();
                                 if idx < total {
                                     if self.selected_run_idx == Some(idx) {
-                                        if self.live.is_syncing && idx == 0 {
+                                        if self.is_syncing() && idx == 0 {
                                             self.set_toast("ℹ Synchronisation active - Détails affichés ci-dessus");
                                         } else {
-                                            let past_idx = if self.live.is_syncing { idx.saturating_sub(1) } else { idx };
+                                            let past_idx = if self.is_syncing() { idx.saturating_sub(1) } else { idx };
                                             if past_idx < self.past_runs.len() {
                                                 self.history_details_scroll = 0;
                                                 self.history_selected_file_idx = 0;
@@ -1504,12 +1541,14 @@ impl App {
                                 if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
                                 } else if idx == 5 || idx == 6 {
-                                    self.is_editing_setting = true;
-                                    self.setting_edit_buffer = if idx == 5 {
-                                        self.config.local_dir.clone()
-                                    } else {
-                                        self.config.remote.clone()
-                                    };
+                                    if !self.is_editing_setting || self.settings_selected_idx != idx {
+                                        self.is_editing_setting = true;
+                                        self.setting_edit_buffer = if idx == 5 {
+                                            self.config.local_dir.clone()
+                                        } else {
+                                            self.config.remote.clone()
+                                        };
+                                    }
                                 } else {
                                     self.cycle_setting(true);
                                 }
@@ -1523,12 +1562,14 @@ impl App {
                                 if idx == 7 {
                                     self.modal = Modal::ConfirmResync;
                                 } else if idx == 5 || idx == 6 {
-                                    self.is_editing_setting = true;
-                                    self.setting_edit_buffer = if idx == 5 {
-                                        self.config.local_dir.clone()
-                                    } else {
-                                        self.config.remote.clone()
-                                    };
+                                    if !self.is_editing_setting || self.settings_selected_idx != idx {
+                                        self.is_editing_setting = true;
+                                        self.setting_edit_buffer = if idx == 5 {
+                                            self.config.local_dir.clone()
+                                        } else {
+                                            self.config.remote.clone()
+                                        };
+                                    }
                                 } else {
                                     self.cycle_setting(forward);
                                 }
@@ -1588,7 +1629,7 @@ impl App {
                                     FocusedPanel::Logs => self.copy_logs_to_clipboard(),
                                     FocusedPanel::History => {
                                         if let Some(sel) = self.selected_run_idx {
-                                            let past_idx = if self.live.is_syncing { sel.saturating_sub(1) } else { sel };
+                                            let past_idx = if self.is_syncing() { sel.saturating_sub(1) } else { sel };
                                             self.copy_history_errors(past_idx);
                                         } else {
                                             self.copy_logs_to_clipboard();
@@ -2253,10 +2294,10 @@ impl App {
                     FocusedPanel::History => {
                         let total = self.total_history_runs();
                         if total > 0 {
-                            if self.live.is_syncing && self.selected_run_idx == Some(0) {
+                            if self.is_syncing() && self.selected_run_idx == Some(0) {
                                 self.set_toast("ℹ Synchronisation active - Détails affichés ci-dessus");
                             } else if let Some(sel) = self.selected_run_idx {
-                                let past_idx = if self.live.is_syncing { sel.saturating_sub(1) } else { sel };
+                                let past_idx = if self.is_syncing() { sel.saturating_sub(1) } else { sel };
                                 if past_idx < self.past_runs.len() {
                                     self.history_details_scroll = 0;
                                     self.history_selected_file_idx = 0;
@@ -2354,7 +2395,7 @@ impl App {
                     }
                     FocusedPanel::History => {
                         if let Some(sel) = self.selected_run_idx {
-                            let past_idx = if self.live.is_syncing { sel.saturating_sub(1) } else { sel };
+                            let past_idx = if self.is_syncing() { sel.saturating_sub(1) } else { sel };
                             self.copy_history_errors(past_idx);
                         } else {
                             self.set_toast("ℹ Aucun run sélectionné dans l'historique.");
@@ -3653,6 +3694,68 @@ mod tests {
             crossterm::event::KeyModifiers::NONE,
         ));
         assert_eq!(app.modal, Modal::None);
+    }
+
+    #[tokio::test]
+    async fn test_scrollbar_cursor_hiding_and_open_commands() {
+        let mut app = App::new();
+
+        // 1. Test is_dragging_scrollbar
+        assert!(!app.is_dragging_scrollbar(ScrollbarTarget::History));
+        app.active_scrollbar_drag = Some((ScrollbarTarget::History, 5, 20, 50, 10));
+        assert!(app.is_dragging_scrollbar(ScrollbarTarget::History));
+        assert!(!app.is_dragging_scrollbar(ScrollbarTarget::RecentFiles));
+        app.active_scrollbar_drag = None;
+        assert!(!app.is_dragging_scrollbar(ScrollbarTarget::History));
+
+        // 2. Test apply_scrollbar_jump positions cursor at top or bottom boundary
+        app.history_viewport_height = 5;
+        // Total 20 runs, viewport 5 -> max_offset = 15
+        // Jump to bottom (offset 9 / 10 -> ratio 1.0)
+        app.apply_scrollbar_jump(ScrollbarTarget::History, 9, 10, 20, 5);
+        assert_eq!(app.history_scroll_offset, 15);
+        // Cursor at bottom of visible items: 15 + 5 - 1 = 19
+        assert_eq!(app.selected_run_idx, Some(19));
+
+        // Jump to top (offset 0 / 10 -> ratio 0.0)
+        app.apply_scrollbar_jump(ScrollbarTarget::History, 0, 10, 20, 5);
+        assert_eq!(app.history_scroll_offset, 0);
+        // Cursor at top of visible items: 0
+        assert_eq!(app.selected_run_idx, Some(0));
+
+        // 3. Test open file / folder command in history details
+        app.past_runs = vec![crate::monitor::history::PastRun {
+            id: 1,
+            date: "2026-09-18".into(),
+            time: "14:00:00".into(),
+            duration: "5s".into(),
+            status: crate::monitor::history::RunStatus::Success,
+            files_copied: vec!["file1.txt".into()],
+            files_modified: vec![],
+            files_deleted: vec![],
+            synced_files: vec![("new".into(), "file1.txt".into(), "14:00".into())],
+            errors: vec![],
+            summary: "1 fichier copié".into(),
+        }];
+        app.modal = Modal::HistoryDetails(0);
+        app.history_selected_file_idx = 0;
+        app.ctrl_mode = false;
+
+        // Enter in file mode calls open_selected_file
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert!(app.toast.is_some());
+
+        // Enter with Ctrl or ctrl_mode = true calls open_history_folder
+        app.ctrl_mode = true;
+        app.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        let (msg, _) = app.toast.as_ref().unwrap();
+        assert!(msg.contains("Dossier parent") || msg.contains("Impossible") || msg.contains("Ouverture"));
     }
 }
 
