@@ -24,25 +24,23 @@ pub fn render_footer(
         ])
         .split(area);
 
-    // Commandes unifiées avec règle de formatage :
-    // - Si la 1ère lettre est la touche : première lettre en rouge, reste en clair.
-    // - Sinon : touche en rouge suivie d'un espace puis du nom de l'action.
-    enum CmdFmt {
-        FirstLetterRed(&'static str, &'static str, HitAction), // ("m", "enu", action)
-        PrefixedKey(&'static str, &'static str, HitAction),    // ("e", "filtres", action)
+    // Commandes unifiées : chaque raccourci a sa touche d'activation en rouge (au début ou dans le mot)
+    struct CmdItem {
+        prefix: &'static str,
+        key: &'static str,
+        suffix: &'static str,
+        action: HitAction,
     }
 
     let items = [
-        CmdFmt::FirstLetterRed("m", "enu", HitAction::ButtonMenu),
-        CmdFmt::FirstLetterRed("q", "uit", HitAction::ButtonQuit),
-        CmdFmt::FirstLetterRed("s", "ync", HitAction::ButtonSync),
-        CmdFmt::FirstLetterRed("d", "ry-run", HitAction::ButtonDryRun),
-        CmdFmt::FirstLetterRed("f", "iles", HitAction::ButtonFiles),
-        CmdFmt::PrefixedKey("e", "filtres", HitAction::ButtonFilters),
-        CmdFmt::FirstLetterRed("o", "ptions", HitAction::ButtonSettings),
-        CmdFmt::FirstLetterRed("t", "heme", HitAction::ButtonTheme),
-        CmdFmt::PrefixedKey("Tab", "panel", HitAction::ButtonPanel),
-        CmdFmt::PrefixedKey("?", "aide", HitAction::ButtonHelp),
+        CmdItem { prefix: "", key: "q", suffix: "uit", action: HitAction::ButtonQuit },
+        CmdItem { prefix: "", key: "s", suffix: "ync", action: HitAction::ButtonSync },
+        CmdItem { prefix: "", key: "d", suffix: "ry-run", action: HitAction::ButtonDryRun },
+        CmdItem { prefix: "", key: "f", suffix: "iles", action: HitAction::ButtonFiles },
+        CmdItem { prefix: "filtr", key: "e", suffix: "s", action: HitAction::ButtonFilters },
+        CmdItem { prefix: "", key: "o", suffix: "ptions", action: HitAction::ButtonSettings },
+        CmdItem { prefix: "", key: "t", suffix: "heme", action: HitAction::ButtonTheme },
+        CmdItem { prefix: "", key: "Tab", suffix: " panel", action: HitAction::ButtonPanel },
     ];
 
     let mut spans: Vec<Span> = Vec::new();
@@ -54,50 +52,28 @@ pub fn render_footer(
             cur_x += 2;
         }
 
-        match item {
-            CmdFmt::FirstLetterRed(first, rest, action) => {
-                let len = (first.chars().count() + rest.chars().count()) as u16;
-                hitboxes.push(Hitbox {
-                    rect: Rect {
-                        x: cur_x,
-                        y: area.y,
-                        width: len,
-                        height: 1,
-                    },
-                    action: *action,
-                });
-                spans.push(Span::styled(
-                    *first,
-                    Style::default().fg(theme.red).add_modifier(Modifier::BOLD),
-                ));
-                spans.push(Span::styled(
-                    *rest,
-                    Style::default().fg(theme.text_bright),
-                ));
-                cur_x += len;
-            }
-            CmdFmt::PrefixedKey(key, action_name, action) => {
-                let len = (key.chars().count() + 1 + action_name.chars().count()) as u16;
-                hitboxes.push(Hitbox {
-                    rect: Rect {
-                        x: cur_x,
-                        y: area.y,
-                        width: len,
-                        height: 1,
-                    },
-                    action: *action,
-                });
-                spans.push(Span::styled(
-                    *key,
-                    Style::default().fg(theme.red).add_modifier(Modifier::BOLD),
-                ));
-                spans.push(Span::styled(
-                    format!(" {}", action_name),
-                    Style::default().fg(theme.text_bright),
-                ));
-                cur_x += len;
-            }
+        let len = (item.prefix.chars().count() + item.key.chars().count() + item.suffix.chars().count()) as u16;
+        hitboxes.push(Hitbox {
+            rect: Rect {
+                x: cur_x,
+                y: area.y,
+                width: len,
+                height: 1,
+            },
+            action: item.action,
+        });
+
+        if !item.prefix.is_empty() {
+            spans.push(Span::styled(item.prefix, Style::default().fg(theme.text_bright)));
         }
+        spans.push(Span::styled(
+            item.key,
+            Style::default().fg(theme.red).add_modifier(Modifier::BOLD),
+        ));
+        if !item.suffix.is_empty() {
+            spans.push(Span::styled(item.suffix, Style::default().fg(theme.text_bright)));
+        }
+        cur_x += len;
     }
 
     let p_left = Paragraph::new(Line::from(spans))

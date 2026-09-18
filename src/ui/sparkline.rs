@@ -56,6 +56,7 @@ pub fn render_speed_sparkline(
 }
 
 /// Render duration sparkline of past runs with status and gradient colors
+#[allow(dead_code)]
 pub fn render_history_sparkline(
     past_runs: &[PastRun],
     theme: &ThemePalette,
@@ -113,6 +114,158 @@ pub fn render_history_sparkline(
     }
 
     Line::from(spans)
+}
+
+/// Renders a multi-line 2D duration bar chart (btop++ style) for past runs.
+/// Returns the rendered lines and the column layout `(col_start_x, col_width, original_idx)` for hitboxes.
+pub fn render_history_graph_multiline(
+    past_runs: &[PastRun],
+    theme: &ThemePalette,
+    width: usize,
+    height: usize,
+    selected_idx: Option<usize>,
+) -> (Vec<Line<'static>>, Vec<(usize, usize, usize)>) {
+    if past_runs.is_empty() || width < 10 || height < 2 {
+        let empty_line = Line::from(vec![Span::styled(" [Aucun run dans l'historique]", Style::default().fg(theme.text_muted))]);
+        return (vec![empty_line], vec![]);
+    }
+
+    let chart_height = height.saturating_sub(1).max(1);
+    let col_width = if width >= 50 { 2 } else { 1 };
+    let gap = 1;
+    let col_total_width = col_width + gap;
+
+    let margin_left = 1;
+    let usable_width = width.saturating_sub(margin_left + 1);
+    let max_cols = usable_width / col_total_width;
+    let count = past_runs.len().min(max_cols).min(32);
+
+    if count == 0 {
+        return (vec![Line::from(vec![Span::styled(" [Espace insuffisant pour le graphe]", Style::default().fg(theme.text_muted))])], vec![]);
+    }
+
+    // Chronological order: oldest on left, newest on right
+    let runs_slice: Vec<(usize, &PastRun)> = (0..count).rev().map(|orig_idx| (orig_idx, &past_runs[orig_idx])).collect();
+
+    let durations: Vec<f64> = runs_slice.iter().map(|(_, r)| parse_duration_seconds(&r.duration)).collect();
+    let max_dur = durations.iter().copied().fold(0.0f64, f64::max).max(1.0);
+    let total_levels = chart_height * 8;
+
+    let mut hitboxes_coords = Vec::new();
+    for (i, (orig_idx, _)) in runs_slice.iter().enumerate() {
+        let col_x = margin_left + i * col_total_width;
+        hitboxes_coords.push((col_x, col_width, *orig_idx));
+    }
+
+    // --- Line 0: Header with stats and selection info ---
+    let mut header_spans = Vec::new();
+    header_spans.push(Span::styled("⏱ DURÉES ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
+
+    if let Some(sel) = selected_idx {
+        if let Some(r) = past_runs.get(sel) {
+            let status_span = match r.status {
+                RunStatus::Success => Span::styled("● OK", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+                RunStatus::Failed => Span::styled("● ÉCHEC", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                RunStatus::Skipped => Span::styled("● IGNORÉ", Style::default().fg(theme.text_muted)),
+                RunStatus::Running => Span::styled("● EN COURS", Style::default().fg(theme.highlight)),
+            };
+            header_spans.push(Span::styled(format!("Run #{} : {} (", sel + 1, r.duration), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+            header_spans.push(status_span);
+            header_spans.push(Span::styled(format!(") · {} ", r.time), Style::default().fg(theme.text_muted)));
+        }
+    } else {
+        let max_str = format_duration_clean(max_dur);
+        header_spans.push(Span::styled(format!("(max: {}) · ", max_str), Style::default().fg(theme.text_muted)));
+        header_spans.push(Span::styled("●", Style::default().fg(theme.green)));
+        header_spans.push(Span::styled(" ok  ", Style::default().fg(theme.text_muted)));
+        header_spans.push(Span::styled("●", Style::default().fg(theme.red)));
+        header_spans.push(Span::styled(" err  ", Style::default().fg(theme.text_muted)));
+        header_spans.push(Span::styled("●", Style::default().fg(theme.text_muted)));
+        header_spans.push(Span::styled(" skip", Style::default().fg(theme.text_muted)));
+    }
+
+    let mut lines = Vec::with_capacity(height);
+    lines.push(Line::from(header_spans));
+
+    // --- Rows 1..=chart_height : 2D Bar Columns ---
+    for row in 0..chart_height {
+        let row_from_bottom = chart_height - 1 - row;
+        let low_thresh = row_from_bottom * 8;
+        let high_thresh = (row_from_bottom + 1) * 8;
+
+        let mut row_spans = Vec::new();
+        row_spans.push(Span::styled(" ".repeat(margin_left), Style::default()));
+
+        for (i, (orig_idx, run)) in runs_slice.iter().enumerate() {
+            let dur = durations[i];
+            let level = if dur > 0.0 {
+                (((dur / max_dur) * (total_levels as f64)).ceil() as usize).clamp(1, total_levels)
+            } else {
+                1
+            };
+
+            let block_char = if level >= high_thresh {
+                '█'
+            } else if level <= low_thresh {
+                ' '
+            } else {
+                let frac = level - low_thresh;
+                BLOCKS[frac.clamp(0, 7)]
+            };
+
+            let is_sel = selected_idx == Some(*orig_idx);
+            let color = match run.status {
+                RunStatus::Success => {
+                    if row_from_bottom == 0 {
+                        theme.green
+                    } else if row_from_bottom == 1 {
+                        theme.cyan
+                    } else if row_from_bottom == 2 {
+                        theme.yellow
+                    } else {
+                        theme.orange
+                    }
+                }
+                RunStatus::Failed => theme.red,
+                RunStatus::Skipped => theme.text_muted,
+                RunStatus::Running => theme.highlight,
+            };
+
+            let mut style = Style::default().fg(color);
+            if is_sel {
+                style = style.add_modifier(Modifier::BOLD);
+                if block_char == ' ' && row_from_bottom == 0 {
+                    row_spans.push(Span::styled("·".repeat(col_width), Style::default().fg(theme.highlight)));
+                    row_spans.push(Span::styled(" ".repeat(gap), Style::default()));
+                    continue;
+                }
+            }
+
+            let s = block_char.to_string().repeat(col_width);
+            row_spans.push(Span::styled(s, style));
+            row_spans.push(Span::styled(" ".repeat(gap), Style::default()));
+        }
+
+        lines.push(Line::from(row_spans));
+    }
+
+    (lines, hitboxes_coords)
+}
+
+fn format_duration_clean(sec: f64) -> String {
+    if sec < 1.0 {
+        "<1s".to_string()
+    } else if sec < 60.0 {
+        format!("{:.0}s", sec)
+    } else {
+        let mins = (sec / 60.0).floor() as u64;
+        let rem_sec = (sec % 60.0).round() as u64;
+        if rem_sec > 0 {
+            format!("{}m{:02}s", mins, rem_sec)
+        } else {
+            format!("{}m", mins)
+        }
+    }
 }
 
 /// Render btop++ style horizontal gradient progress bar: [████████░░░░░░]
@@ -208,5 +361,44 @@ mod tests {
         assert_eq!(parse_duration_seconds("1h 20m 10s"), 4810.0);
         assert_eq!(parse_duration_seconds("--"), 0.0);
         assert_eq!(parse_duration_seconds(""), 0.0);
+    }
+
+    #[test]
+    fn test_render_history_graph_multiline() {
+        use crate::monitor::history::{PastRun, RunStatus};
+        use crate::ui::theme::ThemeChoice;
+        let theme = ThemeChoice::TokyoNight.palette();
+        let runs = vec![
+            PastRun {
+                id: 1,
+                date: "2026-09-18".into(),
+                time: "08:00".into(),
+                duration: "10s".into(),
+                status: RunStatus::Success,
+                summary: "".into(),
+                files_copied: vec!["a.txt".into()],
+                files_modified: vec![],
+                files_deleted: vec![],
+                synced_files: vec![],
+                errors: vec![],
+            },
+            PastRun {
+                id: 2,
+                date: "2026-09-18".into(),
+                time: "08:15".into(),
+                duration: "20s".into(),
+                status: RunStatus::Failed,
+                summary: "".into(),
+                files_copied: vec![],
+                files_modified: vec![],
+                files_deleted: vec![],
+                synced_files: vec![],
+                errors: vec!["error".into()],
+            },
+        ];
+
+        let (lines, hitboxes) = render_history_graph_multiline(&runs, &theme, 60, 5, Some(0));
+        assert_eq!(lines.len(), 5); // 1 header line + 4 chart rows
+        assert_eq!(hitboxes.len(), 2);
     }
 }

@@ -25,26 +25,15 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let mut line1_spans: Vec<Span> = Vec::new();
     let mut cur_x = area.x;
 
-    // 1. Cadran Système sys (sans préfixe ¹)
+    // 1. Cadran Système sys (sans préfixe)
     let sys_tab = if is_wide { "┌sys┐" } else { "┌s┐" };
     line1_spans.push(Span::styled("┌", Style::default().fg(theme.border)));
-    line1_spans.push(Span::styled(if is_wide { "sys" } else { "s" }, Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)));
-    line1_spans.push(Span::styled("┐", Style::default().fg(theme.border)));
-    cur_x += sys_tab.chars().count() as u16;
-
-    // 2. Onglet Menu avec première lettre 'm' en rouge
-    let menu_width: u16 = if is_wide { 6 } else { 3 }; // "┌menu┐" (6) ou "┌m┐" (3)
-    hitboxes.push(Hitbox {
-        rect: Rect { x: cur_x, y: area.y, width: menu_width, height: 1 },
-        action: HitAction::ButtonMenu,
-    });
-    line1_spans.push(Span::styled("┌", Style::default().fg(theme.border)));
-    line1_spans.push(Span::styled("m", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    line1_spans.push(Span::styled("s", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     if is_wide {
-        line1_spans.push(Span::styled("enu", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+        line1_spans.push(Span::styled("ys", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)));
     }
     line1_spans.push(Span::styled("┐", Style::default().fg(theme.border)));
-    cur_x += menu_width;
+    cur_x += sys_tab.chars().count() as u16;
 
     // Horloge digitale centrale & Stepper tick rate à droite
     let clock_str = chrono::Local::now().format("%H:%M:%S").to_string();
@@ -80,9 +69,13 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         action: HitAction::TickRateInc,
     });
 
-    line1_spans.push(Span::styled("┌- ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
+    line1_spans.push(Span::styled("┌", Style::default().fg(theme.border)));
+    line1_spans.push(Span::styled("-", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    line1_spans.push(Span::styled(" ", Style::default().fg(theme.border)));
     line1_spans.push(Span::styled(tick_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
-    line1_spans.push(Span::styled(" +┐", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
+    line1_spans.push(Span::styled(" ", Style::default().fg(theme.border)));
+    line1_spans.push(Span::styled("+", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    line1_spans.push(Span::styled("┐", Style::default().fg(theme.border)));
 
     let line1_p = Paragraph::new(Line::from(line1_spans));
     f.render_widget(line1_p, Rect { x: area.x, y: area.y, width: area.width, height: 1 });

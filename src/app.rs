@@ -78,6 +78,7 @@ pub enum HitAction {
     TickRateDec,
     TickRateInc,
     SparklinePoint(usize),
+    ToggleCtrlMode,
     HistoryRow(usize),
     HistoryFile(usize),
     RecentFile(usize),
@@ -136,6 +137,7 @@ pub struct App {
     pub tick_rate_ms_live: u64,
     pub tick_rate_changed: bool,
     pub menu_selected_idx: usize,
+    pub ctrl_mode: bool,
 
     // Explorateur de fichiers
     pub file_current_rel: String,
@@ -201,6 +203,7 @@ impl App {
             tick_rate_ms_live: tick_rate,
             tick_rate_changed: false,
             menu_selected_idx: 0,
+            ctrl_mode: false,
 
             file_current_rel: "".to_string(),
             file_entries: Vec::new(),
@@ -804,10 +807,20 @@ impl App {
                                 self.modal = Modal::None;
                                 return Action::None;
                             }
+                            HitAction::ToggleCtrlMode => {
+                                self.ctrl_mode = !self.ctrl_mode;
+                                if self.ctrl_mode {
+                                    self.set_toast("✔ Mode Dossier (Ctrl) ACTIF : dossiers affichés");
+                                } else {
+                                    self.set_toast("Mode Fichier Standard");
+                                }
+                                return Action::None;
+                            }
                             HitAction::MenuOption(idx) => {
                                 match idx {
-                                    0 => { self.modal = Modal::Help; }
-                                    1 => { self.running = false; }
+                                    0 => { self.modal = Modal::Settings; }
+                                    1 => { self.modal = Modal::Help; }
+                                    2 => { self.running = false; }
                                     _ => {}
                                 }
                                 return Action::None;
@@ -835,7 +848,7 @@ impl App {
                             }
                             HitAction::RecentFile(idx) => {
                                 self.recent_selected_idx = idx;
-                                if mouse.modifiers.contains(KeyModifiers::CONTROL) {
+                                if self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL) {
                                     self.open_recent_folder(idx);
                                 } else {
                                     self.open_recent_file(idx);
@@ -1007,17 +1020,19 @@ impl App {
                         }
                     }
                     KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => {
-                        if self.menu_selected_idx < 1 {
+                        if self.menu_selected_idx < 2 {
                             self.menu_selected_idx += 1;
                         }
                     }
                     KeyCode::Enter | KeyCode::Char(' ') => {
                         match self.menu_selected_idx {
-                            0 => { self.modal = Modal::Help; }
-                            1 => { self.running = false; }
+                            0 => { self.modal = Modal::Settings; }
+                            1 => { self.modal = Modal::Help; }
+                            2 => { self.running = false; }
                             _ => {}
                         }
                     }
+                    KeyCode::Char('o') => { self.modal = Modal::Settings; }
                     KeyCode::Char('?') | KeyCode::Char('h') => { self.modal = Modal::Help; }
                     KeyCode::Char('q') => { self.running = false; }
                     _ => {}
@@ -1343,7 +1358,7 @@ impl App {
                         }
                     }
                     FocusedPanel::RecentFiles => {
-                        if key.modifiers.contains(KeyModifiers::CONTROL) {
+                        if key.modifiers.contains(KeyModifiers::CONTROL) || self.ctrl_mode {
                             self.open_recent_folder(self.recent_selected_idx);
                         } else {
                             self.open_recent_file(self.recent_selected_idx);
@@ -1695,8 +1710,13 @@ mod tests {
         app.handle_key(esc_event);
         assert_eq!(app.modal, Modal::Menu);
 
-        // First option is Help
+        // First option is Options (Settings)
         assert_eq!(app.menu_selected_idx, 0);
+
+        // Pressing Down selects second option (Help)
+        let down_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        app.handle_key(down_event);
+        assert_eq!(app.menu_selected_idx, 1);
 
         // Pressing Enter opens Help modal
         let enter_event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
@@ -1834,5 +1854,30 @@ mod tests {
         app.handle_mouse(click_row);
         assert_eq!(app.selected_filter_idx, 20);
         assert!(app.filter_scroll_offset >= 11, "filter_scroll_offset must be updated to keep row 20 visible");
+    }
+
+    #[tokio::test]
+    async fn test_toggle_ctrl_mode() {
+        let mut app = App::new();
+        assert!(!app.ctrl_mode);
+
+        // Click on ToggleCtrlMode hitbox toggles ctrl_mode
+        app.hitboxes.push(Hitbox {
+            rect: Rect { x: 30, y: 40, width: 15, height: 1 },
+            action: HitAction::ToggleCtrlMode,
+        });
+        let click_ctrl = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 35,
+            row: 40,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_mouse(click_ctrl);
+        assert!(app.ctrl_mode);
+        assert!(app.toast.is_some());
+
+        // Clicking again toggles back off
+        app.handle_mouse(click_ctrl);
+        assert!(!app.ctrl_mode);
     }
 }
