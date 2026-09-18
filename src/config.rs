@@ -48,6 +48,14 @@ pub fn dirs_home() -> Option<PathBuf> {
 }
 
 pub fn config_dir() -> PathBuf {
+    if let Ok(custom) = std::env::var("RCLONEDASH_CONFIG_DIR") {
+        return PathBuf::from(custom);
+    }
+    #[cfg(test)]
+    {
+        return std::env::temp_dir().join("rclonedash_test_config");
+    }
+    #[cfg(not(test))]
     expand_tilde("~/.config/rclone")
 }
 

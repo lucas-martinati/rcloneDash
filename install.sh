@@ -173,8 +173,28 @@ if [ ! -f "$CONFIG_FILE" ]; then
   "timer_interval": "10min"
 }
 EOF
-    ok "Fichier de configuration créé avec les valeurs par défaut ($CONFIG_FILE)"
+    ok "Fichier de configuration créé avec le dossier local par défaut ~/GoogleDrive ($CONFIG_FILE)"
 else
+    # Si le fichier existe déjà, s'assurer que local_dir est bien défini (et jamais vide ou corrompu)
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - <<PYEOF
+import json
+
+config_path = "$CONFIG_FILE"
+try:
+    with open(config_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception:
+    data = {}
+
+local_dir = str(data.get("local_dir", "")).strip()
+# Si local_dir est vide, absent ou un chemin invalide de test, initialiser à ~/GoogleDrive
+if not local_dir or local_dir == "/home/new/path":
+    data["local_dir"] = "~/GoogleDrive"
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+PYEOF
+    fi
     info "Fichier de configuration existant conservé ($CONFIG_FILE)"
 fi
 
