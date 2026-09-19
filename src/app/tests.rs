@@ -1879,6 +1879,64 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
+    async fn test_first_run_buttons_arrow_navigation() {
+        let mut app = App::new();
+        let mut first_run = FirstRunState::new(&app.config.remote);
+        first_run.step = FirstRunStep::GoogleCredentials;
+        first_run.active_field = FirstRunField::SaveCredentialsButton;
+        app.modal = Modal::FirstRun(Box::new(first_run));
+
+        // On line 3, press Right -> SkipCredentialsButton
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::SkipCredentialsButton),
+            _ => panic!("Expected Modal::FirstRun"),
+        }
+
+        // Press Right -> ToggleHelpButton
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::ToggleHelpButton),
+            _ => panic!("Expected Modal::FirstRun"),
+        }
+
+        // Press Right -> wraps to SaveCredentialsButton
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::SaveCredentialsButton),
+            _ => panic!("Expected Modal::FirstRun"),
+        }
+
+        // Press Left -> wraps to ToggleHelpButton
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::ToggleHelpButton),
+            _ => panic!("Expected Modal::FirstRun"),
+        }
+
+        // Press Left -> SkipCredentialsButton
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::SkipCredentialsButton),
+            _ => panic!("Expected Modal::FirstRun"),
+        }
+
+        // Press Up from buttons -> moves to ClientSecretInput (line 2)
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::ClientSecretInput),
+            _ => panic!("Expected Modal::FirstRun"),
+        }
+
+        // Press Down from line 2 -> moves to SaveCredentialsButton (line 3)
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::SaveCredentialsButton),
+            _ => panic!("Expected Modal::FirstRun"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_settings_google_client_secret_render_no_panic() {
         let mut app = App::new();
         app.modal = Modal::Settings;

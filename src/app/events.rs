@@ -647,7 +647,7 @@ impl App {
                         _ => {}
                     },
                     FirstRunStep::GoogleCredentials => match key.code {
-                        KeyCode::Tab | KeyCode::Down => {
+                        KeyCode::Tab => {
                             state.active_field = match state.active_field {
                                 FirstRunField::ClientIdInput => FirstRunField::ClientSecretInput,
                                 FirstRunField::ClientSecretInput => FirstRunField::SaveCredentialsButton,
@@ -657,13 +657,33 @@ impl App {
                                 _ => FirstRunField::ClientIdInput,
                             };
                         }
-                        KeyCode::BackTab | KeyCode::Up => {
+                        KeyCode::BackTab => {
                             state.active_field = match state.active_field {
                                 FirstRunField::ClientIdInput => FirstRunField::ToggleHelpButton,
                                 FirstRunField::ClientSecretInput => FirstRunField::ClientIdInput,
                                 FirstRunField::SaveCredentialsButton => FirstRunField::ClientSecretInput,
                                 FirstRunField::SkipCredentialsButton => FirstRunField::SaveCredentialsButton,
                                 FirstRunField::ToggleHelpButton => FirstRunField::SkipCredentialsButton,
+                                _ => FirstRunField::ClientIdInput,
+                            };
+                        }
+                        KeyCode::Down => {
+                            state.active_field = match state.active_field {
+                                FirstRunField::ClientIdInput => FirstRunField::ClientSecretInput,
+                                FirstRunField::ClientSecretInput => FirstRunField::SaveCredentialsButton,
+                                FirstRunField::SaveCredentialsButton
+                                | FirstRunField::SkipCredentialsButton
+                                | FirstRunField::ToggleHelpButton => FirstRunField::ClientIdInput,
+                                _ => FirstRunField::ClientIdInput,
+                            };
+                        }
+                        KeyCode::Up => {
+                            state.active_field = match state.active_field {
+                                FirstRunField::ClientIdInput => FirstRunField::SaveCredentialsButton,
+                                FirstRunField::ClientSecretInput => FirstRunField::ClientIdInput,
+                                FirstRunField::SaveCredentialsButton
+                                | FirstRunField::SkipCredentialsButton
+                                | FirstRunField::ToggleHelpButton => FirstRunField::ClientSecretInput,
                                 _ => FirstRunField::ClientIdInput,
                             };
                         }
@@ -693,24 +713,52 @@ impl App {
                         KeyCode::Char('?') | KeyCode::Char('h') if state.active_field != FirstRunField::ClientIdInput && state.active_field != FirstRunField::ClientSecretInput => {
                             state.show_help = !state.show_help;
                         }
-                        KeyCode::Left if state.active_field == FirstRunField::ClientIdInput => {
-                            if state.client_id_cursor > 0 {
-                                state.client_id_cursor -= 1;
+                        KeyCode::Left => {
+                            match state.active_field {
+                                FirstRunField::ClientIdInput => {
+                                    if state.client_id_cursor > 0 {
+                                        state.client_id_cursor -= 1;
+                                    }
+                                }
+                                FirstRunField::ClientSecretInput => {
+                                    if state.client_secret_cursor > 0 {
+                                        state.client_secret_cursor -= 1;
+                                    }
+                                }
+                                FirstRunField::SaveCredentialsButton => {
+                                    state.active_field = FirstRunField::ToggleHelpButton;
+                                }
+                                FirstRunField::SkipCredentialsButton => {
+                                    state.active_field = FirstRunField::SaveCredentialsButton;
+                                }
+                                FirstRunField::ToggleHelpButton => {
+                                    state.active_field = FirstRunField::SkipCredentialsButton;
+                                }
+                                _ => {}
                             }
                         }
-                        KeyCode::Left if state.active_field == FirstRunField::ClientSecretInput => {
-                            if state.client_secret_cursor > 0 {
-                                state.client_secret_cursor -= 1;
-                            }
-                        }
-                        KeyCode::Right if state.active_field == FirstRunField::ClientIdInput => {
-                            if state.client_id_cursor < state.client_id.chars().count() {
-                                state.client_id_cursor += 1;
-                            }
-                        }
-                        KeyCode::Right if state.active_field == FirstRunField::ClientSecretInput => {
-                            if state.client_secret_cursor < state.client_secret.chars().count() {
-                                state.client_secret_cursor += 1;
+                        KeyCode::Right => {
+                            match state.active_field {
+                                FirstRunField::ClientIdInput => {
+                                    if state.client_id_cursor < state.client_id.chars().count() {
+                                        state.client_id_cursor += 1;
+                                    }
+                                }
+                                FirstRunField::ClientSecretInput => {
+                                    if state.client_secret_cursor < state.client_secret.chars().count() {
+                                        state.client_secret_cursor += 1;
+                                    }
+                                }
+                                FirstRunField::SaveCredentialsButton => {
+                                    state.active_field = FirstRunField::SkipCredentialsButton;
+                                }
+                                FirstRunField::SkipCredentialsButton => {
+                                    state.active_field = FirstRunField::ToggleHelpButton;
+                                }
+                                FirstRunField::ToggleHelpButton => {
+                                    state.active_field = FirstRunField::SaveCredentialsButton;
+                                }
+                                _ => {}
                             }
                         }
                         KeyCode::Home if state.active_field == FirstRunField::ClientIdInput => {
