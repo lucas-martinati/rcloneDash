@@ -11,6 +11,7 @@ pub mod settings;
 pub mod sparkline;
 pub mod theme;
 pub mod keys;
+pub mod scrollbar;
 
 pub use container::compute_active_modal_area;
 
@@ -79,9 +80,12 @@ pub fn render(f: &mut Frame, app: &mut App) {
     render_footer(f, app, &dashboard_theme, chunks[1], &mut hitboxes);
 
     // 4. Modales overlay (Settings btop, Fichiers, Filtres, Confirmations)
-    render_popups(f, app, &theme, &mut hitboxes);
+    let mut modal_hitboxes = Vec::with_capacity(32);
+    render_popups(f, app, &theme, &mut modal_hitboxes);
 
     app.active_modal_area = compute_active_modal_area(&app.modal, f.area());
+    app.modal_hitboxes = modal_hitboxes.clone();
+    hitboxes.extend(modal_hitboxes);
     app.hitboxes = hitboxes;
 }
 
@@ -144,19 +148,12 @@ pub fn render_scrollbar_custom(
         },
     });
 
-    // Calcul du curseur
-    let thumb_size = ((visible as f64 / total as f64) * track_height as f64).round().max(1.0) as usize;
-    let max_scroll = total.saturating_sub(visible);
-    let effective_pos = pos.min(max_scroll);
-    let thumb_start = if max_scroll > 0 {
-        ((effective_pos as f64 / max_scroll as f64) * (track_height.saturating_sub(thumb_size)) as f64).round() as usize
-    } else {
-        0
-    };
+    // Calcul unifié de la géométrie du curseur
+    let geom = scrollbar::ScrollbarGeometry::compute(total, visible, track_height, pos);
 
     let thumb_style = Style::default().fg(ratatui::style::Color::Rgb(200, 205, 215));
-    for i in 0..thumb_size {
-        let y = top_y + 1 + (thumb_start + i) as u16;
+    for i in 0..geom.thumb_size {
+        let y = top_y + 1 + (geom.thumb_start + i) as u16;
         if y < bot_y {
             buf.set_string(scroll_x, y, "█", thumb_style);
         }

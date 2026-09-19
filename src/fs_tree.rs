@@ -1,7 +1,6 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
-use std::process::Command;
 use crate::config;
 
 #[derive(Debug, Clone)]
@@ -214,30 +213,6 @@ pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool
     false
 }
 
-fn spawn_open_cmd(path: &Path) -> Result<(), String> {
-    let res = Command::new("xdg-open")
-        .arg(path)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
-
-    match res {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            Command::new("gio")
-                .arg("open")
-                .arg(path)
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .map_err(|_| e.to_string())?;
-            Ok(())
-        }
-    }
-}
-
 pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
     let clean = rel_path.trim_start_matches('/');
     let full = if clean.is_empty() {
@@ -248,7 +223,7 @@ pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
     if !full.exists() {
         return Err("File deleted or not found".to_string());
     }
-    spawn_open_cmd(&full)
+    crate::cmd::open_path(&full)
 }
 
 pub fn open_folder_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
@@ -282,7 +257,7 @@ pub fn open_folder_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {
         }
     }
 
-    spawn_open_cmd(&target)
+    crate::cmd::open_path(&target)
 }
 
 pub fn add_exclude_rule(rel_path: &str, is_dir: bool) -> Result<(), String> {

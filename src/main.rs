@@ -6,6 +6,7 @@ mod monitor;
 mod systemd;
 mod ui;
 pub mod updater;
+pub mod cmd;
 
 use std::io;
 use std::panic;
@@ -209,14 +210,7 @@ fn open_full_logs(
         let _ = std::fs::write(log_path, text);
     }
 
-    let pager = std::env::var("PAGER")
-        .or_else(|_| std::env::var("EDITOR"))
-        .unwrap_or_else(|_| "less".to_string());
-    if pager == "less" {
-        let _ = std::process::Command::new("less").arg("-R").arg(log_path).status();
-    } else {
-        let _ = std::process::Command::new(&pager).arg(log_path).status();
-    }
+    let _ = cmd::open_in_pager(std::path::Path::new(log_path));
 
     enable_raw_mode()?;
     execute!(
@@ -254,9 +248,8 @@ fn handle_single_event(
                     )?;
                     terminal.show_cursor()?;
 
-                    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
                     let path = config::filters_file();
-                    let _ = std::process::Command::new(&editor).arg(&path).status();
+                    let _ = cmd::open_in_editor(&path);
 
                     enable_raw_mode()?;
                     execute!(
