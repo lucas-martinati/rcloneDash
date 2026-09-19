@@ -16,7 +16,7 @@ pub mod keys;
 #[allow(unused_imports)]
 pub use container::{
     centered_fixed_rect, centered_rect, compute_active_modal_area, format_border_footer,
-    format_border_title, render_modal_container, ModalContainerConfig,
+    format_border_title, render_modal_container, ModalContainerConfig, NavArrowsConfig,
 };
 
 use ratatui::{
@@ -61,7 +61,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let file_vh = ((total_h * 75) / 100).saturating_sub(5);
     app.file_viewport_height = file_vh.max(3);
 
-    let filter_vh = ((total_h * 72) / 100).saturating_sub(4);
+    let filter_vh = ((total_h * 74) / 100).saturating_sub(2);
     app.filter_viewport_height = filter_vh.max(3);
 
     let dash_area = chunks[0];

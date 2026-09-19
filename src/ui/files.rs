@@ -69,6 +69,7 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
             counter: Some((cur_file, total_files)),
             border_color,
             show_close_button: true,
+            ..Default::default()
         },
         hitboxes,
     );

@@ -126,6 +126,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             counter: Some((cur_opt, total_opts)),
             border_color: theme.red,
             show_close_button: true,
+            ..Default::default()
         },
         hitboxes,
     );

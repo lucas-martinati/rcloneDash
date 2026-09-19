@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::config;
-use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig};
+use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 
 pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
@@ -18,17 +18,12 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
     let total_rules = if app.is_adding_filter { app.filters.len() + 1 } else { app.filters.len() };
     let cur_rule = if total_rules > 0 { app.selected_filter_idx + 1 } else { 0 };
 
-    let (up_col, down_col) = if total_rules <= 1 {
-        (theme.text_muted, theme.text_muted)
-    } else if app.selected_filter_idx == 0 {
-        (theme.text_muted, theme.red)
-    } else if app.selected_filter_idx >= total_rules.saturating_sub(1) {
-        (theme.red, theme.text_muted)
+    let (can_up, can_down) = if total_rules <= 1 {
+        (false, false)
     } else {
-        (theme.red, theme.red)
+        (app.selected_filter_idx > 0, app.selected_filter_idx < total_rules.saturating_sub(1))
     };
 
-    let bg = app.border_glyphs();
     let max_path_len = (area.width.saturating_sub(42) as usize).max(10);
     let display_path = if filepath.len() > max_path_len {
         format!("…{}", &filepath[filepath.len().saturating_sub(max_path_len - 1)..])
@@ -38,37 +33,18 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
 
     use crate::ui::keys::KeybindingRegistry;
 
-    let sep = format!("{}{}", bg.bot_right, bg.bot_left);
-    let mut bottom_spans = vec![
-        Span::styled(bg.bot_left, Style::default().fg(theme.purple)),
-        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
-        Span::styled(" select ", Style::default().fg(Color::White)),
-        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-    ];
-
+    let mut actions = Vec::new();
     if app.is_editing_filter {
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("↵", "save", theme.green, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("Esc", "cancel", theme.red, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("Backspace", "del", theme.yellow, Color::White));
-        bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(theme.purple)));
+        actions.push(KeybindingRegistry::format_shortcut_label("↵", "save", theme.green, Color::White));
+        actions.push(KeybindingRegistry::format_shortcut_label("Esc", "cancel", theme.red, Color::White));
+        actions.push(KeybindingRegistry::format_shortcut_label("Backspace", "del", theme.yellow, Color::White));
     } else {
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("e", "edit", theme.yellow, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("a", "add", theme.green, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("d", "del", theme.red, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("t", "type", theme.cyan, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.purple)));
-        bottom_spans.extend(KeybindingRegistry::format_shortcut_label("E", "Editor", theme.purple, Color::White));
-        bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(theme.purple)));
+        actions.push(KeybindingRegistry::format_shortcut_label("e", "edit", theme.yellow, Color::White));
+        actions.push(KeybindingRegistry::format_shortcut_label("a", "add", theme.green, Color::White));
+        actions.push(KeybindingRegistry::format_shortcut_label("d", "del", theme.red, Color::White));
+        actions.push(KeybindingRegistry::format_shortcut_label("t", "type", theme.cyan, Color::White));
+        actions.push(KeybindingRegistry::format_shortcut_label("E", "Editor", theme.purple, Color::White));
     }
-
-    let bottom_shortcuts = Line::from(bottom_spans);
 
     let inner_area = render_modal_container(
         f,
@@ -79,10 +55,16 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
             title_prefix: "exclusion filters",
             title_color: Some(theme.purple),
             title_extra: Some(vec![Span::styled(format!(": {}", display_path), Style::default().fg(theme.text_muted))]),
-            bottom_shortcuts: Some(bottom_shortcuts),
+            nav_arrows: Some(NavArrowsConfig {
+                label: "select",
+                up_active: can_up,
+                down_active: can_down,
+            }),
+            action_shortcuts: Some(actions),
             counter: Some((cur_rule, total_rules)),
             border_color: theme.purple,
             show_close_button: true,
+            ..Default::default()
         },
         hitboxes,
     );
@@ -177,7 +159,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                         rect: Rect {
                             x: area.x + 8,
                             y: row_y,
-                            width: area.width.saturating_sub(8),
+                            width: area.width.saturating_sub(9),
                             height: 1,
                         },
                         action: HitAction::FilterRow(i),

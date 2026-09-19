@@ -350,6 +350,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             counter: None,
             border_color: theme.cyan,
             show_close_button: true,
+            ..Default::default()
         },
         hitboxes,
     );

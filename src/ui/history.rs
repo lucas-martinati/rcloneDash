@@ -10,7 +10,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::monitor::history::RunStatus;
-use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig};
+use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 
 pub fn render_history(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
@@ -237,35 +237,24 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let has_errors = !run.errors.is_empty();
     let has_files = !affected_files.is_empty();
 
-    let bg = app.border_glyphs();
-    let sep = format!("{}{}", bg.bot_right, bg.bot_left);
-    let mut bottom_spans = vec![
-        Span::styled(bg.bot_left, Style::default().fg(theme.border_history)),
-    ];
-
-    if has_files {
-        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "Open", theme.highlight, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
-        let mode_label = if app.ctrl_mode { "File" } else { "Folder" };
-        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("^X", mode_label, theme.highlight, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
-    }
-
-    if has_errors {
-        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("c", "Copy errors", theme.red, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
-    } else if has_files {
-        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("y", "Copy", theme.green, Color::White));
-        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
-    }
-
-    bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↑↓", "Scroll", theme.highlight, Color::White));
-    bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(theme.border_history)));
-
     let total_lines = all_lines.len();
     let visible_height = area.height.saturating_sub(4) as usize;
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = app.history_details_scroll.min(max_scroll);
+
+    let mut actions = Vec::new();
+
+    if has_files {
+        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "Open", theme.highlight, Color::White));
+        let mode_label = if app.ctrl_mode { "File" } else { "Folder" };
+        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("Ctrl+X", mode_label, theme.highlight, Color::White));
+    }
+
+    if has_errors {
+        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("c", "Copy errors", theme.red, Color::White));
+    } else if has_files {
+        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("y", "Copy", theme.green, Color::White));
+    }
 
     let inner = render_modal_container(
         f,
@@ -276,10 +265,16 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             title_prefix: "run details",
             title_color: Some(theme.blue),
             title_extra: Some(vec![Span::styled(format!(": #{} ({} {})", run.id, run.date, run.time), Style::default().fg(theme.text_muted))]),
-            bottom_shortcuts: Some(Line::from(bottom_spans)),
+            nav_arrows: Some(NavArrowsConfig {
+                label: "select",
+                up_active: scroll > 0,
+                down_active: scroll < max_scroll,
+            }),
+            action_shortcuts: Some(actions),
             counter: Some((scroll + 1, total_lines.max(1))),
             border_color: theme.border_history,
             show_close_button: true,
+            ..Default::default()
         },
         hitboxes,
     );

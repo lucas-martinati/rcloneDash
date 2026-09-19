@@ -9,10 +9,19 @@ use ratatui::{
 use crate::app::{App, HitAction, Hitbox, Modal};
 use crate::ui::theme::ThemePalette;
 
+#[derive(Clone, Copy, Debug)]
+pub struct NavArrowsConfig {
+    pub label: &'static str,
+    pub up_active: bool,
+    pub down_active: bool,
+}
+
 pub struct ModalContainerConfig<'a> {
     pub title_prefix: &'a str,
     pub title_color: Option<Color>,
     pub title_extra: Option<Vec<Span<'a>>>,
+    pub nav_arrows: Option<NavArrowsConfig>,
+    pub action_shortcuts: Option<Vec<Vec<Span<'a>>>>,
     pub bottom_shortcuts: Option<Line<'a>>,
     pub counter: Option<(usize, usize)>, // (current 1-based, total)
     pub border_color: Color,
@@ -25,6 +34,8 @@ impl<'a> Default for ModalContainerConfig<'a> {
             title_prefix: "",
             title_color: None,
             title_extra: None,
+            nav_arrows: None,
+            action_shortcuts: None,
             bottom_shortcuts: None,
             counter: None,
             border_color: Color::White,
@@ -200,8 +211,44 @@ pub fn render_modal_container<'a>(
     }
 
     // 4. Titre bas : raccourcis à gauche
-    if let Some(bottom_shortcuts) = cfg.bottom_shortcuts {
-        outer_block = outer_block.title_bottom(bottom_shortcuts.alignment(Alignment::Left));
+    let bottom_shortcuts = if let Some(bottom_shortcuts) = cfg.bottom_shortcuts {
+        Some(bottom_shortcuts)
+    } else if cfg.nav_arrows.is_some() || cfg.action_shortcuts.is_some() {
+        let sep = format!("{}{}", bg.bot_right, bg.bot_left);
+        let mut spans: Vec<Span<'a>> = Vec::new();
+
+        if let Some(nav) = cfg.nav_arrows {
+            spans.push(Span::styled(bg.bot_left, Style::default().fg(border_col)));
+            let up_col = if nav.up_active { theme.red } else { theme.text_muted };
+            let down_col = if nav.down_active { theme.red } else { theme.text_muted };
+            spans.push(Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)));
+            spans.push(Span::styled(format!(" {} ", nav.label), Style::default().fg(Color::White)));
+            spans.push(Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)));
+        }
+
+        if let Some(actions) = cfg.action_shortcuts {
+            for action_spans in actions {
+                if spans.is_empty() {
+                    spans.push(Span::styled(bg.bot_left, Style::default().fg(border_col)));
+                } else {
+                    spans.push(Span::styled(sep.clone(), Style::default().fg(border_col)));
+                }
+                spans.extend(action_spans);
+            }
+        }
+
+        if !spans.is_empty() {
+            spans.push(Span::styled(bg.bot_right, Style::default().fg(border_col)));
+            Some(Line::from(spans))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(line) = bottom_shortcuts {
+        outer_block = outer_block.title_bottom(line.alignment(Alignment::Left));
     }
 
     // 5. Titre bas : compteur pagination à droite

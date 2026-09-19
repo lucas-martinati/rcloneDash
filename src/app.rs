@@ -966,6 +966,107 @@ impl App {
         }
     }
 
+    /// Algorithme universel de navigation et défilement pour les listes indexées (RecentFiles, Filters, Files, History)
+    pub fn scroll_list_step(
+        selected_idx: &mut usize,
+        scroll_offset: &mut usize,
+        total: usize,
+        viewport_height: usize,
+        up: bool,
+    ) {
+        if total == 0 {
+            return;
+        }
+        let vp = viewport_height.max(1);
+        let max_offset = total.saturating_sub(vp);
+
+        // Ajuste la sélection si elle était hors du champ visible
+        if *selected_idx < *scroll_offset {
+            *selected_idx = *scroll_offset;
+        } else if *selected_idx >= *scroll_offset + vp {
+            *selected_idx = (*scroll_offset + vp).saturating_sub(1);
+        }
+
+        if up {
+            if *selected_idx > 0 {
+                *selected_idx -= 1;
+                if *selected_idx < *scroll_offset {
+                    *scroll_offset = *selected_idx;
+                }
+            }
+        } else if *selected_idx < total.saturating_sub(1) {
+            *selected_idx += 1;
+            if *selected_idx >= *scroll_offset + vp {
+                *scroll_offset = (*selected_idx + 1).saturating_sub(vp).min(max_offset);
+            }
+        }
+    }
+
+    /// Algorithme universel de saut sur la scrollbar (clic sur la piste ou drag)
+    pub fn scroll_list_jump(
+        selected_idx: &mut usize,
+        scroll_offset: &mut usize,
+        total: usize,
+        viewport_height: usize,
+        ratio: f64,
+    ) {
+        if total == 0 {
+            return;
+        }
+        let vp = viewport_height.max(1);
+        let max_offset = total.saturating_sub(vp);
+        let old_offset = *scroll_offset;
+        let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
+        *scroll_offset = new_offset;
+        if new_offset > old_offset || ratio >= 0.5 {
+            *selected_idx = (new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1));
+        } else {
+            *selected_idx = new_offset.min(total.saturating_sub(1));
+        }
+    }
+
+    /// Version pour les listes où la sélection est optionnelle (RecentFiles, History)
+    pub fn scroll_opt_list_step(
+        selected_idx: &mut Option<usize>,
+        scroll_offset: &mut usize,
+        total: usize,
+        viewport_height: usize,
+        up: bool,
+    ) {
+        if total == 0 {
+            return;
+        }
+        match selected_idx {
+            None => {
+                if !up {
+                    *selected_idx = Some((*scroll_offset).min(total - 1));
+                }
+            }
+            Some(ref mut idx) => {
+                if up && *idx == 0 && *scroll_offset == 0 {
+                    *selected_idx = None;
+                    return;
+                }
+                Self::scroll_list_step(idx, scroll_offset, total, viewport_height, up);
+            }
+        }
+    }
+
+    pub fn scroll_opt_list_jump(
+        selected_idx: &mut Option<usize>,
+        scroll_offset: &mut usize,
+        total: usize,
+        viewport_height: usize,
+        ratio: f64,
+    ) {
+        if total == 0 {
+            return;
+        }
+        let mut current = selected_idx.unwrap_or(0);
+        Self::scroll_list_jump(&mut current, scroll_offset, total, viewport_height, ratio);
+        *selected_idx = Some(current);
+    }
+
     /// Ensure filter scroll offset keeps selected filter visible
     #[allow(dead_code)]
     pub fn ensure_filter_visible(&mut self, viewport_height: usize) {
@@ -991,63 +1092,12 @@ impl App {
 
     pub fn scroll_recent_down(&mut self, viewport_height: usize) {
         let total = self.get_recent_files_list().len();
-        if total == 0 {
-            return;
-        }
-        let vp = viewport_height.max(1);
-        let max_offset = total.saturating_sub(vp);
-
-        match self.recent_selected_idx {
-            None => {
-                self.recent_selected_idx = Some(self.recent_scroll_offset.min(total - 1));
-            }
-            Some(mut idx) => {
-                if idx < self.recent_scroll_offset {
-                    idx = self.recent_scroll_offset;
-                } else if idx >= self.recent_scroll_offset + vp {
-                    idx = (self.recent_scroll_offset + vp).saturating_sub(1);
-                }
-
-                if idx < total - 1 {
-                    idx += 1;
-                    self.recent_selected_idx = Some(idx);
-                    if idx >= self.recent_scroll_offset + vp {
-                        self.recent_scroll_offset = (idx + 1).saturating_sub(vp).min(max_offset);
-                    }
-                }
-            }
-        }
+        Self::scroll_opt_list_step(&mut self.recent_selected_idx, &mut self.recent_scroll_offset, total, viewport_height, false);
     }
 
     pub fn scroll_recent_up(&mut self, viewport_height: usize) {
         let total = self.get_recent_files_list().len();
-        if total == 0 {
-            return;
-        }
-        let vp = viewport_height.max(1);
-
-        match self.recent_selected_idx {
-            None => {}
-            Some(mut idx) => {
-                if idx == 0 && self.recent_scroll_offset == 0 {
-                    self.recent_selected_idx = None;
-                    return;
-                }
-                if idx < self.recent_scroll_offset {
-                    idx = self.recent_scroll_offset;
-                } else if idx >= self.recent_scroll_offset + vp {
-                    idx = (self.recent_scroll_offset + vp).saturating_sub(1);
-                }
-
-                if idx > 0 {
-                    idx -= 1;
-                    self.recent_selected_idx = Some(idx);
-                    if idx < self.recent_scroll_offset {
-                        self.recent_scroll_offset = idx;
-                    }
-                }
-            }
-        }
+        Self::scroll_opt_list_step(&mut self.recent_selected_idx, &mut self.recent_scroll_offset, total, viewport_height, true);
     }
 
     pub fn scroll_history_down(&mut self, viewport_height: usize) {
@@ -1119,28 +1169,22 @@ impl App {
 
     pub fn scroll_filter_down(&mut self, viewport_height: usize) {
         let total = if self.is_adding_filter { self.filters.len() + 1 } else { self.filters.len() };
-        if total == 0 { return; }
-        let vp = viewport_height.max(1);
-        let max_offset = total.saturating_sub(vp);
-
-        if self.filter_scroll_offset < max_offset {
-            self.filter_scroll_offset += 1;
-            self.selected_filter_idx = (self.selected_filter_idx + 1).min(total - 1);
-        } else if self.selected_filter_idx < total - 1 {
-            self.selected_filter_idx += 1;
-        }
+        Self::scroll_list_step(&mut self.selected_filter_idx, &mut self.filter_scroll_offset, total, viewport_height, false);
     }
 
-    pub fn scroll_filter_up(&mut self, _viewport_height: usize) {
+    pub fn scroll_filter_up(&mut self, viewport_height: usize) {
         let total = if self.is_adding_filter { self.filters.len() + 1 } else { self.filters.len() };
-        if total == 0 { return; }
+        Self::scroll_list_step(&mut self.selected_filter_idx, &mut self.filter_scroll_offset, total, viewport_height, true);
+    }
 
-        if self.filter_scroll_offset > 0 {
-            self.filter_scroll_offset -= 1;
-            self.selected_filter_idx = self.selected_filter_idx.saturating_sub(1);
-        } else if self.selected_filter_idx > 0 {
-            self.selected_filter_idx -= 1;
-        }
+    pub fn scroll_file_down(&mut self, viewport_height: usize) {
+        let total = self.file_entries.len();
+        Self::scroll_list_step(&mut self.file_selected_idx, &mut self.file_scroll_offset, total, viewport_height, false);
+    }
+
+    pub fn scroll_file_up(&mut self, viewport_height: usize) {
+        let total = self.file_entries.len();
+        Self::scroll_list_step(&mut self.file_selected_idx, &mut self.file_scroll_offset, total, viewport_height, true);
     }
 
     pub fn scroll_settings_down(&mut self) {
@@ -1254,35 +1298,19 @@ impl App {
                 }
             }
             ScrollbarTarget::Files => {
+                let vp = self.file_viewport_height.max(1);
                 if up {
-                    if self.file_selected_idx > 0 {
-                        self.file_selected_idx -= 1;
-                        if self.file_selected_idx < self.file_scroll_offset {
-                            self.file_scroll_offset = self.file_scroll_offset.saturating_sub(1);
-                        }
-                    }
+                    self.scroll_file_up(vp);
                 } else {
-                    if !self.file_entries.is_empty() && self.file_selected_idx < self.file_entries.len() - 1 {
-                        self.file_selected_idx += 1;
-                        let vp = self.file_viewport_height;
-                        if self.file_selected_idx >= self.file_scroll_offset + vp {
-                            self.file_scroll_offset = self.file_selected_idx - vp + 1;
-                        }
-                    }
+                    self.scroll_file_down(vp);
                 }
             }
             ScrollbarTarget::Filters => {
+                let vp = self.filter_viewport_height.max(1);
                 if up {
-                    self.selected_filter_idx = self.selected_filter_idx.saturating_sub(1);
-                    let vp = self.filter_viewport_height;
-                    self.ensure_filter_visible(vp);
+                    self.scroll_filter_up(vp);
                 } else {
-                    if !self.filters.is_empty() {
-                        let max = self.filters.len().saturating_sub(1);
-                        self.selected_filter_idx = (self.selected_filter_idx + 1).min(max);
-                        let vp = self.filter_viewport_height;
-                        self.ensure_filter_visible(vp);
-                    }
+                    self.scroll_filter_down(vp);
                 }
             }
             ScrollbarTarget::DryRun => {
@@ -1324,28 +1352,12 @@ impl App {
             ScrollbarTarget::History => {
                 self.focused_panel = FocusedPanel::History;
                 let vp = self.history_viewport_height.max(2);
-                let max_offset = total.saturating_sub(vp);
-                let old_offset = self.history_scroll_offset;
-                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
-                self.history_scroll_offset = new_offset;
-                if new_offset > old_offset || ratio >= 0.5 {
-                    self.selected_run_idx = Some((new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1)));
-                } else {
-                    self.selected_run_idx = Some(new_offset.min(total.saturating_sub(1)));
-                }
+                Self::scroll_opt_list_jump(&mut self.selected_run_idx, &mut self.history_scroll_offset, total, vp, ratio);
             }
             ScrollbarTarget::RecentFiles => {
                 self.focused_panel = FocusedPanel::RecentFiles;
                 let vp = self.recent_viewport_height.max(1);
-                let max_offset = total.saturating_sub(vp);
-                let old_offset = self.recent_scroll_offset;
-                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
-                self.recent_scroll_offset = new_offset;
-                if new_offset > old_offset || ratio >= 0.5 {
-                    self.recent_selected_idx = Some((new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1)));
-                } else {
-                    self.recent_selected_idx = Some(new_offset.min(total.saturating_sub(1)));
-                }
+                Self::scroll_opt_list_jump(&mut self.recent_selected_idx, &mut self.recent_scroll_offset, total, vp, ratio);
             }
             ScrollbarTarget::HistoryDetails(run_idx) => {
                 self.history_details_scroll = ((ratio * max_scroll as f64).round() as usize).min(max_scroll);
@@ -1361,27 +1373,11 @@ impl App {
             }
             ScrollbarTarget::Files => {
                 let vp = self.file_viewport_height.max(1);
-                let max_offset = total.saturating_sub(vp);
-                let old_offset = self.file_scroll_offset;
-                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
-                self.file_scroll_offset = new_offset;
-                if new_offset > old_offset || ratio >= 0.5 {
-                    self.file_selected_idx = (new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1));
-                } else {
-                    self.file_selected_idx = new_offset.min(total.saturating_sub(1));
-                }
+                Self::scroll_list_jump(&mut self.file_selected_idx, &mut self.file_scroll_offset, total, vp, ratio);
             }
             ScrollbarTarget::Filters => {
                 let vp = self.filter_viewport_height.max(1);
-                let max_offset = total.saturating_sub(vp);
-                let old_offset = self.filter_scroll_offset;
-                let new_offset = ((ratio * max_offset as f64).round() as usize).min(max_offset);
-                self.filter_scroll_offset = new_offset;
-                if new_offset > old_offset || ratio >= 0.5 {
-                    self.selected_filter_idx = (new_offset + vp.saturating_sub(1)).min(total.saturating_sub(1));
-                } else {
-                    self.selected_filter_idx = new_offset.min(total.saturating_sub(1));
-                }
+                Self::scroll_list_jump(&mut self.selected_filter_idx, &mut self.filter_scroll_offset, total, vp, ratio);
             }
             ScrollbarTarget::DryRun => {
                 self.dry_run_scroll = ((ratio * max_scroll as f64).round() as usize).min(max_scroll);
@@ -1403,13 +1399,8 @@ impl App {
                             self.scroll_settings_down();
                         }
                         Modal::Files => {
-                            if !self.file_entries.is_empty() && self.file_selected_idx < self.file_entries.len() - 1 {
-                                self.file_selected_idx += 1;
-                                let vp = self.file_viewport_height;
-                                if self.file_selected_idx >= self.file_scroll_offset + vp {
-                                    self.file_scroll_offset = self.file_selected_idx - vp + 1;
-                                }
-                            }
+                            let vp = self.file_viewport_height;
+                            self.scroll_file_down(vp);
                         }
                         Modal::HistoryDetails(past_idx) => {
                             let total_files = self.past_runs.get(past_idx).map(|r| r.all_affected_files().len()).unwrap_or(0);
@@ -1483,12 +1474,8 @@ impl App {
                             self.scroll_settings_up();
                         }
                         Modal::Files => {
-                            if self.file_selected_idx > 0 {
-                                self.file_selected_idx -= 1;
-                                if self.file_selected_idx < self.file_scroll_offset {
-                                    self.file_scroll_offset = self.file_scroll_offset.saturating_sub(1);
-                                }
-                            }
+                            let vp = self.file_viewport_height;
+                            self.scroll_file_up(vp);
                         }
                         Modal::HistoryDetails(_) => {
                             if self.history_details_scroll > 0 {
@@ -2461,21 +2448,12 @@ impl App {
                         self.modal = Modal::None;
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
-                        if self.file_selected_idx > 0 {
-                            self.file_selected_idx -= 1;
-                            if self.file_selected_idx < self.file_scroll_offset {
-                                self.file_scroll_offset = self.file_selected_idx;
-                            }
-                        }
+                        let vp = self.file_viewport_height;
+                        self.scroll_file_up(vp);
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        if !self.file_entries.is_empty() && self.file_selected_idx < self.file_entries.len() - 1 {
-                            self.file_selected_idx += 1;
-                            let vp = self.file_viewport_height;
-                            if self.file_selected_idx >= self.file_scroll_offset + vp {
-                                self.file_scroll_offset = self.file_selected_idx - vp + 1;
-                            }
-                        }
+                        let vp = self.file_viewport_height;
+                        self.scroll_file_down(vp);
                     }
                     KeyCode::PageUp => {
                         let jump = self.file_viewport_height;
@@ -2593,16 +2571,10 @@ impl App {
                             return Action::OpenEditor;
                         }
                         KeyCode::Up | KeyCode::Char('k') => {
-                            if self.selected_filter_idx > 0 {
-                                self.selected_filter_idx -= 1;
-                                self.ensure_filter_visible(vp);
-                            }
+                            self.scroll_filter_up(vp);
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
-                            if !self.filters.is_empty() && self.selected_filter_idx < self.filters.len() - 1 {
-                                self.selected_filter_idx += 1;
-                                self.ensure_filter_visible(vp);
-                            }
+                            self.scroll_filter_down(vp);
                         }
                         KeyCode::PageUp => {
                             self.selected_filter_idx = self.selected_filter_idx.saturating_sub(vp.max(5));
@@ -4702,6 +4674,55 @@ mod tests {
         });
         assert_eq!(app.selected_filter_idx, 0);
         assert_eq!(app.logs_scroll, 0);
+    }
+
+    #[tokio::test]
+    async fn test_universal_scroll_primitives_and_scrollbar_harmony() {
+        // 1. Direct unit test of scroll_list_step
+        let mut sel = 0;
+        let mut offset = 0;
+        let total = 20;
+        let vp = 5;
+
+        // Scroll down 4 times (within viewport)
+        for expected in 1..=4 {
+            App::scroll_list_step(&mut sel, &mut offset, total, vp, false);
+            assert_eq!(sel, expected);
+            assert_eq!(offset, 0);
+        }
+
+        // Scroll down 5th time (hits viewport bottom, offset shifts)
+        App::scroll_list_step(&mut sel, &mut offset, total, vp, false);
+        assert_eq!(sel, 5);
+        assert_eq!(offset, 1);
+
+        // Scroll up
+        App::scroll_list_step(&mut sel, &mut offset, total, vp, true);
+        assert_eq!(sel, 4);
+        assert_eq!(offset, 1);
+
+        // 2. Direct unit test of scroll_list_jump
+        App::scroll_list_jump(&mut sel, &mut offset, total, vp, 1.0);
+        assert_eq!(offset, 15); // total(20) - vp(5) = 15
+        assert_eq!(sel, 19);
+
+        App::scroll_list_jump(&mut sel, &mut offset, total, vp, 0.0);
+        assert_eq!(offset, 0);
+        assert_eq!(sel, 0);
+
+        // 3. Test ScrollbarTarget::Filters step and jump via App
+        let mut app = App::new();
+        app.filters = (0..20).map(|i| format!("- rule_{}", i)).collect();
+        app.filter_viewport_height = 5;
+        app.selected_filter_idx = 0;
+        app.filter_scroll_offset = 0;
+
+        app.apply_scrollbar_step(ScrollbarTarget::Filters, false);
+        assert_eq!(app.selected_filter_idx, 1);
+
+        app.apply_scrollbar_jump(ScrollbarTarget::Filters, 5, 10, 20, 5);
+        assert!(app.filter_scroll_offset > 0);
+        assert!(app.selected_filter_idx >= app.filter_scroll_offset);
     }
 }
 
