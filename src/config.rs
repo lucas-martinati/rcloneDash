@@ -239,6 +239,104 @@ impl GraphStyleChoice {
     }
 }
 
+/// Interval options for bisync timer (single source of truth)
+pub const TIMER_INTERVAL_OPTIONS: &[&str] = &["10min", "15min", "30min", "1h", "2h", "4h"];
+
+/// Cloud safety net / full sync intervals (single source of truth)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FullSyncOption {
+    pub value: &'static str,
+    pub label: &'static str,
+}
+
+pub const FULL_SYNC_OPTIONS: &[FullSyncOption] = &[
+    FullSyncOption { value: "60", label: "1h (Recommended)" },
+    FullSyncOption { value: "120", label: "2h" },
+    FullSyncOption { value: "240", label: "4h" },
+    FullSyncOption { value: "360", label: "6h" },
+    FullSyncOption { value: "720", label: "12h" },
+    FullSyncOption { value: "1440", label: "24h (1 day)" },
+    FullSyncOption { value: "never", label: "Never (Local)" },
+];
+
+pub fn full_sync_label(val: &str) -> &'static str {
+    for opt in FULL_SYNC_OPTIONS {
+        if opt.value == val {
+            return opt.label;
+        }
+    }
+    "Custom"
+}
+
+/// Bandwidth limit presets (single source of truth)
+pub const BWLIMIT_OPTIONS: &[&str] = &["Disabled", "5M", "10M", "20M", "50M"];
+
+/// UI tick rate steps in milliseconds (single source of truth)
+pub const TICK_RATE_STEPS: &[u64] = &[
+    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
+    1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
+];
+
+/// Formatters for dynamic settings descriptions (source of truth)
+pub fn format_tick_rate_options() -> String {
+    "100ms to 10s (100ms, 200ms, 500ms, 1s, 2s, 5s, 10s)".to_string()
+}
+pub fn format_timer_interval_options() -> String {
+    TIMER_INTERVAL_OPTIONS.join(", ")
+}
+
+pub fn format_full_sync_options() -> String {
+    FULL_SYNC_OPTIONS
+        .iter()
+        .map(|o| o.label)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+pub fn format_bwlimit_options() -> String {
+    BWLIMIT_OPTIONS.join(", ")
+}
+
+pub fn format_theme_options() -> String {
+    ThemeChoice::all()
+        .iter()
+        .map(|t| format!("• {}", t.name()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn format_container_layout_options() -> String {
+    ContainerLayout::all()
+        .iter()
+        .map(|l| format!("• {}", l.name()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn format_mid_panel_order_options() -> String {
+    MidPanelOrder::all()
+        .iter()
+        .map(|m| format!("• {}", m.name()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn format_border_style_options() -> String {
+    BorderStyleChoice::all()
+        .iter()
+        .map(|b| format!("• {}", b.name()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn format_graph_style_options() -> String {
+    GraphStyleChoice::all()
+        .iter()
+        .map(|g| format!("• {}", g.name()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub remote: String,
@@ -577,5 +675,17 @@ mod tests {
         let json = serde_json::to_string(&quota).unwrap();
         let loaded: CloudQuotaCache = serde_json::from_str(&json).unwrap();
         assert_eq!(quota, loaded);
+    }
+
+    #[test]
+    fn test_settings_dynamic_descriptions_sync() {
+        assert!(format_timer_interval_options().contains("10min, 15min, 30min, 1h, 2h, 4h"));
+        assert!(format_full_sync_options().contains("1h (Recommended)"));
+        assert!(format_full_sync_options().contains("Never (Local)"));
+        assert!(format_bwlimit_options().contains("Disabled, 5M, 10M, 20M, 50M"));
+        assert!(format_theme_options().contains("Nord"));
+        assert!(format_theme_options().contains("Dracula"));
+        assert!(format_border_style_options().contains("Retro"));
+        assert!(format_graph_style_options().contains("Braille"));
     }
 }

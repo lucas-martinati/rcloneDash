@@ -2,11 +2,13 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
     Frame,
 };
 
 use crate::app::{App, HitAction, Hitbox};
+use crate::config;
+use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig};
 use crate::ui::theme::ThemePalette;
 
 #[allow(dead_code)]
@@ -52,8 +54,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         container_area
     };
 
-    f.render_widget(Clear, area);
-
     let bg = app.border_glyphs();
     let total_opts = app.settings_items_count();
     let cur_opt = (app.settings_selected_idx + 1).min(total_opts);
@@ -94,50 +94,41 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         Span::styled(" 2ui ", Style::default().fg(theme.text_muted))
     };
 
-    let outer_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(app.border_type())
-        .border_style(Style::default().fg(theme.red))
-        .style(Style::default().bg(theme.card_bg))
-        .title(Line::from(vec![
-            Span::styled(bg.top_left, Style::default().fg(theme.red)),
-            Span::styled("settings", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(theme.red)),
-            Span::styled("Tab", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled(" ⇆ ", Style::default().fg(Color::White)),
-            tab0_span,
-            Span::styled("   ", Style::default().fg(theme.border)),
-            tab1_span,
-            Span::styled(bg.top_right, Style::default().fg(theme.red)),
-        ]))
-        .title(
-            Line::from(vec![
-                Span::styled(bg.top_left, Style::default().fg(theme.red)),
-                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" close", Style::default().fg(theme.text_bright)),
-                Span::styled(bg.top_right, Style::default().fg(theme.red)),
-            ])
-            .alignment(Alignment::Right),
-        )
-        .title_bottom(
-            Line::from(vec![
-                Span::styled(bg.bot_left, Style::default().fg(theme.red)),
-                Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
-                Span::styled(" select ", Style::default().fg(Color::White)),
-                Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.red)),
-                mid_cmd,
-                Span::styled(bg.bot_right, Style::default().fg(theme.red)),
-            ])
-            .alignment(Alignment::Left),
-        )
-        .title_bottom(
-            Line::from(vec![
-                Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_opt, total_opts, bg.horizontal), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            ])
-            .alignment(Alignment::Right),
-        );
-    f.render_widget(outer_block, area);
+    let title_extra = vec![
+        Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(theme.red)),
+        Span::styled("Tab", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled(" ⇆ ", Style::default().fg(Color::White)),
+        tab0_span,
+        Span::styled("   ", Style::default().fg(theme.border)),
+        tab1_span,
+    ];
+
+    let bottom_shortcuts = Line::from(vec![
+        Span::styled(bg.bot_left, Style::default().fg(theme.red)),
+        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(" select ", Style::default().fg(Color::White)),
+        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.red)),
+        mid_cmd,
+        Span::styled(bg.bot_right, Style::default().fg(theme.red)),
+    ]);
+
+    let inner = render_modal_container(
+        f,
+        app,
+        theme,
+        area,
+        ModalContainerConfig {
+            title_prefix: "settings",
+            title_color: Some(theme.red),
+            title_extra: Some(title_extra),
+            bottom_shortcuts: Some(bottom_shortcuts),
+            counter: Some((cur_opt, total_opts)),
+            border_color: theme.red,
+            show_close_button: true,
+        },
+        hitboxes,
+    );
 
     // Hitbox for "Tab ⇆" (après "settings ┐┌" -> area.x + 12)
     hitboxes.push(Hitbox {
@@ -170,23 +161,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         action: HitAction::SettingsTab(1),
     });
 
-    hitboxes.push(Hitbox {
-        rect: Rect {
-            x: area.x + area.width.saturating_sub(14),
-            y: area.y,
-            width: 12,
-            height: 1,
-        },
-        action: HitAction::CloseModal,
-    });
-
-    let inner = Rect {
-        x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
-    };
-
     if inner.height < 4 || inner.width < 40 {
         return;
     }
@@ -213,16 +187,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     f.render_widget(Paragraph::new(sep_lines), sep_area);
 
     // Données des réglages selon l'onglet actif
-    let full_sync_display = match app.config.full_sync_interval.as_str() {
-        "60" => "1h (Recommended)".to_string(),
-        "120" => "2h".to_string(),
-        "240" => "4h".to_string(),
-        "360" => "6h".to_string(),
-        "720" => "12h".to_string(),
-        "1440" => "24h (1 day)".to_string(),
-        "never" => "Never (Local)".to_string(),
-        other => other.to_string(),
-    };
+    let full_sync_display = config::full_sync_label(&app.config.full_sync_interval).to_string();
 
     let settings: Vec<(&str, String)> = if app.settings_tab == 0 {
         vec![
@@ -352,15 +317,24 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         // --- Catégorie 0 : Rclone ---
         (0, 0) => (
             "Bisync timer interval.",
-            "Frequency of automatic checks and synchronization managed by systemd.\n\nConfigures how often rclone-bisync.timer wakes up to inspect changes.\n\nAvailable values: 10m, 15m, 30m, 1h, 2h, 4h.\nRecommended: 15m for an ideal balance between responsiveness and CPU usage.".to_string(),
+            format!(
+                "Frequency of automatic checks and synchronization managed by systemd.\n\nConfigures how often rclone-bisync.timer wakes up to inspect changes.\n\nAvailable values: {}.\nRecommended: 15m for an ideal balance between responsiveness and CPU usage.",
+                config::format_timer_interval_options()
+            ),
         ),
         (0, 1) => (
             "Cloud safety net.",
-            "Maximum time elapsed before running a full bidirectional sync.\n\nEven if no local changes were detected, this safety net ensures files created or updated remotely from another computer or the web interface are retrieved.\n\n'Never' option is available if you only want sync triggered upon local changes.".to_string(),
+            format!(
+                "Maximum time elapsed before running a full bidirectional sync.\n\nEven if no local changes were detected, this safety net ensures files created or updated remotely from another computer or the web interface are retrieved.\n\nAvailable values: {}.\n'Never' option is available if you only want sync triggered upon local changes.",
+                config::format_full_sync_options()
+            ),
         ),
         (0, 2) => (
             "Bandwidth limit (bwlimit).",
-            "Maximum allowed transfer speed for rclone.\n\nPreserves your internet connection by limiting network bandwidth used by rclone.\n\nSetting stored in bwlimit.env and injected into the systemd service.\nValue 'Disabled' uses 100% of available bandwidth.".to_string(),
+            format!(
+                "Maximum allowed transfer speed for rclone.\n\nPreserves your internet connection by limiting network bandwidth used by rclone.\n\nAvailable presets: {}.\nSetting stored in bwlimit.env and injected into the systemd service.\nValue 'Disabled' uses 100% of available bandwidth.",
+                config::format_bwlimit_options()
+            ),
         ),
         (0, 3) => (
             "Monitored local directory.",
@@ -394,28 +368,45 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         // --- Catégorie 1 : UI & Apparence ---
         (1, 0) => (
             "Color theme.",
-            "Sets the color theme applied across the entire dashboard.\n\nSupports 6 curated themes for optimal readability:\n• Tokyo Night\n• Catppuccin Mocha\n• Nord Frost\n• Gruvbox Dark\n• Dracula\n• Monokai Pro\n\nEach theme dynamically adapts borders, text, and btop++ gradient charts.".to_string(),
+            format!(
+                "Sets the color theme applied across the entire dashboard.\n\nSupports {} curated themes for optimal readability:\n{}\n\nEach theme dynamically adapts borders, text, and btop++ gradient charts.",
+                crate::ui::theme::ThemeChoice::all().len(),
+                config::format_theme_options()
+            ),
         ),
         (1, 1) => (
             "Container layout.",
-            "Reorder the main dashboard containers to match your preferred workflow.\n\nAvailable presets:\n• Default: Storage & Metrics → History & Logs → Recent Files\n• Recent First: Storage & Metrics → Recent Files → History & Logs\n• Logs on Top: History & Logs → Storage & Metrics → Recent Files\n• Inverted: Recent Files → History & Logs → Storage & Metrics\n\nApplies instantly across the entire dashboard.".to_string(),
+            format!(
+                "Reorder the main dashboard containers to match your preferred workflow.\n\nAvailable presets:\n{}\n\nApplies instantly across the entire dashboard.",
+                config::format_container_layout_options()
+            ),
         ),
         (1, 2) => (
             "Mid-panel order.",
-            "Horizontal placement of the middle section containers.\n\nAvailable configurations:\n• History | Logs: Synchronization history on the left, live journal on the right.\n• Logs | History: Live journal on the left, synchronization history on the right.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.".to_string(),
+            format!(
+                "Horizontal placement of the middle section containers.\n\nAvailable configurations:\n{}\n\nAll keyboard shortcuts and mouse interactions adapt automatically.",
+                config::format_mid_panel_order_options()
+            ),
         ),
         (1, 3) => (
             "Border style.",
-            "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nAvailable styles:\n• Rounded: Modern curved corners (╭───╮)\n• Sharp: Classic crisp square corners (┌───┐)\n• Double: Retro dual-line borders (╔═══╗)\n• Thick: Bold high-contrast borders (┏━━━┓)\n\nPersisted across sessions in dash-config.json.".to_string(),
+            format!(
+                "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nAvailable styles:\n{}\n\nPersisted across sessions in dash-config.json.",
+                config::format_border_style_options()
+            ),
         ),
         (1, 4) => (
             "Graph style.",
-            "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nAvailable styles:\n• Braille (Default): Dense 8-dot braille patterns (⡀⣀⣄⣤⣦⣶⣷⣿)\n• Blocks: Unicode block elements ( ▂▃▄▅▆▇█)\n\nPersisted across sessions in dash-config.json.".to_string(),
+            format!(
+                "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nAvailable styles:\n{}\n\nPersisted across sessions in dash-config.json.",
+                config::format_graph_style_options()
+            ),
         ),
         (1, 5) => (
             "UI Loop frequency (tick rate).",
             format!(
-                "Refresh rate of the TUI display engine in milliseconds.\n\nControls smoothness of log scrolling, metrics calculation, and micro-animations.\n\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.",
+                "Refresh rate of the TUI display engine in milliseconds.\n\nControls smoothness of log scrolling, metrics calculation, and micro-animations.\n\nAvailable presets: {}.\n\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.",
+                config::format_tick_rate_options(),
                 k_dec, k_inc
             ),
         ),
@@ -462,15 +453,4 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     let right_p = Paragraph::new(desc_lines).wrap(Wrap { trim: true });
     f.render_widget(right_p, desc_inner);
-}
-
-fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
-    let x = r.x + r.width.saturating_sub(width) / 2;
-    let y = r.y + r.height.saturating_sub(height) / 2;
-    Rect {
-        x,
-        y,
-        width: width.min(r.width),
-        height: height.min(r.height),
-    }
 }

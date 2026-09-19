@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
@@ -10,6 +10,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::monitor::history::RunStatus;
+use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig};
 use crate::ui::theme::ThemePalette;
 
 pub fn render_history(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
@@ -233,66 +234,72 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         )), None));
     }
 
-    let visible_height = area.height.saturating_sub(5) as usize;
+    let has_errors = !run.errors.is_empty();
+    let has_files = !affected_files.is_empty();
+
+    let bg = app.border_glyphs();
+    let sep = format!("{}{}", bg.bot_right, bg.bot_left);
+    let mut bottom_spans = vec![
+        Span::styled(bg.bot_left, Style::default().fg(theme.border_history)),
+    ];
+
+    if has_files {
+        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "Open", theme.highlight, Color::White));
+        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
+        let mode_label = if app.ctrl_mode { "File" } else { "Folder" };
+        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("^X", mode_label, theme.highlight, Color::White));
+        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
+    }
+
+    if has_errors {
+        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("c", "Copy errors", theme.red, Color::White));
+        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
+    } else if has_files {
+        bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("y", "Copy", theme.green, Color::White));
+        bottom_spans.push(Span::styled(&sep, Style::default().fg(theme.border_history)));
+    }
+
+    bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↑↓", "Scroll", theme.highlight, Color::White));
+    bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(theme.border_history)));
+
     let total_lines = all_lines.len();
+    let visible_height = area.height.saturating_sub(4) as usize;
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = app.history_details_scroll.min(max_scroll);
 
-    let bg = app.border_glyphs();
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(app.border_type())
-        .border_style(Style::default().fg(theme.border_history))
-        .style(Style::default().bg(theme.card_bg))
-        .title(Line::from(vec![
-            Span::styled(bg.top_left, Style::default().fg(theme.blue)),
-            Span::styled("run details", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(": #{} ({} {})", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
-            Span::styled(bg.top_right, Style::default().fg(theme.blue)),
-        ]))
-        .title(
-            Line::from(vec![
-                Span::styled(bg.top_left, Style::default().fg(theme.blue)),
-                Span::styled("Esc, q", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-                Span::styled(" close", Style::default().fg(theme.text_bright)),
-                Span::styled(bg.top_right, Style::default().fg(theme.blue)),
-            ])
-            .alignment(Alignment::Right),
-        )
-        .title_bottom(
-            Line::from(vec![
-                Span::styled(format!("{} {}/{} {}", bg.horizontal, scroll + 1, total_lines.max(1), bg.horizontal), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
-            ])
-            .alignment(Alignment::Right),
-        );
-
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(1),
-            Constraint::Length(1),
-        ])
-        .split(inner);
+    let inner = render_modal_container(
+        f,
+        app,
+        theme,
+        area,
+        ModalContainerConfig {
+            title_prefix: "run details",
+            title_color: Some(theme.blue),
+            title_extra: Some(vec![Span::styled(format!(": #{} ({} {})", run.id, run.date, run.time), Style::default().fg(theme.text_muted))]),
+            bottom_shortcuts: Some(Line::from(bottom_spans)),
+            counter: Some((scroll + 1, total_lines.max(1))),
+            border_color: theme.border_history,
+            show_close_button: true,
+        },
+        hitboxes,
+    );
 
     // Enregistrer les hitboxes pour les fichiers visibles
     let display_items: Vec<&(Line, Option<usize>)> = all_lines
         .iter()
         .skip(scroll)
-        .take(visible_height)
+        .take(inner.height as usize)
         .collect();
 
     for (row_i, (_, file_opt)) in display_items.iter().enumerate() {
         if let Some(file_idx) = file_opt {
-            let row_y = layout[0].y + row_i as u16;
-            if row_y < layout[0].y + layout[0].height {
+            let row_y = inner.y + row_i as u16;
+            if row_y < inner.y + inner.height {
                 hitboxes.push(Hitbox {
                     rect: Rect {
-                        x: layout[0].x,
+                        x: inner.x,
                         y: row_y,
-                        width: layout[0].width,
+                        width: inner.width,
                         height: 1,
                     },
                     action: HitAction::HistoryFile(*file_idx),
@@ -303,107 +310,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
 
     let display_lines: Vec<Line> = display_items.iter().map(|(l, _)| l.clone()).collect();
     let p = Paragraph::new(display_lines);
-    f.render_widget(p, layout[0]);
-
-    let has_errors = !run.errors.is_empty();
-    let has_files = !affected_files.is_empty();
-
-    let footer_line = if has_errors && !has_files {
-        // Uniquement des erreurs : seul le bouton de copie + défilement + fermer
-        Line::from(vec![
-            Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("Copy errors  │  ", Style::default().fg(theme.text_bright)),
-            Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Scroll  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Close", Style::default().fg(theme.text_muted)),
-        ])
-    } else if has_files {
-        // Des éléments présents : mêmes règles que le dashboard
-        let copy_label = if has_errors { "Copy errors" } else { "Copy details" };
-        let mode_label = if app.ctrl_mode { "File mode" } else { "Folder mode" };
-        Line::from(vec![
-            Span::styled("[Enter] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Open  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[Ctrl+X] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("{}  │  ", mode_label), Style::default().fg(theme.text_muted)),
-            Span::styled("[y / c] ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("{}  │  ", copy_label), Style::default().fg(theme.text_bright)),
-            Span::styled("[↑↓] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Scroll  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Close", Style::default().fg(theme.text_muted)),
-        ])
-    } else {
-        // Rien : boutons grisés et inutilisables
-        Line::from(vec![
-            Span::styled("[Enter] Open  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[Ctrl+X] Folder mode  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[y / c] Copy  │  ", Style::default().fg(theme.text_muted)),
-            Span::styled("[Esc, q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-            Span::styled("Close", Style::default().fg(theme.text_muted)),
-        ])
-    };
-    let footer_p = Paragraph::new(footer_line).alignment(ratatui::layout::Alignment::Center);
-    f.render_widget(footer_p, layout[1]);
-
-    // Hitbox pour fermer la modale (bouton fermer en haut à droite)
-    hitboxes.push(Hitbox {
-        rect: Rect {
-            x: area.x + area.width.saturating_sub(18),
-            y: area.y,
-            width: 17,
-            height: 1,
-        },
-        action: HitAction::CloseModal,
-    });
-
-    let footer_w = layout[1].width;
-    let footer_y = layout[1].y;
-    if has_files {
-        let copy_label = if has_errors { "Copy errors" } else { "Copy details" };
-        let mode_label = if app.ctrl_mode { "File mode" } else { "Folder mode" };
-        let s_open = "[Enter] Open  │  ";
-        let s_mode = format!("[Ctrl+X] {}  │  ", mode_label);
-        let s_copy = format!("[y / c] {}  │  ", copy_label);
-        let s_scroll = "[↑↓] Scroll  │  ";
-        let s_close = "[Esc, q] Close";
-        let total_chars = (s_open.chars().count() + s_mode.chars().count() + s_copy.chars().count() + s_scroll.chars().count() + s_close.chars().count()) as u16;
-        let start_x = layout[1].x + footer_w.saturating_sub(total_chars) / 2;
-
-        let mut cur_x = start_x;
-        let w_open = s_open.chars().count() as u16;
-        hitboxes.push(Hitbox {
-            rect: Rect { x: cur_x, y: footer_y, width: w_open, height: 1 },
-            action: HitAction::HistoryFile(app.history_selected_file_idx),
-        });
-        cur_x += w_open;
-
-        let w_mode = s_mode.chars().count() as u16;
-        hitboxes.push(Hitbox {
-            rect: Rect { x: cur_x, y: footer_y, width: w_mode, height: 1 },
-            action: HitAction::ToggleCtrlMode,
-        });
-        cur_x += w_mode;
-
-        let w_copy = s_copy.chars().count() as u16;
-        hitboxes.push(Hitbox {
-            rect: Rect { x: cur_x, y: footer_y, width: w_copy, height: 1 },
-            action: HitAction::CopyHistoryErrors(run_idx),
-        });
-        cur_x += w_copy + s_scroll.chars().count() as u16;
-
-        let w_close = s_close.chars().count() as u16;
-        hitboxes.push(Hitbox {
-            rect: Rect { x: cur_x, y: footer_y, width: w_close, height: 1 },
-            action: HitAction::CloseModal,
-        });
-    } else if has_errors {
-        hitboxes.push(Hitbox {
-            rect: layout[1],
-            action: HitAction::CopyHistoryErrors(run_idx),
-        });
-    }
+    f.render_widget(p, inner);
 
     crate::ui::render_btop_scrollbar(
         f,
@@ -415,24 +322,4 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         hitboxes,
         crate::app::ScrollbarTarget::HistoryDetails(run_idx),
     );
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
 }

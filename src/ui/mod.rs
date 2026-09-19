@@ -1,3 +1,4 @@
+pub mod container;
 pub mod dashboard;
 pub mod files;
 pub mod filters;
@@ -11,6 +12,12 @@ pub mod settings;
 pub mod sparkline;
 pub mod theme;
 pub mod keys;
+
+#[allow(unused_imports)]
+pub use container::{
+    centered_fixed_rect, centered_rect, compute_active_modal_area, format_border_footer,
+    format_border_title, render_modal_container, ModalContainerConfig,
+};
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -79,16 +86,16 @@ pub fn render(f: &mut Frame, app: &mut App) {
     // 4. Modales overlay (Settings btop, Fichiers, Filtres, Confirmations)
     render_popups(f, app, &theme, &mut hitboxes);
 
+    app.active_modal_area = compute_active_modal_area(&app.modal, f.area());
     app.hitboxes = hitboxes;
 }
 
-/// Scrollbar intégrée dans les conteneurs (style btop++)
-/// Dessinée directement dans la colonne droite intérieure (x = area.x + area.width - 2)
-/// avec flèche ↑ en haut, flèche ↓ en bas, et curseur plein █ au niveau de la position.
-/// Désormais entièrement interactive à la souris (clic flèches, clic piste, glisser-déposer).
-pub fn render_btop_scrollbar(
+/// Rendu d'une scrollbar btop++ personnalisée avec coordonnées explicites de colonne et de bornes verticales
+pub fn render_btop_scrollbar_custom(
     f: &mut Frame,
-    area: ratatui::layout::Rect,
+    scroll_x: u16,
+    top_y: u16,
+    bot_y: u16,
     total: usize,
     pos: usize,
     visible: usize,
@@ -96,17 +103,9 @@ pub fn render_btop_scrollbar(
     hitboxes: &mut Vec<crate::app::Hitbox>,
     target: crate::app::ScrollbarTarget,
 ) {
-    if total <= visible || area.height < 4 || area.width < 5 {
+    if total <= visible || bot_y <= top_y + 1 {
         return;
     }
-    let scroll_x = area.x + area.width.saturating_sub(2);
-    let top_y = area.y + 1;
-    let bot_y = area.y + area.height.saturating_sub(2);
-
-    if bot_y <= top_y + 1 {
-        return;
-    }
-
     let track_height = (bot_y - top_y - 1) as usize;
     let buf = f.buffer_mut();
 
@@ -167,4 +166,46 @@ pub fn render_btop_scrollbar(
             buf.set_string(scroll_x, y, "█", thumb_style);
         }
     }
+}
+
+/// Scrollbar intégrée dans les conteneurs avec bordure standard (style btop++)
+/// Dessinée directement dans la colonne droite intérieure (x = area.x + area.width - 2)
+pub fn render_btop_scrollbar(
+    f: &mut Frame,
+    area: ratatui::layout::Rect,
+    total: usize,
+    pos: usize,
+    visible: usize,
+    theme: &crate::ui::theme::ThemePalette,
+    hitboxes: &mut Vec<crate::app::Hitbox>,
+    target: crate::app::ScrollbarTarget,
+) {
+    if total <= visible || area.height < 4 || area.width < 5 {
+        return;
+    }
+    let scroll_x = area.x + area.width.saturating_sub(2);
+    let top_y = area.y + 1;
+    let bot_y = area.y + area.height.saturating_sub(2);
+    render_btop_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
+}
+
+/// Scrollbar intégrée dans un sous-panneau intérieur (sans bordure propre, e.g. volet gauche de filtres ou explorer)
+/// Dessinée à l'extrême droite du panneau (x = pane.x + pane.width - 1) sur toute sa hauteur (top_y = pane.y, bot_y = pane.y + pane.height - 1)
+pub fn render_btop_scrollbar_pane(
+    f: &mut Frame,
+    pane: ratatui::layout::Rect,
+    total: usize,
+    pos: usize,
+    visible: usize,
+    theme: &crate::ui::theme::ThemePalette,
+    hitboxes: &mut Vec<crate::app::Hitbox>,
+    target: crate::app::ScrollbarTarget,
+) {
+    if total <= visible || pane.height < 4 || pane.width < 2 {
+        return;
+    }
+    let scroll_x = pane.x + pane.width.saturating_sub(1);
+    let top_y = pane.y;
+    let bot_y = pane.y + pane.height.saturating_sub(1);
+    render_btop_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
 }

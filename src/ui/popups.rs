@@ -6,7 +6,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, HitAction, Hitbox, Modal};
+use crate::app::{App, Hitbox, Modal};
+use crate::ui::container::{centered_fixed_rect, centered_rect, render_modal_container, ModalContainerConfig};
 use crate::ui::files::render_files_modal;
 use crate::ui::filters::render_filters_modal;
 use crate::ui::history::render_history_details_modal;
@@ -37,7 +38,19 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
         }
         Modal::ConfirmSync => {
             let area = centered_rect(58, 25, f.area());
-            f.render_widget(Clear, area);
+            let inner = render_modal_container(
+                f,
+                app,
+                theme,
+                area,
+                ModalContainerConfig {
+                    title_prefix: " Synchronization ",
+                    border_color: theme.accent,
+                    show_close_button: true,
+                    ..Default::default()
+                },
+                hitboxes,
+            );
 
             let text = vec![
                 Line::from(Span::styled("TRIGGER SYNCHRONIZATION NOW?", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
@@ -52,21 +65,24 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ]),
             ];
 
-            let p = Paragraph::new(text)
-                .alignment(Alignment::Center)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(app.border_type())
-                        .border_style(Style::default().fg(theme.accent))
-                        .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Synchronization ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
-                );
-            f.render_widget(p, area);
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            f.render_widget(p, inner);
         }
         Modal::ConfirmDryRun => {
             let area = centered_rect(58, 25, f.area());
-            f.render_widget(Clear, area);
+            let inner = render_modal_container(
+                f,
+                app,
+                theme,
+                area,
+                ModalContainerConfig {
+                    title_prefix: " Dry-Run Simulation ",
+                    border_color: theme.yellow,
+                    show_close_button: true,
+                    ..Default::default()
+                },
+                hitboxes,
+            );
 
             let text = vec![
                 Line::from(Span::styled("RUN DRY-RUN SIMULATION?", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
@@ -81,21 +97,24 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ]),
             ];
 
-            let p = Paragraph::new(text)
-                .alignment(Alignment::Center)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(app.border_type())
-                        .border_style(Style::default().fg(theme.yellow))
-                        .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Dry-Run Simulation ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
-                );
-            f.render_widget(p, area);
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            f.render_widget(p, inner);
         }
         Modal::ConfirmResync => {
             let area = centered_rect(60, 30, f.area());
-            f.render_widget(Clear, area);
+            let inner = render_modal_container(
+                f,
+                app,
+                theme,
+                area,
+                ModalContainerConfig {
+                    title_prefix: " Confirmation required ",
+                    border_color: theme.yellow,
+                    show_close_button: true,
+                    ..Default::default()
+                },
+                hitboxes,
+            );
 
             let text = vec![
                 Line::from(Span::styled("WARNING: FULL RESYNCHRONIZATION", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
@@ -112,21 +131,24 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ]),
             ];
 
-            let p = Paragraph::new(text)
-                .alignment(Alignment::Center)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(app.border_type())
-                        .border_style(Style::default().fg(theme.yellow))
-                        .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Confirmation required ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
-                );
-            f.render_widget(p, area);
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            f.render_widget(p, inner);
         }
         Modal::ConfirmCancel => {
             let area = centered_rect(55, 25, f.area());
-            f.render_widget(Clear, area);
+            let inner = render_modal_container(
+                f,
+                app,
+                theme,
+                area,
+                ModalContainerConfig {
+                    title_prefix: " Force Stop ",
+                    border_color: theme.red,
+                    show_close_button: true,
+                    ..Default::default()
+                },
+                hitboxes,
+            );
 
             let text = vec![
                 Line::from(Span::styled("ABORT SYNCHRONIZATION?", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
@@ -140,21 +162,24 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ]),
             ];
 
-            let p = Paragraph::new(text)
-                .alignment(Alignment::Center)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(app.border_type())
-                        .border_style(Style::default().fg(theme.red))
-                        .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Force Stop ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
-                );
-            f.render_widget(p, area);
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            f.render_widget(p, inner);
         }
         Modal::ConfirmDelete(rel_path) => {
             let area = centered_rect(55, 25, f.area());
-            f.render_widget(Clear, area);
+            let inner = render_modal_container(
+                f,
+                app,
+                theme,
+                area,
+                ModalContainerConfig {
+                    title_prefix: " Deletion ",
+                    border_color: theme.red,
+                    show_close_button: true,
+                    ..Default::default()
+                },
+                hitboxes,
+            );
 
             let text = vec![
                 Line::from(Span::styled("DELETE THIS LOCAL FILE?", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
@@ -168,17 +193,8 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ]),
             ];
 
-            let p = Paragraph::new(text)
-                .alignment(Alignment::Center)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(app.border_type())
-                        .border_style(Style::default().fg(theme.red))
-                        .style(Style::default().bg(theme.card_bg))
-                        .title(Span::styled(" Deletion ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
-                );
-            f.render_widget(p, area);
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            f.render_widget(p, inner);
         }
         Modal::Help => {
             let screen = f.area();
@@ -188,7 +204,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             let box_h = 24.min(screen.height.saturating_sub(logo_h + 3));
 
             let total_h = logo_h + 1 + box_h;
-            let container_area = crate::ui::menu::centered_fixed_rect(box_w, total_h, screen);
+            let container_area = centered_fixed_rect(box_w, total_h, screen);
 
             let v_chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -210,7 +226,19 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
 
             // 2. Boîte d'aide style btop++
             let help_box_area = v_chunks[2];
-            f.render_widget(Clear, help_box_area);
+            let inner = render_modal_container(
+                f,
+                app,
+                theme,
+                help_box_area,
+                ModalContainerConfig {
+                    title_prefix: "help",
+                    border_color: theme.red,
+                    show_close_button: true,
+                    ..Default::default()
+                },
+                hitboxes,
+            );
 
             let help_items = [
                 ("Mouse 1", "Clicks buttons and selects in lists/panels."),
@@ -256,41 +284,8 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             lines.push(Line::from(Span::styled("   For bug reporting and project updates, visit:", Style::default().fg(theme.text_muted))));
             lines.push(Line::from(Span::styled("   https://github.com/lucas-martinati/rcloneDash", Style::default().fg(theme.cyan).add_modifier(Modifier::UNDERLINED))));
 
-            let bg = app.border_glyphs();
-            let p = Paragraph::new(lines)
-                .alignment(Alignment::Left)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(app.border_type())
-                        .border_style(Style::default().fg(theme.red))
-                        .style(Style::default().bg(theme.card_bg))
-                        .title(Line::from(vec![
-                            Span::styled(bg.top_left, Style::default().fg(theme.red)),
-                            Span::styled("help", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                            Span::styled(bg.top_right, Style::default().fg(theme.red)),
-                        ]))
-                        .title(
-                            Line::from(vec![
-                                Span::styled(bg.top_left, Style::default().fg(theme.red)),
-                                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                                Span::styled(" close", Style::default().fg(theme.text_bright)),
-                                Span::styled(bg.top_right, Style::default().fg(theme.red)),
-                            ])
-                            .alignment(Alignment::Right),
-                        ),
-                );
-            f.render_widget(p, help_box_area);
-
-            hitboxes.push(Hitbox {
-                rect: Rect {
-                    x: help_box_area.x + help_box_area.width.saturating_sub(14),
-                    y: help_box_area.y,
-                    width: 12,
-                    height: 1,
-                },
-                action: HitAction::CloseModal,
-            });
+            let p = Paragraph::new(lines).alignment(Alignment::Left);
+            f.render_widget(p, inner);
         }
         Modal::None => {}
     }
@@ -322,30 +317,8 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
     }
 }
 
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
 fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(82, 80, f.area());
-    f.render_widget(Clear, area);
 
     let status_str = if app.dry_run_running {
         "⏳ Simulation in progress (rclone bisync --dry-run)..."
@@ -353,8 +326,36 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         "✔ Simulation completed"
     };
 
+    let footer_line = Line::from(vec![
+        Span::styled("[r] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+        Span::styled("Rerun  │  ", Style::default().fg(theme.text_muted)),
+        Span::styled("[↑↓/PgUp/PgDn] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+        Span::styled("Scroll  │  ", Style::default().fg(theme.text_muted)),
+        Span::styled("[Esc / q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
+        Span::styled("Close", Style::default().fg(theme.text_muted)),
+    ]);
+
+    let inner = render_modal_container(
+        f,
+        app,
+        theme,
+        area,
+        ModalContainerConfig {
+            title_prefix: "🛡 Dry-Run Simulation",
+            title_color: Some(theme.cyan),
+            title_extra: Some(vec![
+                Span::styled(format!(" │ {} ", status_str), Style::default().fg(theme.cyan)),
+            ]),
+            bottom_shortcuts: Some(footer_line),
+            counter: None,
+            border_color: theme.cyan,
+            show_close_button: true,
+        },
+        hitboxes,
+    );
+
     let total_lines = app.dry_run_logs.len();
-    let visible_height = area.height.saturating_sub(5) as usize;
+    let visible_height = inner.height as usize;
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = app.dry_run_scroll.min(max_scroll);
 
@@ -369,49 +370,12 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             .collect()
     };
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(app.border_type())
-        .border_style(Style::default().fg(theme.cyan))
-        .style(Style::default().bg(theme.card_bg))
-        .title(Span::styled(format!(" 🛡 Dry-Run Simulation │ {} ", status_str), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
-
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(inner);
-
     let p = Paragraph::new(lines);
-    f.render_widget(p, chunks[0]);
-
-    let close_btn_area = Rect {
-        x: chunks[1].x + chunks[1].width.saturating_sub(15),
-        y: chunks[1].y,
-        width: 14,
-        height: 1,
-    };
-    hitboxes.push(Hitbox {
-        rect: close_btn_area,
-        action: HitAction::CloseModal,
-    });
-
-    let footer_line = Line::from(vec![
-        Span::styled("[r] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Rerun  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("[↑↓/PgUp/PgDn] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Scroll  │  ", Style::default().fg(theme.text_muted)),
-        Span::styled("[Esc / q] ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
-        Span::styled("Close", Style::default().fg(theme.text_muted)),
-    ]);
-    let footer_p = Paragraph::new(footer_line).alignment(Alignment::Center);
-    f.render_widget(footer_p, chunks[1]);
+    f.render_widget(p, inner);
 
     crate::ui::render_btop_scrollbar(
         f,
-        chunks[0],
+        inner,
         total_lines,
         scroll,
         visible_height,

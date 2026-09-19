@@ -136,10 +136,7 @@ pub enum Modal {
     HistoryDetails(usize),
 }
 
-pub const TICK_RATE_STEPS: [u64; 21] = [
-    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
-    1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
-];
+pub use crate::config::TICK_RATE_STEPS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollbarTarget {
@@ -299,6 +296,7 @@ pub struct App {
 
     // Registre précis des hitboxes cliquables (au pixel près)
     pub hitboxes: Vec<Hitbox>,
+    pub active_modal_area: Option<Rect>,
 
     pub cloud_quota: Option<CloudQuota>,
     pub tracked_files_count: usize,
@@ -393,6 +391,7 @@ impl App {
             active_scrollbar_drag: None,
 
             hitboxes: Vec::with_capacity(64),
+            active_modal_area: None,
 
             cloud_quota: config::load_quota_cache().map(|c| CloudQuota {
                 total_bytes: c.total_bytes,
@@ -1118,6 +1117,57 @@ impl App {
         }
     }
 
+    pub fn scroll_filter_down(&mut self, viewport_height: usize) {
+        let total = if self.is_adding_filter { self.filters.len() + 1 } else { self.filters.len() };
+        if total == 0 { return; }
+        let vp = viewport_height.max(1);
+        let max_offset = total.saturating_sub(vp);
+
+        if self.filter_scroll_offset < max_offset {
+            self.filter_scroll_offset += 1;
+            self.selected_filter_idx = (self.selected_filter_idx + 1).min(total - 1);
+        } else if self.selected_filter_idx < total - 1 {
+            self.selected_filter_idx += 1;
+        }
+    }
+
+    pub fn scroll_filter_up(&mut self, _viewport_height: usize) {
+        let total = if self.is_adding_filter { self.filters.len() + 1 } else { self.filters.len() };
+        if total == 0 { return; }
+
+        if self.filter_scroll_offset > 0 {
+            self.filter_scroll_offset -= 1;
+            self.selected_filter_idx = self.selected_filter_idx.saturating_sub(1);
+        } else if self.selected_filter_idx > 0 {
+            self.selected_filter_idx -= 1;
+        }
+    }
+
+    pub fn scroll_settings_down(&mut self) {
+        let total = self.settings_items_count();
+        if total == 0 { return; }
+        if self.settings_selected_idx < total - 1 {
+            self.settings_selected_idx += 1;
+        }
+    }
+
+    pub fn scroll_settings_up(&mut self) {
+        if self.settings_selected_idx > 0 {
+            self.settings_selected_idx -= 1;
+        }
+    }
+
+    pub fn dismiss_active_modal(&mut self) {
+        if self.is_editing_setting {
+            self.commit_setting_edit();
+        }
+        if self.is_editing_filter {
+            self.cancel_filter_edit();
+        }
+        self.modal = Modal::None;
+        self.active_modal_area = None;
+    }
+
     pub fn commit_setting_edit(&mut self) {
         if !self.is_editing_setting {
             return;
@@ -1342,6 +1392,44 @@ impl App {
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Action {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
+                // 1. Si une modale est active : le scroll est confiné à celle-ci et aligné
+                if self.modal != Modal::None {
+                    match self.modal {
+                        Modal::Filters => {
+                            let vp = self.filter_viewport_height;
+                            self.scroll_filter_down(vp);
+                        }
+                        Modal::Settings => {
+                            self.scroll_settings_down();
+                        }
+                        Modal::Files => {
+                            if !self.file_entries.is_empty() && self.file_selected_idx < self.file_entries.len() - 1 {
+                                self.file_selected_idx += 1;
+                                let vp = self.file_viewport_height;
+                                if self.file_selected_idx >= self.file_scroll_offset + vp {
+                                    self.file_scroll_offset = self.file_selected_idx - vp + 1;
+                                }
+                            }
+                        }
+                        Modal::HistoryDetails(past_idx) => {
+                            let total_files = self.past_runs.get(past_idx).map(|r| r.all_affected_files().len()).unwrap_or(0);
+                            let max_scroll = total_files.saturating_sub(5);
+                            if self.history_details_scroll < max_scroll {
+                                self.history_details_scroll += 1;
+                            }
+                        }
+                        Modal::DryRun => {
+                            let max_dry = self.dry_run_logs.len().saturating_sub(5);
+                            if self.dry_run_scroll < max_dry {
+                                self.dry_run_scroll += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                    return Action::None;
+                }
+
+                // 2. Mode dashboard : scroll sur le conteneur sous la souris
                 let col = mouse.column;
                 let row = mouse.row;
                 let mut handled = false;
@@ -1368,45 +1456,10 @@ impl App {
                                 handled = true;
                                 break;
                             }
-                            HitAction::HistoryFile(_) => {
-                                let past_idx = if self.is_syncing() {
-                                    self.selected_run_idx.map(|i| i.saturating_sub(1)).unwrap_or(0)
-                                } else {
-                                    self.selected_run_idx.unwrap_or(0)
-                                };
-                                let total_files = self.past_runs.get(past_idx).map(|r| r.all_affected_files().len()).unwrap_or(0);
-                                let max_scroll = total_files.saturating_sub(5);
-                                if self.history_details_scroll < max_scroll {
-                                    self.history_details_scroll += 1;
-                                }
-                                handled = true;
-                                break;
-                            }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
                                 let vp = self.recent_viewport_height.max(1);
                                 self.scroll_recent_down(vp);
-                                handled = true;
-                                break;
-                            }
-                            HitAction::FileEntry(_) => {
-                                if !self.file_entries.is_empty() && self.file_selected_idx < self.file_entries.len() - 1 {
-                                    self.file_selected_idx += 1;
-                                    let vp = self.file_viewport_height;
-                                    if self.file_selected_idx >= self.file_scroll_offset + vp {
-                                        self.file_scroll_offset = self.file_selected_idx - vp + 1;
-                                    }
-                                }
-                                handled = true;
-                                break;
-                            }
-                            HitAction::FilterArea | HitAction::FilterRow(_) => {
-                                if !self.filters.is_empty() {
-                                    let max = self.filters.len().saturating_sub(1);
-                                    self.selected_filter_idx = (self.selected_filter_idx + 1).min(max);
-                                    let vp = self.filter_viewport_height;
-                                    self.ensure_filter_visible(vp);
-                                }
                                 handled = true;
                                 break;
                             }
@@ -1417,15 +1470,40 @@ impl App {
                 if handled {
                     return Action::None;
                 }
-                if self.modal == Modal::DryRun {
-                    let max_dry = self.dry_run_logs.len().saturating_sub(5);
-                    if self.dry_run_scroll < max_dry {
-                        self.dry_run_scroll += 1;
+            }
+            MouseEventKind::ScrollUp => {
+                // 1. Si une modale est active : le scroll est confiné à celle-ci et aligné
+                if self.modal != Modal::None {
+                    match self.modal {
+                        Modal::Filters => {
+                            let vp = self.filter_viewport_height;
+                            self.scroll_filter_up(vp);
+                        }
+                        Modal::Settings => {
+                            self.scroll_settings_up();
+                        }
+                        Modal::Files => {
+                            if self.file_selected_idx > 0 {
+                                self.file_selected_idx -= 1;
+                                if self.file_selected_idx < self.file_scroll_offset {
+                                    self.file_scroll_offset = self.file_scroll_offset.saturating_sub(1);
+                                }
+                            }
+                        }
+                        Modal::HistoryDetails(_) => {
+                            if self.history_details_scroll > 0 {
+                                self.history_details_scroll -= 1;
+                            }
+                        }
+                        Modal::DryRun => {
+                            self.dry_run_scroll = self.dry_run_scroll.saturating_sub(1);
+                        }
+                        _ => {}
                     }
                     return Action::None;
                 }
-            }
-            MouseEventKind::ScrollUp => {
+
+                // 2. Mode dashboard : scroll sur le conteneur sous la souris
                 let col = mouse.column;
                 let row = mouse.row;
                 let mut handled = false;
@@ -1452,34 +1530,10 @@ impl App {
                                 handled = true;
                                 break;
                             }
-                            HitAction::HistoryFile(_) => {
-                                if self.history_details_scroll > 0 {
-                                    self.history_details_scroll -= 1;
-                                }
-                                handled = true;
-                                break;
-                            }
                             HitAction::RecentFilesArea | HitAction::RecentFile(_) => {
                                 self.focused_panel = FocusedPanel::RecentFiles;
                                 let vp = self.recent_viewport_height.max(1);
                                 self.scroll_recent_up(vp);
-                                handled = true;
-                                break;
-                            }
-                            HitAction::FileEntry(_) => {
-                                if self.file_selected_idx > 0 {
-                                    self.file_selected_idx -= 1;
-                                    if self.file_selected_idx < self.file_scroll_offset {
-                                        self.file_scroll_offset = self.file_scroll_offset.saturating_sub(1);
-                                    }
-                                }
-                                handled = true;
-                                break;
-                            }
-                            HitAction::FilterArea | HitAction::FilterRow(_) => {
-                                self.selected_filter_idx = self.selected_filter_idx.saturating_sub(1);
-                                let vp = self.filter_viewport_height;
-                                self.ensure_filter_visible(vp);
                                 handled = true;
                                 break;
                             }
@@ -1490,10 +1544,6 @@ impl App {
                 if handled {
                     return Action::None;
                 }
-                if self.modal == Modal::DryRun {
-                    self.dry_run_scroll = self.dry_run_scroll.saturating_sub(1);
-                    return Action::None;
-                }
                 self.auto_scroll = false;
                 let max_scroll = self.total_log_lines().saturating_sub(self.logs_viewport_height.max(3));
                 self.logs_scroll = (self.logs_scroll + 1).min(max_scroll);
@@ -1501,354 +1551,42 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 let col = mouse.column;
                 let row = mouse.row;
+                let is_ctrl = self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL);
 
-                // Tester les hitboxes de la plus récente (modal en premier) à la plus ancienne
+                // 1. Si une modale est ouverte : gestion unifiée du clic extérieur (click-outside)
+                if self.modal != Modal::None {
+                    if let Some(modal_rect) = self.active_modal_area {
+                        let inside = col >= modal_rect.x
+                            && col < modal_rect.x + modal_rect.width
+                            && row >= modal_rect.y
+                            && row < modal_rect.y + modal_rect.height;
+
+                        if !inside {
+                            // Clic en dehors du panel actif : fermer la modale
+                            self.dismiss_active_modal();
+                            return Action::None;
+                        }
+                    }
+
+                    // Clic à l'intérieur de la modale : tester uniquement les hitboxes de la modale
+                    for hb in self.hitboxes.iter().rev() {
+                        if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
+                            && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
+                        {
+                            return self.execute_hit_action(hb.action, is_ctrl, row);
+                        }
+                    }
+                    // Clic à l'intérieur mais sans hitbox : absorber sans fuite
+                    return Action::None;
+                }
+
+                // 2. Mode dashboard standard (aucune modale active)
                 for hb in self.hitboxes.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
                     {
-                        match hb.action {
-                            HitAction::ButtonMenu => {
-                                self.menu_selected_idx = 0;
-                                self.modal = Modal::Menu;
-                                return Action::None;
-                            }
-                            HitAction::ButtonSync => {
-                                self.modal = Modal::ConfirmSync;
-                                return Action::None;
-                            }
-                            HitAction::ButtonCancel => {
-                                self.modal = Modal::ConfirmCancel;
-                                return Action::None;
-                            }
-                            HitAction::ButtonDryRun => {
-                                self.modal = Modal::ConfirmDryRun;
-                                return Action::None;
-                            }
-                            HitAction::ButtonFiles => {
-                                self.modal = if self.modal == Modal::Files { Modal::None } else { Modal::Files };
-                                return Action::None;
-                            }
-                            HitAction::ButtonFilters => {
-                                self.modal = if self.modal == Modal::Filters { Modal::None } else { Modal::Filters };
-                                return Action::None;
-                            }
-                            HitAction::ButtonSettings => {
-                                self.modal = if self.modal == Modal::Settings { Modal::None } else { Modal::Settings };
-                                return Action::None;
-                            }
-                            HitAction::ButtonQuit => {
-                                self.running = false;
-                                return Action::None;
-                            }
-                            HitAction::ButtonHelp => {
-                                self.modal = if self.modal == Modal::Help { Modal::None } else { Modal::Help };
-                                return Action::None;
-                            }
-                            HitAction::ButtonTheme => {
-                                self.next_theme();
-                                return Action::None;
-                            }
-                            HitAction::ButtonPanel => {
-                                self.focused_panel = self.focused_panel.next();
-                                return Action::None;
-                            }
-                            HitAction::TickRateDec => {
-                                self.step_tick_rate(true);
-                                return Action::None;
-                            }
-                            HitAction::TickRateInc => {
-                                self.step_tick_rate(false);
-                                return Action::None;
-                            }
-                            HitAction::SparklinePoint(idx) => {
-                                if idx < self.past_runs.len() {
-                                    self.selected_run_idx = Some(idx);
-                                    let run = &self.past_runs[idx];
-                                    let st = match run.status {
-                                        RunStatus::Success => "✓ Success",
-                                        RunStatus::Failed => "✗ Error",
-                                        RunStatus::Skipped => "○ Skipped",
-                                        RunStatus::Running => "⟳ Running",
-                                    };
-                                    let files_count = run.files_copied.len() + run.files_modified.len() + run.files_deleted.len();
-                                    self.set_toast(format!("{} — {} · {} file(s) · {}", run.time, run.duration, files_count, st));
-                                }
-                                return Action::None;
-                            }
-                            HitAction::CloseModal => {
-                                self.commit_setting_edit();
-                                self.modal = Modal::None;
-                                return Action::None;
-                            }
-                            HitAction::ToggleCtrlMode => {
-                                self.ctrl_mode = !self.ctrl_mode;
-                                if self.ctrl_mode {
-                                    self.set_toast("✔ Folder Mode (Ctrl) ACTIVE: showing folders");
-                                } else {
-                                    self.set_toast("Standard File Mode");
-                                }
-                                return Action::None;
-                            }
-                            HitAction::MenuOption(idx) => {
-                                match idx {
-                                    0 => { self.modal = Modal::Settings; }
-                                    1 => { self.modal = Modal::Help; }
-                                    2 => { self.running = false; }
-                                    _ => {}
-                                }
-                                return Action::None;
-                            }
-                            HitAction::HistoryArea => {
-                                self.focused_panel = FocusedPanel::History;
-                                return Action::None;
-                            }
-                            HitAction::LogsArea => {
-                                self.focused_panel = FocusedPanel::Logs;
-                                return Action::None;
-                            }
-                            HitAction::RecentFilesArea => {
-                                self.focused_panel = FocusedPanel::RecentFiles;
-                                return Action::None;
-                            }
-                            HitAction::HistoryRow(idx) => {
-                                self.focused_panel = FocusedPanel::History;
-                                let total = self.total_history_runs();
-                                if idx < total {
-                                    if self.selected_run_idx == Some(idx) {
-                                        if self.is_syncing() && idx == 0 {
-                                            self.set_toast("ℹ Active sync - Details shown above");
-                                        } else {
-                                            let past_idx = if self.is_syncing() { idx.saturating_sub(1) } else { idx };
-                                            if past_idx < self.past_runs.len() {
-                                                self.history_details_scroll = 0;
-                                                self.history_selected_file_idx = 0;
-                                                self.modal = Modal::HistoryDetails(past_idx);
-                                            }
-                                        }
-                                    } else {
-                                        self.selected_run_idx = Some(idx);
-                                    }
-                                }
-                                return Action::None;
-                            }
-                            HitAction::HistoryFile(idx) => {
-                                self.history_selected_file_idx = idx;
-                                if self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL) {
-                                    self.open_history_folder(idx);
-                                } else {
-                                    self.open_history_file(idx);
-                                }
-                                return Action::None;
-                            }
-                            HitAction::RecentFile(idx) => {
-                                self.focused_panel = FocusedPanel::RecentFiles;
-                                if self.recent_selected_idx == Some(idx) {
-                                    if self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL) {
-                                        self.open_recent_folder(idx);
-                                    } else {
-                                        self.open_recent_file(idx);
-                                    }
-                                } else {
-                                    self.recent_selected_idx = Some(idx);
-                                }
-                                return Action::None;
-                            }
-                            HitAction::RecentFilterFocus => {
-                                self.focused_panel = FocusedPanel::RecentFiles;
-                                self.is_filtering_recent = true;
-                                return Action::None;
-                            }
-                            HitAction::SettingsTab(tab_idx) => {
-                                if self.is_editing_setting {
-                                    self.commit_setting_edit();
-                                }
-                                self.settings_tab = tab_idx;
-                                self.settings_selected_idx = 0;
-                                return Action::None;
-                            }
-                            HitAction::SettingOption(idx) => {
-                                if self.is_editing_setting && idx != self.settings_selected_idx {
-                                    self.commit_setting_edit();
-                                }
-                                self.settings_selected_idx = idx;
-                                if self.settings_tab == 0 {
-                                    if idx == 6 {
-                                        return Action::OpenFullLogs;
-                                    } else if idx == 5 {
-                                        self.modal = Modal::ConfirmResync;
-                                    } else if idx == 3 || idx == 4 {
-                                        if !self.is_editing_setting || self.settings_selected_idx != idx {
-                                            self.is_editing_setting = true;
-                                            self.setting_edit_buffer = if idx == 3 {
-                                                self.config.local_dir.clone()
-                                            } else {
-                                                self.config.remote.clone()
-                                            };
-                                        }
-                                    } else {
-                                        self.cycle_setting(true);
-                                    }
-                                } else {
-                                    self.cycle_setting(true);
-                                }
-                                return Action::None;
-                            }
-                            HitAction::SettingCycle(idx, forward) => {
-                                if self.is_editing_setting && idx != self.settings_selected_idx {
-                                    self.commit_setting_edit();
-                                }
-                                self.settings_selected_idx = idx;
-                                if self.settings_tab == 0 {
-                                    if idx == 6 {
-                                        return Action::OpenFullLogs;
-                                    } else if idx == 5 {
-                                        self.modal = Modal::ConfirmResync;
-                                    } else if idx == 3 || idx == 4 {
-                                        if !self.is_editing_setting || self.settings_selected_idx != idx {
-                                            self.is_editing_setting = true;
-                                            self.setting_edit_buffer = if idx == 3 {
-                                                self.config.local_dir.clone()
-                                            } else {
-                                                self.config.remote.clone()
-                                            };
-                                        }
-                                    } else {
-                                        self.cycle_setting(forward);
-                                    }
-                                } else {
-                                    self.cycle_setting(forward);
-                                }
-                                return Action::None;
-                            }
-                            HitAction::SaveSettings => {
-                                self.commit_setting_edit();
-                                self.save_current_settings();
-                                return Action::None;
-                            }
-                            HitAction::FileEntry(idx) => {
-                                self.file_selected_idx = idx;
-                                if self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL) {
-                                    if let Some(entry) = self.file_entries.get(idx) {
-                                        let base = config::expand_tilde(&self.config.local_dir);
-                                        let _ = fs_tree::open_folder_with_xdg(&base, &entry.rel_path);
-                                    }
-                                } else {
-                                    self.enter_selected_file_or_dir();
-                                }
-                                return Action::None;
-                            }
-                            HitAction::FileOpen(idx) => {
-                                self.file_selected_idx = idx;
-                                self.enter_selected_file_or_dir();
-                                return Action::None;
-                            }
-                            HitAction::FileParent => {
-                                self.parent_file_dir();
-                                return Action::None;
-                            }
-                            HitAction::ToggleLogsAuto => {
-                                self.auto_scroll = !self.auto_scroll;
-                                return Action::None;
-                            }
-                            HitAction::FilterRow(idx) => {
-                                if idx < self.filters.len() {
-                                    if self.is_editing_filter && self.selected_filter_idx != idx {
-                                        self.commit_filter_edit();
-                                    }
-                                    self.selected_filter_idx = idx;
-                                    let vp = self.filter_viewport_height;
-                                    self.ensure_filter_visible(vp);
-                                }
-                                return Action::None;
-                            }
-                            HitAction::FilterCycleType(idx) => {
-                                if !self.is_editing_filter {
-                                    self.cycle_filter_type(idx);
-                                }
-                                return Action::None;
-                            }
-                            HitAction::FilterStartEdit => {
-                                self.start_editing_filter();
-                                return Action::None;
-                            }
-                            HitAction::FilterAdd => {
-                                self.start_adding_filter();
-                                return Action::None;
-                            }
-                            HitAction::FilterDelete(idx) => {
-                                if idx < self.filters.len() {
-                                    self.selected_filter_idx = idx;
-                                    self.delete_selected_filter();
-                                }
-                                return Action::None;
-                            }
-                            HitAction::FilterOpenEditor => {
-                                return Action::OpenEditor;
-                            }
-                            HitAction::FilterArea => {
-                                return Action::None;
-                            }
-                            HitAction::CopyLogs => {
-                                self.copy_logs_to_clipboard();
-                                return Action::None;
-                            }
-                            HitAction::LogFilterTab(idx) => {
-                                self.log_filter = LogFilter::from_index(idx);
-                                self.focused_panel = FocusedPanel::Logs;
-                                return Action::None;
-                            }
-                            HitAction::LogFilterPrev => {
-                                self.log_filter = self.log_filter.prev();
-                                self.focused_panel = FocusedPanel::Logs;
-                                return Action::None;
-                            }
-                            HitAction::LogFilterNext | HitAction::LogFilterCycle => {
-                                self.log_filter = self.log_filter.next();
-                                self.focused_panel = FocusedPanel::Logs;
-                                return Action::None;
-                            }
-                            HitAction::CopyHistoryErrors(idx) => {
-                                self.copy_history_errors(idx);
-                                return Action::None;
-                            }
-                            HitAction::ButtonCopy => {
-                                match self.focused_panel {
-                                    FocusedPanel::Logs => self.copy_logs_to_clipboard(),
-                                    FocusedPanel::History => {
-                                        if let Some(sel) = self.selected_run_idx {
-                                            let past_idx = if self.is_syncing() { sel.saturating_sub(1) } else { sel };
-                                            self.copy_history_errors(past_idx);
-                                        } else {
-                                            self.copy_logs_to_clipboard();
-                                        }
-                                    }
-                                    FocusedPanel::RecentFiles => self.copy_selected_recent_file(),
-                                }
-                                return Action::None;
-                            }
-                            HitAction::ScrollbarArrowUp(target) => {
-                                self.apply_scrollbar_step(target, true);
-                                return Action::None;
-                            }
-                            HitAction::ScrollbarArrowDown(target) => {
-                                self.apply_scrollbar_step(target, false);
-                                return Action::None;
-                            }
-                            HitAction::ScrollbarTrack { target, top_y, track_height, total, visible } => {
-                                self.active_scrollbar_drag = Some((target, top_y, track_height, total, visible));
-                                let click_offset = row.saturating_sub(top_y).min(track_height.saturating_sub(1));
-                                self.apply_scrollbar_jump(target, click_offset, track_height, total, visible);
-                                return Action::None;
-                            }
-                        }
+                        return self.execute_hit_action(hb.action, is_ctrl, row);
                     }
-                }
-
-                // Clic en dehors d'une modale ouverte : fermeture
-                if self.modal != Modal::None {
-                    self.commit_setting_edit();
-                    self.modal = Modal::None;
                 }
             }
             MouseEventKind::Drag(MouseButton::Left) => {
@@ -1878,6 +1616,339 @@ impl App {
             _ => {}
         }
         Action::None
+    }
+
+    pub fn execute_hit_action(&mut self, action: HitAction, is_ctrl: bool, row: u16) -> Action {
+        match action {
+            HitAction::ButtonMenu => {
+                self.menu_selected_idx = 0;
+                self.modal = Modal::Menu;
+                Action::None
+            }
+            HitAction::ButtonSync => {
+                self.modal = Modal::ConfirmSync;
+                Action::None
+            }
+            HitAction::ButtonCancel => {
+                self.modal = Modal::ConfirmCancel;
+                Action::None
+            }
+            HitAction::ButtonDryRun => {
+                self.modal = Modal::ConfirmDryRun;
+                Action::None
+            }
+            HitAction::ButtonFiles => {
+                self.modal = if self.modal == Modal::Files { Modal::None } else { Modal::Files };
+                Action::None
+            }
+            HitAction::ButtonFilters => {
+                self.modal = if self.modal == Modal::Filters { Modal::None } else { Modal::Filters };
+                Action::None
+            }
+            HitAction::ButtonSettings => {
+                self.modal = if self.modal == Modal::Settings { Modal::None } else { Modal::Settings };
+                Action::None
+            }
+            HitAction::ButtonQuit => {
+                self.running = false;
+                Action::None
+            }
+            HitAction::ButtonHelp => {
+                self.modal = if self.modal == Modal::Help { Modal::None } else { Modal::Help };
+                Action::None
+            }
+            HitAction::ButtonTheme => {
+                self.next_theme();
+                Action::None
+            }
+            HitAction::ButtonPanel => {
+                self.focused_panel = self.focused_panel.next();
+                Action::None
+            }
+            HitAction::TickRateDec => {
+                self.step_tick_rate(true);
+                Action::None
+            }
+            HitAction::TickRateInc => {
+                self.step_tick_rate(false);
+                Action::None
+            }
+            HitAction::SparklinePoint(idx) => {
+                if idx < self.past_runs.len() {
+                    self.selected_run_idx = Some(idx);
+                    let run = &self.past_runs[idx];
+                    let st = match run.status {
+                        RunStatus::Success => "✓ Success",
+                        RunStatus::Failed => "✗ Error",
+                        RunStatus::Skipped => "○ Skipped",
+                        RunStatus::Running => "⟳ Running",
+                    };
+                    let files_count = run.files_copied.len() + run.files_modified.len() + run.files_deleted.len();
+                    self.set_toast(format!("{} — {} · {} file(s) · {}", run.time, run.duration, files_count, st));
+                }
+                Action::None
+            }
+            HitAction::CloseModal => {
+                self.dismiss_active_modal();
+                Action::None
+            }
+            HitAction::ToggleCtrlMode => {
+                self.ctrl_mode = !self.ctrl_mode;
+                if self.ctrl_mode {
+                    self.set_toast("✔ Folder Mode (Ctrl) ACTIVE: showing folders");
+                } else {
+                    self.set_toast("Standard File Mode");
+                }
+                Action::None
+            }
+            HitAction::MenuOption(idx) => {
+                match idx {
+                    0 => { self.modal = Modal::Settings; }
+                    1 => { self.modal = Modal::Help; }
+                    2 => { self.running = false; }
+                    _ => {}
+                }
+                Action::None
+            }
+            HitAction::HistoryArea => {
+                self.focused_panel = FocusedPanel::History;
+                Action::None
+            }
+            HitAction::LogsArea => {
+                self.focused_panel = FocusedPanel::Logs;
+                Action::None
+            }
+            HitAction::RecentFilesArea => {
+                self.focused_panel = FocusedPanel::RecentFiles;
+                Action::None
+            }
+            HitAction::HistoryRow(idx) => {
+                self.focused_panel = FocusedPanel::History;
+                let total = self.total_history_runs();
+                if idx < total {
+                    if self.selected_run_idx == Some(idx) {
+                        if self.is_syncing() && idx == 0 {
+                            self.set_toast("ℹ Active sync - Details shown above");
+                        } else {
+                            let past_idx = if self.is_syncing() { idx.saturating_sub(1) } else { idx };
+                            if past_idx < self.past_runs.len() {
+                                self.history_details_scroll = 0;
+                                self.history_selected_file_idx = 0;
+                                self.modal = Modal::HistoryDetails(past_idx);
+                            }
+                        }
+                    } else {
+                        self.selected_run_idx = Some(idx);
+                    }
+                }
+                Action::None
+            }
+            HitAction::HistoryFile(idx) => {
+                self.history_selected_file_idx = idx;
+                if is_ctrl {
+                    self.open_history_folder(idx);
+                } else {
+                    self.open_history_file(idx);
+                }
+                Action::None
+            }
+            HitAction::RecentFile(idx) => {
+                self.focused_panel = FocusedPanel::RecentFiles;
+                if self.recent_selected_idx == Some(idx) {
+                    if is_ctrl {
+                        self.open_recent_folder(idx);
+                    } else {
+                        self.open_recent_file(idx);
+                    }
+                } else {
+                    self.recent_selected_idx = Some(idx);
+                }
+                Action::None
+            }
+            HitAction::RecentFilterFocus => {
+                self.focused_panel = FocusedPanel::RecentFiles;
+                self.is_filtering_recent = true;
+                Action::None
+            }
+            HitAction::SettingsTab(tab_idx) => {
+                if self.is_editing_setting {
+                    self.commit_setting_edit();
+                }
+                self.settings_tab = tab_idx;
+                self.settings_selected_idx = 0;
+                Action::None
+            }
+            HitAction::SettingOption(idx) => {
+                if self.is_editing_setting && idx != self.settings_selected_idx {
+                    self.commit_setting_edit();
+                }
+                self.settings_selected_idx = idx;
+                if self.settings_tab == 0 {
+                    if idx == 6 {
+                        return Action::OpenFullLogs;
+                    } else if idx == 5 {
+                        self.modal = Modal::ConfirmResync;
+                    } else if idx == 3 || idx == 4 {
+                        if !self.is_editing_setting || self.settings_selected_idx != idx {
+                            self.is_editing_setting = true;
+                            self.setting_edit_buffer = if idx == 3 {
+                                self.config.local_dir.clone()
+                            } else {
+                                self.config.remote.clone()
+                            };
+                        }
+                    } else {
+                        self.cycle_setting(true);
+                    }
+                } else {
+                    self.cycle_setting(true);
+                }
+                Action::None
+            }
+            HitAction::SettingCycle(idx, forward) => {
+                if self.is_editing_setting && idx != self.settings_selected_idx {
+                    self.commit_setting_edit();
+                }
+                self.settings_selected_idx = idx;
+                if self.settings_tab == 0 {
+                    if idx == 6 {
+                        return Action::OpenFullLogs;
+                    } else if idx == 5 {
+                        self.modal = Modal::ConfirmResync;
+                    } else if idx == 3 || idx == 4 {
+                        if !self.is_editing_setting || self.settings_selected_idx != idx {
+                            self.is_editing_setting = true;
+                            self.setting_edit_buffer = if idx == 3 {
+                                self.config.local_dir.clone()
+                            } else {
+                                self.config.remote.clone()
+                            };
+                        }
+                    } else {
+                        self.cycle_setting(forward);
+                    }
+                } else {
+                    self.cycle_setting(forward);
+                }
+                Action::None
+            }
+            HitAction::SaveSettings => {
+                self.commit_setting_edit();
+                self.save_current_settings();
+                Action::None
+            }
+            HitAction::FileEntry(idx) => {
+                self.file_selected_idx = idx;
+                if is_ctrl {
+                    if let Some(entry) = self.file_entries.get(idx) {
+                        let base = config::expand_tilde(&self.config.local_dir);
+                        let _ = fs_tree::open_folder_with_xdg(&base, &entry.rel_path);
+                    }
+                } else {
+                    self.enter_selected_file_or_dir();
+                }
+                Action::None
+            }
+            HitAction::FileOpen(idx) => {
+                self.file_selected_idx = idx;
+                self.enter_selected_file_or_dir();
+                Action::None
+            }
+            HitAction::FileParent => {
+                self.parent_file_dir();
+                Action::None
+            }
+            HitAction::ToggleLogsAuto => {
+                self.auto_scroll = !self.auto_scroll;
+                Action::None
+            }
+            HitAction::FilterRow(idx) => {
+                if idx < self.filters.len() {
+                    if self.is_editing_filter && self.selected_filter_idx != idx {
+                        self.commit_filter_edit();
+                    }
+                    self.selected_filter_idx = idx;
+                    let vp = self.filter_viewport_height;
+                    self.ensure_filter_visible(vp);
+                }
+                Action::None
+            }
+            HitAction::FilterCycleType(idx) => {
+                if !self.is_editing_filter {
+                    self.cycle_filter_type(idx);
+                }
+                Action::None
+            }
+            HitAction::FilterStartEdit => {
+                self.start_editing_filter();
+                Action::None
+            }
+            HitAction::FilterAdd => {
+                self.start_adding_filter();
+                Action::None
+            }
+            HitAction::FilterDelete(idx) => {
+                if idx < self.filters.len() {
+                    self.selected_filter_idx = idx;
+                    self.delete_selected_filter();
+                }
+                Action::None
+            }
+            HitAction::FilterOpenEditor => Action::OpenEditor,
+            HitAction::FilterArea => Action::None,
+            HitAction::CopyLogs => {
+                self.copy_logs_to_clipboard();
+                Action::None
+            }
+            HitAction::LogFilterTab(idx) => {
+                self.log_filter = LogFilter::from_index(idx);
+                self.focused_panel = FocusedPanel::Logs;
+                Action::None
+            }
+            HitAction::LogFilterPrev => {
+                self.log_filter = self.log_filter.prev();
+                self.focused_panel = FocusedPanel::Logs;
+                Action::None
+            }
+            HitAction::LogFilterNext | HitAction::LogFilterCycle => {
+                self.log_filter = self.log_filter.next();
+                self.focused_panel = FocusedPanel::Logs;
+                Action::None
+            }
+            HitAction::CopyHistoryErrors(idx) => {
+                self.copy_history_errors(idx);
+                Action::None
+            }
+            HitAction::ButtonCopy => {
+                match self.focused_panel {
+                    FocusedPanel::Logs => self.copy_logs_to_clipboard(),
+                    FocusedPanel::History => {
+                        if let Some(sel) = self.selected_run_idx {
+                            let past_idx = if self.is_syncing() { sel.saturating_sub(1) } else { sel };
+                            self.copy_history_errors(past_idx);
+                        } else {
+                            self.copy_logs_to_clipboard();
+                        }
+                    }
+                    FocusedPanel::RecentFiles => self.copy_selected_recent_file(),
+                }
+                Action::None
+            }
+            HitAction::ScrollbarArrowUp(target) => {
+                self.apply_scrollbar_step(target, true);
+                Action::None
+            }
+            HitAction::ScrollbarArrowDown(target) => {
+                self.apply_scrollbar_step(target, false);
+                Action::None
+            }
+            HitAction::ScrollbarTrack { target, top_y, track_height, total, visible } => {
+                self.active_scrollbar_drag = Some((target, top_y, track_height, total, visible));
+                let click_offset = row.saturating_sub(top_y).min(track_height.saturating_sub(1));
+                self.apply_scrollbar_jump(target, click_offset, track_height, total, visible);
+                Action::None
+            }
+        }
     }
 
     pub fn enter_selected_file_or_dir(&mut self) {
@@ -2022,19 +2093,19 @@ impl App {
             // Rclone settings
             match self.settings_selected_idx {
                 0 => {
-                    let options = ["10min", "15min", "30min", "1h"];
+                    let options = config::TIMER_INTERVAL_OPTIONS;
                     let pos = options.iter().position(|&o| o == self.config.timer_interval).unwrap_or(0);
                     let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
                     self.config.timer_interval = options[next].to_string();
                 }
                 1 => {
-                    let options = ["60", "120", "240", "360", "720", "1440", "never"];
-                    let pos = options.iter().position(|&o| o == self.config.full_sync_interval).unwrap_or(0);
+                    let options = config::FULL_SYNC_OPTIONS;
+                    let pos = options.iter().position(|o| o.value == self.config.full_sync_interval).unwrap_or(0);
                     let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                    self.config.full_sync_interval = options[next].to_string();
+                    self.config.full_sync_interval = options[next].value.to_string();
                 }
                 2 => {
-                    let options = ["Disabled", "5M", "10M", "20M", "50M"];
+                    let options = config::BWLIMIT_OPTIONS;
                     let cur = self.config.bwlimit.as_deref().unwrap_or("Disabled");
                     let cur = if cur == "Désactivé" { "Disabled" } else { cur };
                     let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
@@ -4519,6 +4590,118 @@ mod tests {
         });
         assert_eq!(app.filters.len(), 1);
         assert_eq!(app.filters[0], "- /row0/**");
+    }
+
+    #[tokio::test]
+    async fn test_timer_interval_options_cycle_forward_and_backward() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        app.settings_tab = 0;
+        app.settings_selected_idx = 0; // timer_interval
+        app.config.timer_interval = "10min".to_string();
+
+        // Forward cycle: 10min -> 15min -> 30min -> 1h -> 2h -> 4h -> 10min
+        app.cycle_setting(true);
+        assert_eq!(app.config.timer_interval, "15min");
+        app.cycle_setting(true);
+        assert_eq!(app.config.timer_interval, "30min");
+        app.cycle_setting(true);
+        assert_eq!(app.config.timer_interval, "1h");
+        app.cycle_setting(true);
+        assert_eq!(app.config.timer_interval, "2h"); // Visited 2h!
+        app.cycle_setting(true);
+        assert_eq!(app.config.timer_interval, "4h"); // Visited 4h!
+        app.cycle_setting(true);
+        assert_eq!(app.config.timer_interval, "10min");
+
+        // Backward cycle: 10min -> 4h -> 2h -> 1h -> 30min -> 15min -> 10min
+        app.cycle_setting(false);
+        assert_eq!(app.config.timer_interval, "4h");
+        app.cycle_setting(false);
+        assert_eq!(app.config.timer_interval, "2h");
+        app.cycle_setting(false);
+        assert_eq!(app.config.timer_interval, "1h");
+        app.cycle_setting(false);
+        assert_eq!(app.config.timer_interval, "30min");
+        app.cycle_setting(false);
+        assert_eq!(app.config.timer_interval, "15min");
+        app.cycle_setting(false);
+        assert_eq!(app.config.timer_interval, "10min");
+    }
+
+    #[tokio::test]
+    async fn test_click_outside_modal_dismissal() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        app.active_modal_area = Some(ratatui::layout::Rect { x: 20, y: 10, width: 40, height: 20 });
+
+        // Background hitbox that shouldn't be clicked when modal is open
+        app.hitboxes = vec![
+            Hitbox {
+                rect: ratatui::layout::Rect { x: 5, y: 5, width: 10, height: 1 },
+                action: HitAction::ButtonSync,
+            },
+        ];
+
+        // Click outside the active modal area at (5, 5)
+        let action = app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 5,
+            row: 5,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+
+        // The modal should be dismissed, and ButtonSync must NOT be executed!
+        assert_eq!(app.modal, Modal::None);
+        assert_eq!(action, Action::None);
+
+        // Re-open modal and click inside active_modal_area at (25, 15)
+        app.modal = Modal::Settings;
+        app.active_modal_area = Some(ratatui::layout::Rect { x: 20, y: 10, width: 40, height: 20 });
+        let action2 = app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 25,
+            row: 15,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        // Modal is NOT dismissed by click inside
+        assert_eq!(app.modal, Modal::Settings);
+        assert_eq!(action2, Action::None);
+    }
+
+    #[tokio::test]
+    async fn test_modal_scroll_isolation() {
+        let mut app = App::new();
+        app.modal = Modal::Filters;
+        app.filters = vec![
+            "- /row0/**".to_string(),
+            "+ /row1/**".to_string(),
+            "- /row2/**".to_string(),
+        ];
+        app.selected_filter_idx = 0;
+        app.logs_scroll = 0;
+
+        // ScrollDown while Filters modal is open
+        app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::ScrollDown,
+            column: 10,
+            row: 10,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+
+        // Filters selection scrolled to 1, while background logs remained 0!
+        assert_eq!(app.selected_filter_idx, 1);
+        assert_eq!(app.logs_scroll, 0);
+
+        // ScrollUp while Filters modal is open
+        app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::ScrollUp,
+            column: 10,
+            row: 10,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        assert_eq!(app.selected_filter_idx, 0);
+        assert_eq!(app.logs_scroll, 0);
     }
 }
 

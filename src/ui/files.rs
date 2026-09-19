@@ -1,30 +1,17 @@
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     Frame,
 };
 
 use crate::app::{App, HitAction, Hitbox};
+use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig};
 use crate::ui::theme::ThemePalette;
 
 pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(80, 75, f.area());
-    f.render_widget(Clear, area);
-
-    let main_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(70),
-            Constraint::Percentage(30),
-        ])
-        .split(Rect {
-            x: area.x + 1,
-            y: area.y + 1,
-            width: area.width.saturating_sub(2),
-            height: area.height.saturating_sub(2),
-        });
 
     let title_path = if app.file_current_rel.is_empty() {
         app.config.local_dir.clone()
@@ -55,60 +42,44 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
 
     let border_color = theme.border_history;
 
-    let title_line = Line::from(vec![
-        Span::styled(bg.top_left, Style::default().fg(border_color)),
-        Span::styled("file explorer", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(": {}", display_title_path), Style::default().fg(theme.text_muted)),
-        Span::styled(bg.top_right, Style::default().fg(border_color)),
+    let bottom_shortcuts = Line::from(vec![
+        Span::styled(bg.bot_left, Style::default().fg(theme.border_history)),
+        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(" select ", Style::default().fg(Color::White)),
+        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
+        Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled(" parent ", Style::default().fg(Color::White)),
+        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
+        Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled(" open", Style::default().fg(Color::White)),
+        Span::styled(bg.bot_right, Style::default().fg(theme.border_history)),
     ]);
 
-    let right_title = Line::from(vec![
-        Span::styled(bg.top_left, Style::default().fg(border_color)),
-        Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled(" close", Style::default().fg(theme.text_bright)),
-        Span::styled(bg.top_right, Style::default().fg(border_color)),
-    ]);
-
-    let outer_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(app.border_type())
-        .border_style(Style::default().fg(border_color))
-        .style(Style::default().bg(theme.card_bg))
-        .title(title_line)
-        .title(right_title.alignment(Alignment::Right))
-        .title_bottom(
-            Line::from(vec![
-                Span::styled(bg.bot_left, Style::default().fg(theme.border_history)),
-                Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
-                Span::styled(" select ", Style::default().fg(Color::White)),
-                Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
-                Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" parent ", Style::default().fg(Color::White)),
-                Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
-                Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" open", Style::default().fg(Color::White)),
-                Span::styled(bg.bot_right, Style::default().fg(theme.border_history)),
-            ])
-            .alignment(Alignment::Left),
-        )
-        .title_bottom(
-            Line::from(vec![
-                Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_file, total_files, bg.horizontal), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
-            ])
-            .alignment(Alignment::Right),
-        );
-    f.render_widget(outer_block, area);
-
-    hitboxes.push(Hitbox {
-        rect: Rect {
-            x: area.x + area.width.saturating_sub(14),
-            y: area.y,
-            width: 12,
-            height: 1,
+    let inner_area = render_modal_container(
+        f,
+        app,
+        theme,
+        area,
+        ModalContainerConfig {
+            title_prefix: "file explorer",
+            title_color: Some(theme.blue),
+            title_extra: Some(vec![Span::styled(format!(": {}", display_title_path), Style::default().fg(theme.text_muted))]),
+            bottom_shortcuts: Some(bottom_shortcuts),
+            counter: Some((cur_file, total_files)),
+            border_color,
+            show_close_button: true,
         },
-        action: HitAction::CloseModal,
-    });
+        hitboxes,
+    );
+
+    let main_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(70),
+            Constraint::Percentage(30),
+        ])
+        .split(inner_area);
 
     render_file_table(f, app, theme, main_chunks[0], hitboxes);
     render_file_actions(f, app, theme, main_chunks[1], hitboxes);
@@ -230,11 +201,11 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     f.render_widget(table, area);
 
-    crate::ui::render_btop_scrollbar(
+    crate::ui::render_btop_scrollbar_pane(
         f,
         area,
         app.file_entries.len(),
-        app.file_selected_idx,
+        start_idx,
         visible_height,
         theme,
         hitboxes,
@@ -326,24 +297,4 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
         Span::styled(" [ Close (Esc / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
     ])).alignment(ratatui::layout::Alignment::Center);
     f.render_widget(close_p, close_btn_area);
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
 }

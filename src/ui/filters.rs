@@ -1,18 +1,18 @@
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::config;
+use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig};
 use crate::ui::theme::ThemePalette;
 
 pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(82, 74, f.area());
-    f.render_widget(Clear, area);
 
     let filepath = config::filters_file().display().to_string();
     let total_rules = if app.is_adding_filter { app.filters.len() + 1 } else { app.filters.len() };
@@ -70,44 +70,22 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
 
     let bottom_shortcuts = Line::from(bottom_spans);
 
-    let outer_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(app.border_type())
-        .border_style(Style::default().fg(theme.purple))
-        .style(Style::default().bg(theme.card_bg))
-        .title(Line::from(vec![
-            Span::styled(bg.top_left, Style::default().fg(theme.purple)),
-            Span::styled("exclusion filters", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(": {}", display_path), Style::default().fg(theme.text_muted)),
-            Span::styled(bg.top_right, Style::default().fg(theme.purple)),
-        ]))
-        .title(
-            Line::from(vec![
-                Span::styled(bg.top_left, Style::default().fg(theme.purple)),
-                Span::styled("Esc, q", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
-                Span::styled(" close", Style::default().fg(theme.text_bright)),
-                Span::styled(bg.top_right, Style::default().fg(theme.purple)),
-            ])
-            .alignment(Alignment::Right),
-        )
-        .title_bottom(bottom_shortcuts.alignment(Alignment::Left))
-        .title_bottom(
-            Line::from(vec![
-                Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_rule, total_rules, bg.horizontal), Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
-            ])
-            .alignment(Alignment::Right),
-        );
-    f.render_widget(outer_block, area);
-
-    hitboxes.push(Hitbox {
-        rect: Rect {
-            x: area.x + area.width.saturating_sub(14),
-            y: area.y,
-            width: 12,
-            height: 1,
+    let inner_area = render_modal_container(
+        f,
+        app,
+        theme,
+        area,
+        ModalContainerConfig {
+            title_prefix: "exclusion filters",
+            title_color: Some(theme.purple),
+            title_extra: Some(vec![Span::styled(format!(": {}", display_path), Style::default().fg(theme.text_muted))]),
+            bottom_shortcuts: Some(bottom_shortcuts),
+            counter: Some((cur_rule, total_rules)),
+            border_color: theme.purple,
+            show_close_button: true,
         },
-        action: HitAction::CloseModal,
-    });
+        hitboxes,
+    );
 
     if !app.is_editing_filter {
         let bottom_y = area.y + area.height.saturating_sub(1);
@@ -132,13 +110,6 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
             action: HitAction::FilterOpenEditor,
         });
     }
-
-    let inner_area = Rect {
-        x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
-    };
 
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -166,13 +137,8 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let total_count = if app.is_adding_filter { app.filters.len() + 1 } else { app.filters.len() };
 
-    let offset = if app.selected_filter_idx < app.filter_scroll_offset {
-        app.selected_filter_idx
-    } else if app.selected_filter_idx >= app.filter_scroll_offset + visible_height {
-        app.selected_filter_idx.saturating_sub(visible_height) + 1
-    } else {
-        app.filter_scroll_offset
-    };
+    let max_offset = total_count.saturating_sub(visible_height);
+    let offset = app.filter_scroll_offset.min(max_offset);
 
     let items: Vec<ListItem> = if total_count == 0 {
         vec![
@@ -304,11 +270,19 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                         Span::styled("  ", Style::default())
                     };
 
+                    let max_rule_w = (area.width.saturating_sub(12) as usize).max(5);
+                    let display_rule = if rule_text.chars().count() > max_rule_w {
+                        let truncated: String = rule_text.chars().take(max_rule_w - 1).collect();
+                        format!("{}…", truncated)
+                    } else {
+                        rule_text.to_string()
+                    };
+
                     let line = Line::from(vec![
                         cursor_span,
                         Span::styled(format!("{:2} │ ", i + 1), num_style),
                         Span::styled(sym, Style::default().fg(sym_fg).add_modifier(Modifier::BOLD)),
-                        Span::styled(rule_text, rule_style),
+                        Span::styled(display_rule, rule_style),
                     ]);
 
                     let row_style = if is_selected {
@@ -326,11 +300,11 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let list = List::new(items).block(Block::default().borders(Borders::NONE));
     f.render_widget(list, area);
 
-    crate::ui::render_btop_scrollbar(
+    crate::ui::render_btop_scrollbar_pane(
         f,
         area,
         total_count,
-        app.selected_filter_idx,
+        offset,
         visible_height,
         theme,
         hitboxes,
@@ -338,96 +312,55 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     );
 }
 
-fn render_filters_help(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
-    let bg = app.border_glyphs();
-
-    let lines = vec![
-        Line::from(vec![
-            Span::styled(bg.top_left, Style::default().fg(theme.cyan)),
-            Span::styled("filter syntax", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-            Span::styled(bg.top_right, Style::default().fg(theme.cyan)),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(" - ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled("Exclusion", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled(" (skip sync)", Style::default().fg(theme.text_muted)),
-        ]),
-        Line::from(vec![
-            Span::styled("    - /folder/**, - *.tmp", Style::default().fg(Color::Rgb(255, 175, 175))),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(" + ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("Inclusion", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled(" (force sync)", Style::default().fg(theme.text_muted)),
-        ]),
-        Line::from(vec![
-            Span::styled("    + *.pdf, + /docs/**", Style::default().fg(Color::Rgb(175, 255, 195))),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(" # ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-            Span::styled("Comment / Note", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-            Span::styled(" (ignored)", Style::default().fg(theme.text_muted)),
-        ]),
-        Line::from(vec![
-            Span::styled("    # Project archive rules", Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC)),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(format!(" {} rules & persistence {}", bg.horizontal, bg.horizontal), Style::default().fg(theme.border))),
-        Line::from(""),
-        Line::from(Span::styled("• Exclusions ignore matching files", Style::default().fg(theme.text_bright))),
-        Line::from(Span::styled("  and folders during synchronization.", Style::default().fg(theme.text_muted))),
-        Line::from(""),
-        Line::from(Span::styled("• Inclusions take priority over", Style::default().fg(theme.text_bright))),
-        Line::from(Span::styled("  subsequent exclusion patterns.", Style::default().fg(theme.text_muted))),
-        Line::from(""),
-        Line::from(Span::styled("• All changes are saved automatically", Style::default().fg(theme.cyan))),
-        Line::from(Span::styled("  to ~/.config/rclone/gdrive-filters.txt", Style::default().fg(theme.text_muted))),
-        Line::from(Span::styled("  and applied on next bisync run.", Style::default().fg(theme.text_muted))),
-    ];
-
-    let close_btn_area = Rect {
-        x: area.x + 2,
-        y: area.y + area.height.saturating_sub(2),
-        width: area.width.saturating_sub(4),
-        height: 1,
-    };
-    hitboxes.push(Hitbox {
-        rect: close_btn_area,
-        action: HitAction::CloseModal,
-    });
+fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Rect, _hitboxes: &mut Vec<Hitbox>) {
+    let mut lines = Vec::new();
+    lines.push(Line::from(vec![
+        Span::styled(" FILTER SYNTAX ", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(" - ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled("Exclusion", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled(" (skip sync)", Style::default().fg(theme.text_muted)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("    - /folder/**, - *.tmp", Style::default().fg(Color::Rgb(255, 175, 175))),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(" + ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled("Inclusion", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+        Span::styled(" (force sync)", Style::default().fg(theme.text_muted)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("    + *.pdf, + /docs/**", Style::default().fg(Color::Rgb(175, 255, 195))),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(" # ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled("Comment / Note", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(" (ignored)", Style::default().fg(theme.text_muted)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("    # Project archive rules", Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC)),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("─".repeat(area.width.saturating_sub(2) as usize), Style::default().fg(theme.border))));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("• Exclusions ignore matching files", Style::default().fg(theme.text_bright))));
+    lines.push(Line::from(Span::styled("  and folders during synchronization.", Style::default().fg(theme.text_muted))));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("• Inclusions take priority over", Style::default().fg(theme.text_bright))));
+    lines.push(Line::from(Span::styled("  subsequent exclusion patterns.", Style::default().fg(theme.text_muted))));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("• All changes are saved automatically", Style::default().fg(theme.cyan))));
+    lines.push(Line::from(Span::styled("  to ~/.config/rclone/gdrive-filters.txt", Style::default().fg(theme.text_muted))));
+    lines.push(Line::from(Span::styled("  and applied on next bisync run.", Style::default().fg(theme.text_muted))));
 
     let p = Paragraph::new(lines).block(
         Block::default()
             .borders(Borders::LEFT)
-            .border_style(Style::default().fg(theme.border)),
+            .border_style(Style::default().fg(theme.purple)),
     );
     f.render_widget(p, area);
-
-    let close_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [ Close (Esc / q) ] ", Style::default().fg(theme.text_bright).bg(theme.border)),
-    ])).alignment(Alignment::Center);
-    f.render_widget(close_p, close_btn_area);
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
 }
