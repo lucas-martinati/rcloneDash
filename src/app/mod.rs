@@ -123,6 +123,21 @@ pub enum Modal {
     HistoryDetails(usize),
 }
 
+/// Sub-state for inline text editing within Settings or Filters modals.
+/// Replaces the former booleans `is_editing_setting`, `is_editing_filter`,
+/// `is_adding_filter` and their associated `String` buffers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditState {
+    /// No editing is active.
+    Idle,
+    /// Editing a setting value (tab + index identify *which* setting).
+    Setting { tab: usize, index: usize, buffer: String },
+    /// Editing an existing filter rule.
+    Filter { index: usize, buffer: String },
+    /// Adding a brand-new filter rule.
+    AddingFilter { buffer: String },
+}
+
 pub use crate::config::TICK_RATE_STEPS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -202,6 +217,34 @@ pub struct Hitbox {
     pub action: HitAction,
 }
 
+/// Gestionnaire spatial à double couche pour les zones cliquables.
+/// La couche `dashboard` est active quand aucune modale n'est ouverte ;
+/// la couche `modal` prend le relais quand une modale est visible.
+pub struct HitboxManager {
+    pub dashboard: Vec<Hitbox>,
+    pub modal: Vec<Hitbox>,
+    pub active_modal_area: Option<Rect>,
+}
+
+impl HitboxManager {
+    pub fn new() -> Self {
+        Self {
+            dashboard: Vec::with_capacity(64),
+            modal: Vec::with_capacity(32),
+            active_modal_area: None,
+        }
+    }
+
+    /// Returns the appropriate hitbox layer for the current modal state.
+    pub fn active_layer(&self, has_modal: bool) -> &[Hitbox] {
+        if has_modal && !self.modal.is_empty() {
+            &self.modal
+        } else {
+            &self.dashboard
+        }
+    }
+}
+
 pub struct App {
     pub running: bool,
     pub modal: Modal,
@@ -249,13 +292,9 @@ pub struct App {
     // Paramètres
     pub settings_tab: usize,
     pub settings_selected_idx: usize,
-    pub is_editing_setting: bool,
-    pub setting_edit_buffer: String,
 
-    // Filtres d'exclusion (inline editing)
-    pub is_editing_filter: bool,
-    pub filter_edit_buffer: String,
-    pub is_adding_filter: bool,
+    // État d'édition unifié (settings + filters)
+    pub edit_state: EditState,
 
     // Simulation Dry-Run
     pub dry_run_running: bool,
@@ -268,10 +307,8 @@ pub struct App {
     pub recent_selected_idx: Option<usize>,
     pub active_scrollbar_drag: Option<(ScrollbarTarget, u16, u16, usize, usize, u16)>,
 
-    // Registre précis des hitboxes cliquables (au pixel près)
-    pub hitboxes: Vec<Hitbox>,
-    pub modal_hitboxes: Vec<Hitbox>,
-    pub active_modal_area: Option<Rect>,
+    // Gestionnaire de hitboxes à double couche (dashboard / modal)
+    pub hit_mgr: HitboxManager,
 
     pub cloud_quota: Option<CloudQuota>,
     pub tracked_files_count: usize,
@@ -353,12 +390,7 @@ impl App {
 
             settings_tab: 0,
             settings_selected_idx: 0,
-            is_editing_setting: false,
-            setting_edit_buffer: String::new(),
-
-            is_editing_filter: false,
-            filter_edit_buffer: String::new(),
-            is_adding_filter: false,
+            edit_state: EditState::Idle,
 
             dry_run_running: false,
             dry_run_logs: Vec::new(),
@@ -369,9 +401,7 @@ impl App {
             recent_selected_idx: None,
             active_scrollbar_drag: None,
 
-            hitboxes: Vec::with_capacity(64),
-            modal_hitboxes: Vec::with_capacity(32),
-            active_modal_area: None,
+            hit_mgr: HitboxManager::new(),
 
             cloud_quota: config::load_quota_cache().map(|c| CloudQuota {
                 total_bytes: c.total_bytes,
@@ -414,6 +444,44 @@ impl App {
     pub fn border_glyphs(&self) -> crate::config::BorderGlyphs {
         self.config.border_style.glyphs()
     }
+
+    // ───── EditState helpers ─────
+
+    /// Returns `true` when the user is editing a setting text field.
+    pub fn is_editing_setting(&self) -> bool {
+        matches!(self.edit_state, EditState::Setting { .. })
+    }
+
+    /// Returns `true` when the user is editing or adding a filter rule.
+    pub fn is_editing_filter(&self) -> bool {
+        matches!(self.edit_state, EditState::Filter { .. } | EditState::AddingFilter { .. })
+    }
+
+    /// Returns `true` when the user is adding a **new** filter (not editing an existing one).
+    pub fn is_adding_filter(&self) -> bool {
+        matches!(self.edit_state, EditState::AddingFilter { .. })
+    }
+
+    /// Returns a reference to the current edit buffer, if any.
+    pub fn edit_buffer(&self) -> &str {
+        match &self.edit_state {
+            EditState::Setting { buffer, .. } => buffer,
+            EditState::Filter { buffer, .. } => buffer,
+            EditState::AddingFilter { buffer } => buffer,
+            EditState::Idle => "",
+        }
+    }
+
+    /// Returns a mutable reference to the current edit buffer, if any.
+    pub fn edit_buffer_mut(&mut self) -> Option<&mut String> {
+        match &mut self.edit_state {
+            EditState::Setting { buffer, .. } => Some(buffer),
+            EditState::Filter { buffer, .. } => Some(buffer),
+            EditState::AddingFilter { buffer } => Some(buffer),
+            EditState::Idle => None,
+        }
+    }
+
     pub async fn on_tick(&mut self) {
         {
             let st = self.streamer.read().await;

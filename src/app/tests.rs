@@ -13,10 +13,10 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // Rendu pour générer les hitboxes précises
         terminal.draw(|f| crate::ui::render(f, &mut app)).unwrap();
-        assert!(!app.hitboxes.is_empty(), "Les hitboxes doivent être enregistrées");
+        assert!(!app.hit_mgr.dashboard.is_empty(), "Les hitboxes doivent être enregistrées");
 
         // Trouver la hitbox du bouton Fichiers (Files) dans le footer
-        let files_hb = app.hitboxes.iter().find(|h| h.action == HitAction::ButtonFiles);
+        let files_hb = app.hit_mgr.dashboard.iter().find(|h| h.action == HitAction::ButtonFiles);
         assert!(files_hb.is_some(), "Le bouton Files doit être présent");
         let hb = files_hb.unwrap();
 
@@ -42,7 +42,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.modal = Modal::Menu;
         app.menu_selected_idx = 0;
         terminal.draw(|f| crate::ui::render(f, &mut app)).unwrap();
-        let menu_opt0_hb = app.hitboxes.iter().find(|h| h.action == HitAction::MenuOption(0));
+        let menu_opt0_hb = app.hit_mgr.modal.iter().find(|h| h.action == HitAction::MenuOption(0));
         assert!(menu_opt0_hb.is_some(), "L'option Menu 0 (Settings) doit avoir sa hitbox");
         let mhb = menu_opt0_hb.unwrap();
         let menu_click = MouseEvent {
@@ -60,7 +60,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         let mut app = App::new();
         app.live.log_lines = (1..=30).map(|i| format!("log {}", i)).collect();
         app.logs_viewport_height = 10;
-        app.hitboxes.push(Hitbox {
+        app.hit_mgr.dashboard.push(Hitbox {
             rect: Rect { x: 50, y: 5, width: 50, height: 15 },
             action: HitAction::LogsArea,
         });
@@ -233,7 +233,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.filter_scroll_offset = 0;
 
         // Register a Hitbox for FilterArea
-        app.hitboxes.push(Hitbox {
+        app.hit_mgr.dashboard.push(Hitbox {
             rect: Rect { x: 10, y: 10, width: 40, height: 15 },
             action: HitAction::FilterArea,
         });
@@ -273,7 +273,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.selected_filter_idx, 2);
 
         // 5. Left Click on FilterRow
-        app.hitboxes.push(Hitbox {
+        app.hit_mgr.dashboard.push(Hitbox {
             rect: Rect { x: 10, y: 12, width: 40, height: 1 },
             action: HitAction::FilterRow(20),
         });
@@ -294,7 +294,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert!(!app.ctrl_mode);
 
         // Click on ToggleCtrlMode hitbox toggles ctrl_mode
-        app.hitboxes.push(Hitbox {
+        app.hit_mgr.dashboard.push(Hitbox {
             rect: Rect { x: 30, y: 40, width: 15, height: 1 },
             action: HitAction::ToggleCtrlMode,
         });
@@ -718,30 +718,30 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // Appui sur Entrée pour entrer en mode édition
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(app.is_editing_setting);
-        assert_eq!(app.setting_edit_buffer, "/home/user/drive");
+        assert!(app.is_editing_setting());
+        assert_eq!(app.edit_buffer(), "/home/user/drive");
 
         // Saisie de caractères : "/sub"
         for c in "/sub".chars() {
             app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
         }
-        assert_eq!(app.setting_edit_buffer, "/home/user/drive/sub");
+        assert_eq!(app.edit_buffer(), "/home/user/drive/sub");
 
         // Backspace
         app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
-        assert_eq!(app.setting_edit_buffer, "/home/user/drive/su");
+        assert_eq!(app.edit_buffer(), "/home/user/drive/su");
 
         // Sortie avec Échap : ce qui est écrit dans le champ est sauvegardé (selon demande utilisateur)
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(!app.is_editing_setting);
+        assert!(!app.is_editing_setting());
         assert_eq!(app.config.local_dir, "/home/user/drive/su");
 
         // Entrée en édition avec 'e', modification et validation avec Entrée
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
-        assert!(app.is_editing_setting);
-        app.setting_edit_buffer = "/home/new/path".to_string();
+        assert!(app.is_editing_setting());
+        app.edit_state = EditState::Setting { tab: 0, index: 3, buffer: "/home/new/path".to_string() };
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(!app.is_editing_setting);
+        assert!(!app.is_editing_setting());
         assert_eq!(app.config.local_dir, "/home/new/path");
 
         // Test sur le remote (option 4) : par exemple "GoogleDrive:"
@@ -749,12 +749,12 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.settings_selected_idx = 4;
         app.config.remote = "GoogleDrive:".to_string();
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)); // Flèche droite active l'édition
-        assert!(app.is_editing_setting);
-        assert_eq!(app.setting_edit_buffer, "GoogleDrive:");
+        assert!(app.is_editing_setting());
+        assert_eq!(app.edit_buffer(), "GoogleDrive:");
 
         // L'utilisateur ne modifie rien à la chaîne et sort : "GoogleDrive:" reste inchangé
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(!app.is_editing_setting);
+        assert!(!app.is_editing_setting());
         assert_eq!(app.config.remote, "GoogleDrive:");
     }
 
@@ -1196,7 +1196,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.log_filter, LogFilter::Problems);
 
         // Mouse click on selector left/right arrows
-        app.hitboxes = vec![
+        app.hit_mgr.dashboard = vec![
             Hitbox {
                 rect: ratatui::layout::Rect { x: 10, y: 10, width: 1, height: 1 },
                 action: HitAction::LogFilterPrev,
@@ -1348,30 +1348,30 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // Press 'e' or Enter to start editing
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
-        assert!(app.is_editing_filter);
-        assert!(!app.is_adding_filter);
-        assert_eq!(app.filter_edit_buffer, "- /test/**");
+        assert!(app.is_editing_filter());
+        assert!(!app.is_adding_filter());
+        assert_eq!(app.edit_buffer(), "- /test/**");
 
         // Type additional characters
         app.handle_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
-        assert_eq!(app.filter_edit_buffer, "- /test/**1");
+        assert_eq!(app.edit_buffer(), "- /test/**1");
 
         // Backspace
         app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
-        assert_eq!(app.filter_edit_buffer, "- /test/**");
+        assert_eq!(app.edit_buffer(), "- /test/**");
 
         // Commit with Enter
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(!app.is_editing_filter);
+        assert!(!app.is_editing_filter());
         assert_eq!(app.filters[0], "- /test/**");
 
         // Start editing and cancel with Esc
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(app.is_editing_filter);
+        assert!(app.is_editing_filter());
         app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
-        assert_eq!(app.filter_edit_buffer, "- /test/**x");
+        assert_eq!(app.edit_buffer(), "- /test/**x");
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(!app.is_editing_filter);
+        assert!(!app.is_editing_filter());
         assert_eq!(app.filters[0], "- /test/**"); // Reverted!
     }
 
@@ -1386,19 +1386,19 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // Press 'a' to add a new filter
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
-        assert!(app.is_editing_filter);
-        assert!(app.is_adding_filter);
-        assert_eq!(app.filter_edit_buffer, "- ");
+        assert!(app.is_editing_filter());
+        assert!(app.is_adding_filter());
+        assert_eq!(app.edit_buffer(), "- ");
 
         // Type rule content
         for c in "custom/**".chars() {
             app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
         }
-        assert_eq!(app.filter_edit_buffer, "- custom/**");
+        assert_eq!(app.edit_buffer(), "- custom/**");
 
         // Commit with Enter
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(!app.is_editing_filter);
+        assert!(!app.is_editing_filter());
         assert_eq!(app.filters.len(), 2);
         assert_eq!(app.filters[1], "- custom/**");
         assert_eq!(app.selected_filter_idx, 1);
@@ -1421,7 +1421,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.selected_filter_idx = 0;
 
         // HitAction::FilterAdd
-        app.hitboxes = vec![
+        app.hit_mgr.dashboard = vec![
             Hitbox {
                 rect: ratatui::layout::Rect { x: 50, y: 10, width: 10, height: 1 },
                 action: HitAction::FilterAdd,
@@ -1433,13 +1433,13 @@ use crate::monitor::history::{PastRun, RunStatus};
             row: 10,
             modifiers: crossterm::event::KeyModifiers::NONE,
         });
-        assert!(app.is_editing_filter);
-        assert!(app.is_adding_filter);
+        assert!(app.is_editing_filter());
+        assert!(app.is_adding_filter());
 
         app.cancel_filter_edit();
 
         // HitAction::FilterDelete
-        app.hitboxes = vec![
+        app.hit_mgr.dashboard = vec![
             Hitbox {
                 rect: ratatui::layout::Rect { x: 50, y: 12, width: 10, height: 1 },
                 action: HitAction::FilterDelete(1),
@@ -1496,10 +1496,10 @@ use crate::monitor::history::{PastRun, RunStatus};
     async fn test_click_outside_modal_dismissal() {
         let mut app = App::new();
         app.modal = Modal::Settings;
-        app.active_modal_area = Some(ratatui::layout::Rect { x: 20, y: 10, width: 40, height: 20 });
+        app.hit_mgr.active_modal_area = Some(ratatui::layout::Rect { x: 20, y: 10, width: 40, height: 20 });
 
         // Background hitbox that shouldn't be clicked when modal is open
-        app.hitboxes = vec![
+        app.hit_mgr.dashboard = vec![
             Hitbox {
                 rect: ratatui::layout::Rect { x: 5, y: 5, width: 10, height: 1 },
                 action: HitAction::ButtonSync,
@@ -1520,7 +1520,7 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // Re-open modal and click inside active_modal_area at (25, 15)
         app.modal = Modal::Settings;
-        app.active_modal_area = Some(ratatui::layout::Rect { x: 20, y: 10, width: 40, height: 20 });
+        app.hit_mgr.active_modal_area = Some(ratatui::layout::Rect { x: 20, y: 10, width: 40, height: 20 });
         let action2 = app.handle_mouse(crossterm::event::MouseEvent {
             kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
             column: 25,

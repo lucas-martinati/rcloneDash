@@ -15,7 +15,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
     let area = centered_rect(82, 74, f.area());
 
     let filepath = config::filters_file().display().to_string();
-    let total_rules = if app.is_adding_filter { app.filters.len() + 1 } else { app.filters.len() };
+    let total_rules = if app.is_adding_filter() { app.filters.len() + 1 } else { app.filters.len() };
     let cur_rule = if total_rules > 0 { app.selected_filter_idx + 1 } else { 0 };
 
     let (can_up, can_down) = if total_rules <= 1 {
@@ -34,7 +34,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
     use crate::ui::keys::KeybindingRegistry;
 
     let mut actions = Vec::new();
-    if app.is_editing_filter {
+    if app.is_editing_filter() {
         actions.push(KeybindingRegistry::format_shortcut_label("↵", "save", theme.green, Color::White));
         actions.push(KeybindingRegistry::format_shortcut_label("Esc", "cancel", theme.red, Color::White));
         actions.push(KeybindingRegistry::format_shortcut_label("Backspace", "del", theme.yellow, Color::White));
@@ -69,7 +69,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
         hitboxes,
     );
 
-    if !app.is_editing_filter {
+    if !app.is_editing_filter() {
         let bottom_y = area.y + area.height.saturating_sub(1);
         hitboxes.push(Hitbox {
             rect: Rect { x: area.x + 13, y: bottom_y, width: 4, height: 1 },
@@ -117,7 +117,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         action: HitAction::FilterArea,
     });
 
-    let total_count = if app.is_adding_filter { app.filters.len() + 1 } else { app.filters.len() };
+    let total_count = if app.is_adding_filter() { app.filters.len() + 1 } else { app.filters.len() };
 
     let max_offset = total_count.saturating_sub(visible_height);
     let offset = app.filter_scroll_offset.min(max_offset);
@@ -136,8 +136,8 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     } else {
         (offset..(offset + visible_height).min(total_count))
             .map(|i| {
-                let is_adding_this = app.is_adding_filter && i == app.filters.len();
-                let is_editing_this = app.is_editing_filter && (is_adding_this || (!app.is_adding_filter && i == app.selected_filter_idx));
+                let is_adding_this = app.is_adding_filter() && i == app.filters.len();
+                let is_editing_this = app.is_editing_filter() && (is_adding_this || (!app.is_adding_filter() && i == app.selected_filter_idx));
                 let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::Filters);
                 let is_selected = !is_dragging && i == app.selected_filter_idx;
 
@@ -167,7 +167,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                 }
 
                 if is_editing_this {
-                    let buf = &app.filter_edit_buffer;
+                    let buf = app.edit_buffer();
                     let text_col = if buf.starts_with('-') {
                         Color::Rgb(255, 175, 175)
                     } else if buf.starts_with('+') {
@@ -182,7 +182,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                         Span::styled("✎ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                         Span::styled(format!("{:2} │ ", i + 1), Style::default().fg(theme.yellow)),
                         Span::styled("[ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-                        Span::styled(buf.clone(), Style::default().fg(text_col).add_modifier(Modifier::BOLD)),
+                        Span::styled(buf.to_string(), Style::default().fg(text_col).add_modifier(Modifier::BOLD)),
                         Span::styled("█", Style::default().fg(theme.yellow).add_modifier(Modifier::RAPID_BLINK)),
                         Span::styled(" ]", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     ]);

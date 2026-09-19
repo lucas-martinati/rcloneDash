@@ -20,11 +20,11 @@ impl App {
     }
 
     pub fn commit_setting_edit(&mut self) {
-        if !self.is_editing_setting {
-            return;
-        }
-        let trimmed = self.setting_edit_buffer.trim().to_string();
-        if self.settings_tab == 0 && self.settings_selected_idx == 3 {
+        let (tab, idx, trimmed) = match &self.edit_state {
+            EditState::Setting { tab, index, buffer } => (*tab, *index, buffer.trim().to_string()),
+            _ => return,
+        };
+        if tab == 0 && idx == 3 {
             if !trimmed.is_empty() {
                 if self.config.local_dir != trimmed {
                     self.config.local_dir = trimmed;
@@ -37,7 +37,7 @@ impl App {
             } else {
                 self.set_toast("ℹ Empty value: keeping previous directory");
             }
-        } else if self.settings_tab == 0 && self.settings_selected_idx == 4 {
+        } else if tab == 0 && idx == 4 {
             if !trimmed.is_empty() {
                 if self.config.remote != trimmed {
                     self.config.remote = trimmed;
@@ -50,7 +50,21 @@ impl App {
                 self.set_toast("ℹ Empty value: keeping previous remote");
             }
         }
-        self.is_editing_setting = false;
+        self.edit_state = EditState::Idle;
+    }
+
+    /// Enter editing mode for the currently selected setting (text fields only).
+    pub fn start_editing_setting(&mut self) {
+        let buffer = if self.settings_selected_idx == 3 {
+            self.config.local_dir.clone()
+        } else {
+            self.config.remote.clone()
+        };
+        self.edit_state = EditState::Setting {
+            tab: self.settings_tab,
+            index: self.settings_selected_idx,
+            buffer,
+        };
     }
 
     pub fn cycle_setting(&mut self, forward: bool) {

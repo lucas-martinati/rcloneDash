@@ -2,14 +2,13 @@ use super::*;
 
 impl App {
     pub fn dismiss_active_modal(&mut self) {
-        if self.is_editing_setting {
-            self.commit_setting_edit();
-        }
-        if self.is_editing_filter {
-            self.cancel_filter_edit();
+        match &self.edit_state {
+            EditState::Setting { .. } => self.commit_setting_edit(),
+            EditState::Filter { .. } | EditState::AddingFilter { .. } => self.cancel_filter_edit(),
+            EditState::Idle => {}
         }
         self.modal = Modal::None;
-        self.active_modal_area = None;
+        self.hit_mgr.active_modal_area = None;
     }
 
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Action {
@@ -51,7 +50,7 @@ impl App {
                 let col = mouse.column;
                 let row = mouse.row;
                 let mut handled = false;
-                for hb in self.hitboxes.iter().rev() {
+                for hb in self.hit_mgr.dashboard.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
                     {
@@ -121,7 +120,7 @@ impl App {
                 let col = mouse.column;
                 let row = mouse.row;
                 let mut handled = false;
-                for hb in self.hitboxes.iter().rev() {
+                for hb in self.hit_mgr.dashboard.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
                     {
@@ -169,7 +168,7 @@ impl App {
 
                 // 1. Si une modale est ouverte : gestion unifiée du clic extérieur (click-outside)
                 if self.modal != Modal::None {
-                    if let Some(modal_rect) = self.active_modal_area {
+                    if let Some(modal_rect) = self.hit_mgr.active_modal_area {
                         let inside = col >= modal_rect.x
                             && col < modal_rect.x + modal_rect.width
                             && row >= modal_rect.y
@@ -182,12 +181,7 @@ impl App {
                         }
                     }
 
-                    // Clic à l'intérieur de la modale : tester strictement les hitboxes de la modale
-                    let hitboxes_to_search = if !self.modal_hitboxes.is_empty() {
-                        &self.modal_hitboxes
-                    } else {
-                        &self.hitboxes
-                    };
+                    let hitboxes_to_search = self.hit_mgr.active_layer(true);
                     for hb in hitboxes_to_search.iter().rev() {
                         if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                             && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
@@ -200,7 +194,7 @@ impl App {
                 }
 
                 // 2. Mode dashboard standard (aucune modale active)
-                for hb in self.hitboxes.iter().rev() {
+                for hb in self.hit_mgr.dashboard.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
                     {
@@ -215,11 +209,8 @@ impl App {
                     return Action::None;
                 }
                 let col = mouse.column;
-                let hitboxes_to_search = if self.modal != Modal::None && !self.modal_hitboxes.is_empty() {
-                    &self.modal_hitboxes
-                } else {
-                    &self.hitboxes
-                };
+                let has_modal = self.modal != Modal::None;
+                let hitboxes_to_search = self.hit_mgr.active_layer(has_modal);
                 for hb in hitboxes_to_search.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
@@ -358,7 +349,7 @@ impl App {
                 Action::None
             }
             HitAction::SettingsTab(tab_idx) => {
-                if self.is_editing_setting {
+                if self.is_editing_setting() {
                     self.commit_setting_edit();
                 }
                 self.settings_tab = tab_idx;
@@ -366,7 +357,7 @@ impl App {
                 Action::None
             }
             HitAction::SettingOption(idx) => {
-                if self.is_editing_setting && idx != self.settings_selected_idx {
+                if self.is_editing_setting() && idx != self.settings_selected_idx {
                     self.commit_setting_edit();
                 }
                 self.settings_selected_idx = idx;
@@ -376,13 +367,8 @@ impl App {
                     } else if idx == 5 {
                         self.modal = Modal::ConfirmResync;
                     } else if idx == 3 || idx == 4 {
-                        if !self.is_editing_setting || self.settings_selected_idx != idx {
-                            self.is_editing_setting = true;
-                            self.setting_edit_buffer = if idx == 3 {
-                                self.config.local_dir.clone()
-                            } else {
-                                self.config.remote.clone()
-                            };
+                        if !self.is_editing_setting() || self.settings_selected_idx != idx {
+                            self.start_editing_setting();
                         }
                     } else {
                         self.cycle_setting(true);
@@ -393,7 +379,7 @@ impl App {
                 Action::None
             }
             HitAction::SettingCycle(idx, forward) => {
-                if self.is_editing_setting && idx != self.settings_selected_idx {
+                if self.is_editing_setting() && idx != self.settings_selected_idx {
                     self.commit_setting_edit();
                 }
                 self.settings_selected_idx = idx;
@@ -403,13 +389,8 @@ impl App {
                     } else if idx == 5 {
                         self.modal = Modal::ConfirmResync;
                     } else if idx == 3 || idx == 4 {
-                        if !self.is_editing_setting || self.settings_selected_idx != idx {
-                            self.is_editing_setting = true;
-                            self.setting_edit_buffer = if idx == 3 {
-                                self.config.local_dir.clone()
-                            } else {
-                                self.config.remote.clone()
-                            };
+                        if !self.is_editing_setting() || self.settings_selected_idx != idx {
+                            self.start_editing_setting();
                         }
                     } else {
                         self.cycle_setting(forward);
@@ -437,7 +418,7 @@ impl App {
             }
             HitAction::FilterRow(idx) => {
                 if idx < self.filters.len() {
-                    if self.is_editing_filter && self.selected_filter_idx != idx {
+                    if self.is_editing_filter() && self.selected_filter_idx != idx {
                         self.commit_filter_edit();
                     }
                     self.selected_filter_idx = idx;
@@ -447,7 +428,7 @@ impl App {
                 Action::None
             }
             HitAction::FilterCycleType(idx) => {
-                if !self.is_editing_filter {
+                if !self.is_editing_filter() {
                     self.cycle_filter_type(idx);
                 }
                 Action::None
@@ -556,7 +537,7 @@ impl App {
         // 1. Modales prioritaires
         if self.modal != Modal::None {
             // Touche universelle 'q' pour fermer n'importe quelle modale (sauf Menu où 'q' quitte l'application)
-            if key.code == KeyCode::Char('q') && self.modal != Modal::Menu && !self.is_editing_setting && !self.is_editing_filter {
+            if key.code == KeyCode::Char('q') && self.modal != Modal::Menu && self.edit_state == EditState::Idle {
                 self.modal = Modal::None;
                 return Action::None;
             }
@@ -658,16 +639,16 @@ impl App {
                     }
                 }
                 Modal::Settings => {
-                    if self.is_editing_setting {
+                    if self.is_editing_setting() {
                         match key.code {
                             KeyCode::Esc | KeyCode::Enter => {
                                 self.commit_setting_edit();
                             }
                             KeyCode::Backspace => {
-                                self.setting_edit_buffer.pop();
+                                if let Some(buf) = self.edit_buffer_mut() { buf.pop(); }
                             }
                             KeyCode::Char(c) => {
-                                self.setting_edit_buffer.push(c);
+                                if let Some(buf) = self.edit_buffer_mut() { buf.push(c); }
                             }
                             _ => {}
                         }
@@ -712,12 +693,7 @@ impl App {
                                 } else if self.settings_selected_idx == 5 {
                                     self.modal = Modal::ConfirmResync;
                                 } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
-                                    self.is_editing_setting = true;
-                                    self.setting_edit_buffer = if self.settings_selected_idx == 3 {
-                                        self.config.local_dir.clone()
-                                    } else {
-                                        self.config.remote.clone()
-                                    };
+                                    self.start_editing_setting();
                                 } else {
                                     self.cycle_setting(true);
                                 }
@@ -727,12 +703,7 @@ impl App {
                         }
                         KeyCode::Char('e') | KeyCode::Char(' ') => {
                             if self.settings_tab == 0 && (self.settings_selected_idx == 3 || self.settings_selected_idx == 4) {
-                                self.is_editing_setting = true;
-                                self.setting_edit_buffer = if self.settings_selected_idx == 3 {
-                                    self.config.local_dir.clone()
-                                } else {
-                                    self.config.remote.clone()
-                                };
+                                self.start_editing_setting();
                             } else {
                                 self.cycle_setting(true);
                             }
@@ -744,12 +715,7 @@ impl App {
                                 } else if self.settings_selected_idx == 5 {
                                     self.modal = Modal::ConfirmResync;
                                 } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
-                                    self.is_editing_setting = true;
-                                    self.setting_edit_buffer = if self.settings_selected_idx == 3 {
-                                        self.config.local_dir.clone()
-                                    } else {
-                                        self.config.remote.clone()
-                                    };
+                                    self.start_editing_setting();
                                 } else {
                                     self.cycle_setting(true);
                                 }
@@ -764,12 +730,7 @@ impl App {
                                 } else if self.settings_selected_idx == 5 {
                                     self.modal = Modal::ConfirmResync;
                                 } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
-                                    self.is_editing_setting = true;
-                                    self.setting_edit_buffer = if self.settings_selected_idx == 3 {
-                                        self.config.local_dir.clone()
-                                    } else {
-                                        self.config.remote.clone()
-                                    };
+                                    self.start_editing_setting();
                                 } else {
                                     self.cycle_setting(false);
                                 }
@@ -866,7 +827,7 @@ impl App {
                     _ => {}
                 },
                 Modal::Filters => {
-                    if self.is_editing_filter {
+                    if self.is_editing_filter() {
                         match key.code {
                             KeyCode::Enter => {
                                 self.commit_filter_edit();
@@ -875,10 +836,10 @@ impl App {
                                 self.cancel_filter_edit();
                             }
                             KeyCode::Backspace => {
-                                self.filter_edit_buffer.pop();
+                                if let Some(buf) = self.edit_buffer_mut() { buf.pop(); }
                             }
                             KeyCode::Char(c) => {
-                                self.filter_edit_buffer.push(c);
+                                if let Some(buf) = self.edit_buffer_mut() { buf.push(c); }
                             }
                             _ => {}
                         }

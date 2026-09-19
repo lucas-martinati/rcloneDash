@@ -70,7 +70,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let can_up = total_opts > 1 && app.settings_selected_idx > 0;
     let can_down = total_opts > 1 && app.settings_selected_idx < total_opts.saturating_sub(1);
 
-    let mid_cmd: Vec<Span> = if app.is_editing_setting {
+    let mid_cmd: Vec<Span> = if app.is_editing_setting() {
         let mut spans = crate::ui::keys::KeybindingRegistry::format_shortcut_label("Esc", "cancel", theme.red, Color::White);
         spans.push(Span::styled("  ", Style::default()));
         spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "confirm", theme.green, Color::White));
@@ -272,8 +272,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
             let inner_w = w.saturating_sub(4);
             let line2 = if app.settings_tab == 0 {
-                if app.is_editing_setting && (i == 3 || i == 4) {
-                    let edit_text = format!("{}_", app.setting_edit_buffer);
+                if app.is_editing_setting() && (i == 3 || i == 4) {
+                    let edit_text = format!("{}_", app.edit_buffer());
                     let edit_centered = format!("{:^width$}", edit_text, width = inner_w);
                     Line::from(vec![
                         Span::styled(format!("[{}]", edit_centered), Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),

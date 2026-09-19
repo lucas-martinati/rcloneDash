@@ -29,7 +29,7 @@ use popups::render_popups;
 
 pub fn render(f: &mut Frame, app: &mut App) {
     // Réinitialiser les hitboxes pour cette frame
-    let mut hitboxes = std::mem::take(&mut app.hitboxes);
+    let mut hitboxes = std::mem::take(&mut app.hit_mgr.dashboard);
     hitboxes.clear();
 
     let theme = app.current_theme.palette();
@@ -83,10 +83,9 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let mut modal_hitboxes = Vec::with_capacity(32);
     render_popups(f, app, &theme, &mut modal_hitboxes);
 
-    app.active_modal_area = compute_active_modal_area(&app.modal, f.area());
-    app.modal_hitboxes = modal_hitboxes.clone();
-    hitboxes.extend(modal_hitboxes);
-    app.hitboxes = hitboxes;
+    app.hit_mgr.active_modal_area = compute_active_modal_area(&app.modal, f.area());
+    app.hit_mgr.modal = modal_hitboxes;
+    app.hit_mgr.dashboard = hitboxes;
 }
 
 /// Rendu d'une scrollbar btop++ personnalisée avec coordonnées explicites de colonne et de bornes verticales
