@@ -108,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         default_panic_hook(panic_info);
     }));
 
-    // 2. Initialisation du terminal avec capture souris et clavier enrichi (btop++ style)
+    // 2. Initialisation du terminal avec capture souris et clavier enrichi
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     let _ = execute!(

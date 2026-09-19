@@ -82,7 +82,7 @@ cargo run
 | :---: | :---: |
 | ![File Explorer](assets/screenshots/tui/files.png) | ![Filters](assets/screenshots/tui/filters.png) |
 
-| btop++ Styled Main Menu |
+| Main Menu |
 | :---: |
 | ![Main Menu](assets/screenshots/tui/menu.png) |
 
@@ -126,7 +126,7 @@ Puis accédez à [http://localhost:8765](http://localhost:8765).
     - Défilement automatique intelligent ou pause (`Space` / molette).
   - **Panneau Inférieur - Fichiers récemment synchronisés** :
     - Badges colorés de statut (`● Added`, `● Modified`, `● Deleted`), chemins relatifs et horodatage.
-- **Menu Principal style btop++ (Overlay Modal)** :
+- **Menu Principal (Overlay Modal)** :
   - Accessible via `Échap` ou `m` (ou clic sur le bouton `[m]enu`).
   - Grand bandeau ASCII art, version et 3 gros boutons arrondis (`[o] Options`, `[h] Help`, `[q] Quit`).
 - **Menu Paramètres (Overlay Modal)** :
@@ -140,7 +140,7 @@ Puis accédez à [http://localhost:8765](http://localhost:8765).
   - Parcourez les fichiers synchronisés ou l'historique complet des runs.
   - `Entrée` ou clic pour ouvrir le fichier dans l'application par défaut.
   - `Ctrl+Entrée`, `d` ou `Ctrl+Clic` pour ouvrir le dossier contenant dans le gestionnaire de fichiers système.
-- **Widget de fréquence de rafraîchissement style btop++** :
+- **Widget de fréquence de rafraîchissement** :
   - Affichage `[- 250ms +]` en haut à droite avec boutons interactifs cliquables et raccourcis clavier (`-` pour accélérer, `+` pour ralentir).
 - **Annulation dynamique des synchronisations** :
   - Le bouton du bandeau devient dynamiquement `[ ⏹ Cancel ]` en rouge lorsqu'une synchronisation est active.
@@ -157,7 +157,7 @@ Puis accédez à [http://localhost:8765](http://localhost:8765).
 | `Clic gauche` | Cliquer sur un bouton, un run d'historique, un fichier ou une option |
 | `Ctrl + Clic` | Ouvrir le dossier parent du fichier dans l'explorateur système |
 | `Molette haut/bas` | Défilement fluide des logs et des listes |
-| `Échap` / `m` | Ouvrir le **Menu Principal** style `btop++` (ou fermer la modale active) |
+| `Échap` / `m` | Ouvrir le **Menu Principal** (ou fermer la modale active) |
 | `o` | Ouvrir les **Paramètres / Options** (ou ouvrir le fichier sélectionné) |
 | `d` | Lancer une **Simulation Dry-Run** (ou ouvrir le dossier du fichier sélectionné) |
 | `s` / Clic `[ ⟳ Sync ]` | **Forcer une synchronisation** immédiate |
@@ -182,3 +182,8 @@ Puis accédez à [http://localhost:8765](http://localhost:8765).
 - **[Tokio](https://tokio.rs/)** pour l'asynchronisme non bloquant du monitoring et des subprocesses.
 - **Systemd User Units** (`rclone-bisync.service` et `rclone-bisync.timer`) pour l'automatisation sans aucun privilège root.
 - **Interface Web optionnelle** : FastAPI / Python (`rclone-monitor.py`) avec frontend Vanilla HTML5/CSS3/ES Modules dans `web/`.
+
+---
+
+> 💻 *Projet vibe codé avec passion.*
+

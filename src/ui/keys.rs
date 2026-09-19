@@ -41,7 +41,7 @@ impl KeybindingRegistry {
         ]
     }
 
-    /// Formate un libellé d'action btop++ avec mise en valeur de la touche :
+    /// Formate un libellé d'action avec mise en valeur de la touche :
     /// - Si `key` est un caractère présent dans `word` (ex: 'e' dans "edit", 'a' dans "add", 'd' dans "del", 't' dans "type", 'E' dans "Editor"),
     ///   ce caractère est mis en valeur avec `key_fg` et `BOLD` directement au sein du mot.
     /// - Si `key` n'est pas présent dans `word` ou s'il s'agit d'une touche spéciale (ex: "↵", "Esc", "Tab", "↑"),

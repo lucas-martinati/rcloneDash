@@ -262,7 +262,7 @@ pub struct App {
     pub log_filter: LogFilter,
     pub toast: Option<(String, Instant)>,
 
-    // btop++ : panel actif et tick rate dynamique
+    // Panel actif et tick rate dynamique
     pub focused_panel: FocusedPanel,
     pub tick_rate_ms_live: u64,
     pub tick_rate_changed: bool,

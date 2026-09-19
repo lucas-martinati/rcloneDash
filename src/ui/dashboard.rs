@@ -761,7 +761,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         }
     }
 
-    // 1. Graphe de durées multi-lignes (btop style) avec hitboxes sur chaque colonne
+    // 1. Graphe de durées multi-lignes avec hitboxes sur chaque colonne
     let past_selected = match app.selected_run_idx {
         Some(idx) => {
             if is_syncing {
@@ -1116,7 +1116,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let p = Paragraph::new(lines).block(outer_block);
     f.render_widget(p, area);
 
-    // Scrollbar intégrée style btop++
+    // Scrollbar intégrée
     let current_pos = if app.auto_scroll {
         max_scroll
     } else {

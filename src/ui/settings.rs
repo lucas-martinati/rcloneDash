@@ -191,7 +191,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let sep_area = cols[1];
     let right_area = cols[2];
 
-    // Séparateur vertical btop++
+    // Séparateur vertical
     let sep_lines: Vec<Line> = (0..inner.height)
         .map(|_| Line::from(Span::styled("│", Style::default().fg(theme.border))))
         .collect();
@@ -263,7 +263,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         let w = left_area.width as usize;
 
         if is_selected {
-            // Bandeau de fond coloré btop++ (brun/rouge profond #5A2222)
+            // Bandeau de fond coloré (brun/rouge profond #5A2222)
             let highlight_bg = Color::Rgb(90, 32, 32);
 
             let line1 = Line::from(vec![
@@ -318,7 +318,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let left_p = Paragraph::new(left_lines);
     f.render_widget(left_p, left_area);
 
-    // Rendu de la colonne droite : Panneau de description style btop++
+    // Rendu de la colonne droite : Panneau de description
     use crate::ui::keys::{KeyAction, KeybindingRegistry};
     let k_files = KeybindingRegistry::get_key_str(KeyAction::Files);
     let k_dec = KeybindingRegistry::get_key_str(KeyAction::DecTickRate);

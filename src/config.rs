@@ -431,7 +431,7 @@ impl SettingId {
             Self::RemoteStorage => "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nUsed for cloud quota inquiries, remote listings, and bidirectional synchronization.",
             Self::ResyncAction => "In case of critical bisync errors or corrupted sync listings, this action rebuilds listing databases by comparing the local directory and Google Drive (keeping the newest files: --resync-mode newer).",
             Self::LogJournalAction => "Opens the complete rclone-bisync systemd journal log in your external viewer (less or configured editor).\n\nAllows navigating the full history, searching text, and inspecting detailed file transfers.",
-            Self::ColorTheme => "Sets the color theme applied across the entire dashboard.\n\nEach theme dynamically adapts borders, text, and btop++ gradient charts.",
+            Self::ColorTheme => "Sets the color theme applied across the entire dashboard.\n\nEach theme dynamically adapts borders, text, and gradient charts.",
             Self::ContainerLayout => "Reorder the main dashboard containers to match your preferred workflow.\n\nApplies instantly across the entire dashboard.",
             Self::MidPanelOrder => "Horizontal placement of the middle section containers.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.",
             Self::BorderStyle => "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nPersisted across sessions in dash-config.json.",

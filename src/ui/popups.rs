@@ -232,7 +232,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             let ver_line = Line::from(ver_spans);
             f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
 
-            // 2. Boîte d'aide style btop++
+            // 2. Boîte d'aide
             let help_box_area = v_chunks[2];
             let inner = render_modal_container(
                 f,

@@ -25,7 +25,7 @@ impl ThemeChoice {
 
     pub fn name(&self) -> &'static str {
         match self {
-            ThemeChoice::TokyoNight => "Tokyo Night (btop default)",
+            ThemeChoice::TokyoNight => "Tokyo Night",
             ThemeChoice::CatppuccinMocha => "Catppuccin Mocha",
             ThemeChoice::Nord => "Nord Frost",
             ThemeChoice::GruvboxDark => "Gruvbox Dark",
@@ -240,7 +240,7 @@ pub struct ThemePalette {
 }
 
 impl ThemePalette {
-    /// Convertit l'ensemble des couleurs en nuances de gris (monochrome style btop++)
+    /// Convertit l'ensemble des couleurs en nuances de gris (monochrome)
     pub fn to_grayscale(&self) -> ThemePalette {
         let to_gray = |c: Color| -> Color {
             match c {

@@ -17,7 +17,7 @@ pub fn get_graph_chars(style: GraphStyleChoice) -> [char; 8] {
     }
 }
 
-/// Renders a multi-line 2D duration bar chart (btop++ style) for past runs.
+/// Renders a multi-line 2D duration bar chart for past runs.
 /// Returns the rendered lines and the column layout `(col_start_x, col_width, original_idx)` for hitboxes.
 pub fn render_history_graph_multiline(
     past_runs: &[PastRun],
@@ -169,7 +169,7 @@ fn format_duration_clean(sec: f64) -> String {
     }
 }
 
-/// Render btop++ style horizontal gradient progress bar: [████████····] or [⣿⣿⣿⣿····]
+/// Render horizontal gradient progress bar: [████████····] or [⣿⣿⣿⣿····]
 pub fn render_gradient_bar(
     pct: f64,
     width: usize,
@@ -214,7 +214,7 @@ pub fn render_gradient_bar(
     spans
 }
 
-/// Render btop++ style solid progress bar with uniform color: [████····] or [⣿⣿⣿⣿····]
+/// Render solid progress bar with uniform color: [████····] or [⣿⣿⣿⣿····]
 pub fn render_solid_bar(
     pct: f64,
     width: usize,

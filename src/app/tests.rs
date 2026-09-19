@@ -502,7 +502,7 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
-    async fn test_initial_unselected_and_btop_scroll() {
+    async fn test_initial_unselected_and_scroll() {
         let mut app = App::new();
         app.service_info.state = ServiceState::Idle;
         app.live.is_syncing = false;
@@ -695,7 +695,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::None);
 
-        // 6. Menu btop : 'q' quitte l'application
+        // 6. Menu principal : 'q' quitte l'application
         app.modal = Modal::Menu;
         app.running = true;
         app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));

@@ -41,7 +41,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         theme.clone()
     };
 
-    // Fond global sombre style btop++
+    // Fond global sombre
     f.render_widget(Block::default().style(Style::default().bg(dashboard_theme.bg_main)), f.area());
 
     let chunks = Layout::default()
@@ -79,7 +79,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     // 2. Pied de page
     render_footer(f, app, &dashboard_theme, chunks[1], &mut hitboxes);
 
-    // 4. Modales overlay (Settings btop, Fichiers, Filtres, Confirmations)
+    // 4. Modales overlay (Settings, Fichiers, Filtres, Confirmations)
     let mut modal_hitboxes = Vec::with_capacity(32);
     render_popups(f, app, &theme, &mut modal_hitboxes);
 
@@ -88,7 +88,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     app.hit_mgr.dashboard = hitboxes;
 }
 
-/// Rendu d'une scrollbar btop++ personnalisée avec coordonnées explicites de colonne et de bornes verticales
+/// Rendu d'une scrollbar personnalisée avec coordonnées explicites de colonne et de bornes verticales
 pub fn render_scrollbar_custom(
     f: &mut Frame,
     scroll_x: u16,
@@ -159,7 +159,7 @@ pub fn render_scrollbar_custom(
     }
 }
 
-/// Scrollbar intégrée dans les conteneurs avec bordure standard (style btop++)
+/// Scrollbar intégrée dans les conteneurs avec bordure standard
 /// Dessinée directement dans la colonne droite intérieure (x = area.x + area.width - 2)
 pub fn render_scrollbar(
     f: &mut Frame,

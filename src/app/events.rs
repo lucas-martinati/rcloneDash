@@ -504,7 +504,7 @@ impl App {
             return Action::None;
         }
 
-        // Saisie en cours pour le filtre des fichiers récents (style btop)
+        // Saisie en cours pour le filtre des fichiers récents
         if self.is_filtering_recent && self.modal == Modal::None {
             match key.code {
                 KeyCode::Esc => {
@@ -1057,7 +1057,7 @@ impl App {
                     _ => {}
                 }
             }
-            // Esc ou m ouvre le menu principal (style btop++) quand aucune modale n'est ouverte
+            // Esc ou m ouvre le menu principal quand aucune modale n'est ouverte
             KeyCode::Esc | KeyCode::Char('m') => {
                 self.menu_selected_idx = 0;
                 self.modal = Modal::Menu;
@@ -1185,7 +1185,7 @@ impl App {
                 self.focused_panel = self.focused_panel.prev();
                 return Action::None;
             }
-            // +/- : tick rate dynamique (btop++ style: - accélère, + ralentit)
+            // +/- : tick rate dynamique (- accélère, + ralentit)
             KeyCode::Char('+') | KeyCode::Char('=') => {
                 self.step_tick_rate(false); // ralentit
                 return Action::None;

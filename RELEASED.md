@@ -34,7 +34,7 @@ Cette version de maintenance et d'évolution apporte l'auto-updater intégré po
 ## [v1.0.0] - Version Majeure & Réécriture Rust TUI
 
 Bienvenue dans la première version officielle majeure de **RcloneDash** !  
-Cette version 1.0.0 marque une étape charnière : la réécriture complète du frontend et du moteur de monitoring en une interface terminal moderne, ultra-légère et autonome développée en **Rust**, inspirée des standards visuels de `btop++` et de l'ergonomie de `lazygit`.
+Cette version 1.0.0 marque une étape charnière : la réécriture complète du frontend et du moteur de monitoring en une interface terminal moderne, ultra-légère et autonome développée en **Rust**, inspirée par l'ergonomie de `lazygit`.
 
 ---
 
@@ -51,7 +51,7 @@ Cette version 1.0.0 marque une étape charnière : la réécriture complète du 
   - Statut en temps réel du service systemd (`rclone-bisync.service`).
   - Compte à rebours avant la prochaine synchronisation (`rclone-bisync.timer`).
   - Bouton d'action adaptatif : `[ ⟳ Sync ]` au repos, devenant automatiquement `[ ⏹ Arrêter ]` en rouge pendant une synchronisation en cours.
-  - Bouton interactif de fréquence de rafraîchissement style btop++ `[- 250ms +]`.
+  - Bouton interactif de fréquence de rafraîchissement `[- 250ms +]`.
 - **Barre des 7 cartes KPI clés** :
   - Espace de stockage Cloud (Google Drive ou distant configuré).
   - Espace disque local (calculé en temps réel via `statvfs`).
@@ -73,7 +73,7 @@ Cette version 1.0.0 marque une étape charnière : la réécriture complète du 
   - Intégration système : `Entrée` pour ouvrir le fichier (`xdg-open`), `Ctrl+Entrée` ou `d` pour ouvrir le dossier contenant dans le gestionnaire de fichiers.
 
 #### 3. Modales et Menus Dédiés
-- **Menu Principal style btop++ (`Échap` ou `m`)** :
+- **Menu Principal (`Échap` ou `m`)** :
   - Bannière ASCII art, options rapides et navigation clavier/souris.
 - **Menu Paramètres (`o`)** :
   - Choix parmi **6 thèmes visuels modernes** (*Tokyo Night, Catppuccin Mocha, Nord, Gruvbox, Dracula, Monokai Pro*).
