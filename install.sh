@@ -2,13 +2,13 @@
 set -eEo pipefail
 
 # --------------------------------------------------------------------------- #
-#  RcloneDash - Script d'installation unifié (TUI & Services Systemd)
+#  RcloneDash - Unified Installer Script (TUI & Systemd Services)
 # --------------------------------------------------------------------------- #
 
 LOG_FILE="${TMPDIR:-/tmp}/rclonedash-install-$UID.log"
-echo "=== Début de l'installation de RcloneDash : $(date) ===" > "$LOG_FILE"
+echo "=== Starting RcloneDash installation: $(date) ===" > "$LOG_FILE"
 
-# Couleurs & helpers
+# Colors & formatting helpers
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
     BOLD=$'\033[1m';  DIM=$'\033[2m';   RESET=$'\033[0m'
     RED=$'\033[31m';  GREEN=$'\033[32m'; YELLOW=$'\033[33m'
@@ -27,20 +27,20 @@ err()     { printf '   %s✗%s %s\n'  "$RED"    "$RESET" "$1" >&2; }
 detail()  { printf '     %s%s%s\n' "$GREY"   "$1" "$RESET"; }
 
 # --------------------------------------------------------------------------- #
-#  Vérification de l'utilisateur (interdiction stricte de sudo)
+#  User Verification (strict non-root requirement)
 # --------------------------------------------------------------------------- #
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
-    printf '\n%s%s   ✗ Erreur : ce script ne doit PAS être exécuté avec les privilèges root (sudo).%s\n' "$BOLD" "$RED" "$RESET" >&2
-    printf '     %sRcloneDash s'\''installe dans votre session utilisateur (~/.local/bin, ~/.config/systemd/user).%s\n' "$GREY" "$RESET" >&2
-    printf '     %sL'\''exécuter avec sudo empêcherait les services utilisateur systemd de fonctionner.%s\n\n' "$GREY" "$RESET" >&2
-    printf '     %s➜ Relancez la commande sans sudo :%s %s./install.sh%s\n\n' "$BOLD" "$YELLOW" "$RESET" "$BOLD" "$RESET" >&2
+    printf '\n%s%s   ✗ Error: This script must NOT be run with root privileges (sudo).%s\n' "$BOLD" "$RED" "$RESET" >&2
+    printf '     %sRcloneDash installs inside your user session (~/.local/bin, ~/.config/systemd/user).%s\n' "$GREY" "$RESET" >&2
+    printf '     %sRunning with sudo will prevent user systemd services from functioning properly.%s\n\n' "$GREY" "$RESET" >&2
+    printf '     %s➜ Run the command again without sudo:%s %s./install.sh%s\n\n' "$BOLD" "$YELLOW" "$RESET" "$BOLD" "$RESET" >&2
     exit 1
 fi
 
 banner() {
     local rule="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     printf '\n%s%s%s%s\n'      "$BOLD" "$CYAN" "$rule" "$RESET"
-    printf '%s%s  Installation de RcloneDash (Rust TUI & Systemd)%s\n' "$BOLD" "$CYAN" "$RESET"
+    printf '%s%s  Installing RcloneDash (Rust TUI & Systemd)%s\n' "$BOLD" "$CYAN" "$RESET"
     printf '%s%s%s%s\n'        "$BOLD" "$CYAN" "$rule" "$RESET"
 }
 
@@ -50,56 +50,87 @@ on_error() {
     local command="$3"
 
     printf '\n' >&2
-    err "L'installation a échoué (code d'erreur: $exit_code)"
-    detail "Commande en échec : $command"
-    detail "Ligne : $line_no dans $0"
+    err "Installation failed (exit code: $exit_code)"
+    detail "Failed command: $command"
+    detail "Line: $line_no in $0"
 
     if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
-        printf '\n   %s%sDernières lignes du journal :%s\n' "$BOLD" "$YELLOW" "$RESET" >&2
+        printf '\n   %s%sLast lines of the installation log:%s\n' "$BOLD" "$YELLOW" "$RESET" >&2
         tail -n 15 "$LOG_FILE" | while IFS= read -r line; do
             printf '     %s│%s %s\n' "$GREY" "$RESET" "$line" >&2
         done
-        printf '\n   %sConsultez le journal complet : %s%s\n' "$GREY" "$LOG_FILE" "$RESET" >&2
+        printf '\n   %sCheck the full log at: %s%s\n' "$GREY" "$LOG_FILE" "$RESET" >&2
     fi
     printf '\n' >&2
     exit "$exit_code"
 }
 
+TMP_DL_DIR=""
+cleanup() {
+    if [ -n "$TMP_DL_DIR" ] && [ -d "$TMP_DL_DIR" ]; then
+        rm -rf "$TMP_DL_DIR"
+    fi
+}
+trap cleanup EXIT
+
 trap 'on_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 banner
 
-# Répertoire du script d'installation et détection des modèles
+# Determine script directory and template location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_DIR="$SCRIPT_DIR/services"
+
+# If templates are not found locally (e.g. piped execution via curl | bash), download the latest release
+if [ ! -f "$TEMPLATE_DIR/rclone-bisync-guard.sh.template" ] && [ ! -d "/usr/share/rclonedash" ]; then
+    info "Standalone mode detected: downloading latest official release package..."
+    TMP_DL_DIR=$(mktemp -d "${TMPDIR:-/tmp}/rclonedash-install-XXXXXX")
+
+    RELEASE_API="https://api.github.com/repos/lucas-martinati/rcloneDash/releases/latest"
+    TAR_URL=$(curl -sL "$RELEASE_API" | grep -o 'https://github.com/lucas-martinati/rcloneDash/releases/download/[^" ]*linux-x86_64.tar.gz' | head -n 1)
+    if [ -z "$TAR_URL" ]; then
+        TAR_URL="https://github.com/lucas-martinati/rcloneDash/releases/latest/download/rclonedash-v1.0.0-linux-x86_64.tar.gz"
+    fi
+
+    if curl -fsSL "$TAR_URL" -o "$TMP_DL_DIR/rclonedash.tar.gz" 2>>"$LOG_FILE"; then
+        tar -xzf "$TMP_DL_DIR/rclonedash.tar.gz" -C "$TMP_DL_DIR" --strip-components=1 2>>"$LOG_FILE"
+        SCRIPT_DIR="$TMP_DL_DIR"
+        TEMPLATE_DIR="$TMP_DL_DIR/services"
+        ok "Official release package downloaded and extracted"
+    else
+        err "Failed to download release archive from $TAR_URL"
+        exit 1
+    fi
+fi
+
 if [ ! -f "$TEMPLATE_DIR/rclone-bisync-guard.sh.template" ] && [ -d "/usr/share/rclonedash" ]; then
     TEMPLATE_DIR="/usr/share/rclonedash"
 fi
 
 # --------------------------------------------------------------------------- #
-#  Vérification des prérequis
+#  Prerequisites Check
 # --------------------------------------------------------------------------- #
 if ! command -v systemctl >/dev/null 2>&1; then
-    err "systemctl n'a pas été trouvé. RcloneDash nécessite systemd pour planifier les synchronisations."
+    err "systemctl was not found. RcloneDash requires systemd to schedule background synchronizations."
     exit 1
 fi
 
 if ! command -v rclone >/dev/null 2>&1; then
-    warn "rclone n'est pas détecté dans votre PATH."
-    detail "RcloneDash surveille vos synchronisations, mais nécessite rclone pour fonctionner."
-    detail "Installez-le avec : sudo apt install rclone (ou https://rclone.org/install/)"
+    warn "rclone is not detected in your PATH."
+    detail "RcloneDash monitors your syncs, but requires rclone to execute them."
+    detail "Install it with: sudo apt install rclone (or https://rclone.org/install/)"
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
-    warn "python3 n'est pas détecté dans votre PATH."
-    detail "Le script de garde rclone utilise python3 pour lire la configuration JSON."
-    detail "Installez-le avec : sudo apt install python3"
+    warn "python3 is not detected in your PATH."
+    detail "The rclone guard script uses python3 to parse JSON configuration."
+    detail "Install it with: sudo apt install python3"
 fi
 
 # --------------------------------------------------------------------------- #
-#  Étape 1 — Installation du binaire TUI
+#  Step 1 — Install TUI Binary
 # --------------------------------------------------------------------------- #
-step 1 "Installation du binaire RcloneDash TUI"
+step 1 "Installing RcloneDash TUI binary"
 
 BIN_SRC=""
 if [ -f "$SCRIPT_DIR/rclonedash" ] && [ -x "$SCRIPT_DIR/rclonedash" ]; then
@@ -109,39 +140,39 @@ elif [ -f "$SCRIPT_DIR/target/release/rclonedash" ] && [ -x "$SCRIPT_DIR/target/
 elif [ -x "/usr/bin/rclonedash" ]; then
     BIN_SRC="/usr/bin/rclonedash"
 elif command -v cargo >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/Cargo.toml" ]; then
-    info "Compilation du binaire release avec Cargo (optimisations LTO activées)..."
+    info "Compiling release binary with Cargo (LTO optimizations enabled)..."
     (cd "$SCRIPT_DIR" && cargo build --release >> "$LOG_FILE" 2>&1)
     BIN_SRC="$SCRIPT_DIR/target/release/rclonedash"
 fi
 
 if [ -z "$BIN_SRC" ] || [ ! -f "$BIN_SRC" ]; then
-    err "Impossible de localiser ou compiler le binaire rclonedash."
-    detail "Si vous installez depuis les sources, assurez-vous d'avoir Rust installé (cargo build --release)."
-    detail "Si vous utilisez une archive release, assurez-vous que le fichier 'rclonedash' est présent."
+    err "Unable to locate or compile the rclonedash binary."
+    detail "If compiling from source, make sure Rust/Cargo is installed (cargo build --release)."
+    detail "If using a release archive, verify that the 'rclonedash' file is present."
     exit 1
 fi
 
 INSTALL_BIN_DIR="$HOME/.local/bin"
 if [ "$BIN_SRC" = "/usr/bin/rclonedash" ]; then
-    ok "Binaire système détecté dans /usr/bin/rclonedash"
+    ok "System binary detected at /usr/bin/rclonedash"
 else
     mkdir -p "$INSTALL_BIN_DIR"
     install -m 755 "$BIN_SRC" "$INSTALL_BIN_DIR/rclonedash"
-    ok "Binaire installé dans $INSTALL_BIN_DIR/rclonedash"
+    ok "Binary installed to $INSTALL_BIN_DIR/rclonedash"
 
-    # Vérification du PATH
+    # PATH verification
     if [[ ":$PATH:" != *":$INSTALL_BIN_DIR:"* ]]; then
-        warn "$INSTALL_BIN_DIR n'est pas dans votre variable PATH !"
-        detail "Pour lancer 'rclonedash' directement depuis n'importe où, ajoutez la ligne suivante"
-        detail "dans votre fichier ~/.bashrc ou ~/.zshrc :"
+        warn "$INSTALL_BIN_DIR is not in your PATH variable!"
+        detail "To launch 'rclonedash' directly from anywhere, add the following line"
+        detail "to your ~/.bashrc or ~/.zshrc file:"
         detail "    export PATH=\"\$HOME/.local/bin:\$PATH\""
     fi
 fi
 
 # --------------------------------------------------------------------------- #
-#  Étape 2 — Installation du script de garde bisync
+#  Step 2 — Install Bisync Guard Script
 # --------------------------------------------------------------------------- #
-step 2 "Installation du script de garde rclone-bisync"
+step 2 "Installing rclone-bisync guard script"
 
 DATA_DIR="$HOME/.local/share/RcloneDash"
 mkdir -p "$DATA_DIR"
@@ -149,16 +180,16 @@ mkdir -p "$DATA_DIR"
 if [ -f "$TEMPLATE_DIR/rclone-bisync-guard.sh.template" ]; then
     sed -e "s|__HOME__|$HOME|g" "$TEMPLATE_DIR/rclone-bisync-guard.sh.template" > "$DATA_DIR/rclone-bisync-guard.sh"
     chmod +x "$DATA_DIR/rclone-bisync-guard.sh"
-    ok "Script de garde configuré dans $DATA_DIR/rclone-bisync-guard.sh"
+    ok "Guard script configured at $DATA_DIR/rclone-bisync-guard.sh"
 else
-    err "Modèle 'rclone-bisync-guard.sh.template' introuvable dans $TEMPLATE_DIR."
+    err "Template 'rclone-bisync-guard.sh.template' not found in $TEMPLATE_DIR."
     exit 1
 fi
 
 # --------------------------------------------------------------------------- #
-#  Étape 3 — Configuration & Règles d'exclusion rclone
+#  Step 3 — Configuration & Rclone Exclusion Filters
 # --------------------------------------------------------------------------- #
-step 3 "Configuration et filtres rclone"
+step 3 "Setting up configuration and rclone filters"
 
 RCLONE_CONF_DIR="$HOME/.config/rclone"
 mkdir -p "$RCLONE_CONF_DIR"
@@ -167,10 +198,10 @@ mkdir -p "$RCLONE_CONF_DIR"
 if [ ! -f "$RCLONE_CONF_DIR/gdrive-filters.txt" ]; then
     if [ -f "$TEMPLATE_DIR/gdrive-filters.txt" ]; then
         cp "$TEMPLATE_DIR/gdrive-filters.txt" "$RCLONE_CONF_DIR/gdrive-filters.txt"
-        ok "Fichier de filtres par défaut installé ($RCLONE_CONF_DIR/gdrive-filters.txt)"
+        ok "Default filters file installed ($RCLONE_CONF_DIR/gdrive-filters.txt)"
     fi
 else
-    info "Filtres existants conservés ($RCLONE_CONF_DIR/gdrive-filters.txt)"
+    info "Preserving existing filters ($RCLONE_CONF_DIR/gdrive-filters.txt)"
 fi
 
 # dash-config.json
@@ -183,9 +214,9 @@ if [ ! -f "$CONFIG_FILE" ]; then
   "timer_interval": "10min"
 }
 EOF
-    ok "Fichier de configuration créé avec le dossier local par défaut ~/GoogleDrive ($CONFIG_FILE)"
+    ok "Configuration file created with default local directory ~/GoogleDrive ($CONFIG_FILE)"
 else
-    # Si le fichier existe déjà, s'assurer que local_dir est bien défini (et jamais vide ou corrompu)
+    # If the file already exists, ensure local_dir is well defined
     if command -v python3 >/dev/null 2>&1; then
         python3 - <<PYEOF
 import json
@@ -198,20 +229,19 @@ except Exception:
     data = {}
 
 local_dir = str(data.get("local_dir", "")).strip()
-# Si local_dir est vide, absent ou un chemin invalide de test, initialiser à ~/GoogleDrive
 if not local_dir or local_dir == "/home/new/path":
     data["local_dir"] = "~/GoogleDrive"
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 PYEOF
     fi
-    info "Fichier de configuration existant conservé ($CONFIG_FILE)"
+    info "Preserving existing configuration file ($CONFIG_FILE)"
 fi
 
 # --------------------------------------------------------------------------- #
-#  Étape 4 — Service & Timer Systemd utilisateur
+#  Step 4 — User Systemd Service & Timer
 # --------------------------------------------------------------------------- #
-step 4 "Installation et activation des services Systemd utilisateur"
+step 4 "Configuring and enabling user systemd services"
 
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 mkdir -p "$SYSTEMD_USER_DIR"
@@ -219,42 +249,42 @@ mkdir -p "$SYSTEMD_USER_DIR"
 if [ -f "$TEMPLATE_DIR/rclone-bisync.service.template" ]; then
     sed -e "s|__HOME__|$HOME|g" "$TEMPLATE_DIR/rclone-bisync.service.template" > "$SYSTEMD_USER_DIR/rclone-bisync.service"
 else
-    err "Modèle 'rclone-bisync.service.template' introuvable dans $TEMPLATE_DIR."
+    err "Template 'rclone-bisync.service.template' not found in $TEMPLATE_DIR."
     exit 1
 fi
 
 if [ -f "$TEMPLATE_DIR/rclone-bisync.timer" ]; then
     cp "$TEMPLATE_DIR/rclone-bisync.timer" "$SYSTEMD_USER_DIR/rclone-bisync.timer"
     
-    # Ajuster l'intervalle si configuré dans dash-config.json
+    # Adjust timer interval if configured in dash-config.json
     if command -v python3 >/dev/null 2>&1 && [ -f "$CONFIG_FILE" ]; then
         CUSTOM_INTERVAL=$(python3 -c "import sys, json; print(json.load(open(sys.argv[1])).get('timer_interval', '10min'))" "$CONFIG_FILE" 2>/dev/null || echo "10min")
         if [ -n "$CUSTOM_INTERVAL" ] && [ "$CUSTOM_INTERVAL" != "10min" ]; then
             sed -i "s|OnUnitInactiveSec=.*|OnUnitInactiveSec=$CUSTOM_INTERVAL|" "$SYSTEMD_USER_DIR/rclone-bisync.timer"
-            info "Intervalle du timer ajusté à $CUSTOM_INTERVAL d'après votre configuration"
+            info "Timer interval adjusted to $CUSTOM_INTERVAL from your configuration"
         fi
     fi
 else
-    err "Fichier 'services/rclone-bisync.timer' introuvable."
+    err "File 'services/rclone-bisync.timer' not found."
     exit 1
 fi
 
-# Rechargement et activation sans sudo
+# Reload and enable without sudo
 systemctl --user daemon-reload >> "$LOG_FILE" 2>&1
 systemctl --user enable --now rclone-bisync.timer >> "$LOG_FILE" 2>&1
 systemctl --user restart rclone-bisync.timer >> "$LOG_FILE" 2>&1
-ok "Timer systemd utilisateur 'rclone-bisync.timer' activé et démarré"
+ok "User systemd timer 'rclone-bisync.timer' enabled and started"
 
 # --------------------------------------------------------------------------- #
-#  Récapitulatif final
+#  Installation Summary
 # --------------------------------------------------------------------------- #
 printf '\n%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$BOLD" "$GREEN" "$RESET"
-printf '%s%s  ✔ Installation terminée avec succès !%s\n' "$BOLD" "$GREEN" "$RESET"
+printf '%s%s  ✔ Installation completed successfully!%s\n' "$BOLD" "$GREEN" "$RESET"
 printf '%s%s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n' "$BOLD" "$GREEN" "$RESET"
 
-printf '  %s• Lancer l'\''interface TUI :%s   %s%srclonedash%s\n' "$BOLD" "$RESET" "$BOLD" "$CYAN" "$RESET"
-printf '  %s• Binaire installé :%s         %s\n' "$BOLD" "$RESET" "$INSTALL_BIN_DIR/rclonedash"
-printf '  %s• Configuration :%s            %s\n' "$BOLD" "$RESET" "$CONFIG_FILE"
-printf '  %s• Filtres d'\''exclusion :%s      %s\n' "$BOLD" "$RESET" "$RCLONE_CONF_DIR/gdrive-filters.txt"
-printf '  %s• Service de garde :%s         %s\n' "$BOLD" "$RESET" "$DATA_DIR/rclone-bisync-guard.sh"
-printf '  %s• Statut du timer :%s          systemctl --user status rclone-bisync.timer\n\n' "$BOLD" "$RESET"
+printf '  %s• Launch TUI interface:%s   %s%srclonedash%s\n' "$BOLD" "$RESET" "$BOLD" "$CYAN" "$RESET"
+printf '  %s• Installed binary:%s       %s\n' "$BOLD" "$RESET" "$INSTALL_BIN_DIR/rclonedash"
+printf '  %s• Configuration:%s          %s\n' "$BOLD" "$RESET" "$CONFIG_FILE"
+printf '  %s• Exclusion filters:%s      %s\n' "$BOLD" "$RESET" "$RCLONE_CONF_DIR/gdrive-filters.txt"
+printf '  %s• Guard script:%s           %s\n' "$BOLD" "$RESET" "$DATA_DIR/rclone-bisync-guard.sh"
+printf '  %s• Timer status:%s           systemctl --user status rclone-bisync.timer\n\n' "$BOLD" "$RESET"

@@ -38,9 +38,9 @@ pub fn render_speed_sparkline(
     }
 
     let title = if current_speed.is_empty() || current_speed == "--" {
-        " ⚡ Débit Réseau ".to_string()
+        " ⚡ Transfer Speed ".to_string()
     } else {
-        format!(" ⚡ Débit Réseau : {} ", current_speed)
+        format!(" ⚡ Transfer Speed: {} ", current_speed)
     };
 
     let p = Paragraph::new(Line::from(spans))

@@ -198,12 +198,12 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
     }
 
     let summary = match status {
-        RunStatus::Skipped => "Garde légère : aucun changement".to_string(),
-        RunStatus::Failed => format!("{} erreur(s) détectée(s)", errors.len()),
+        RunStatus::Skipped => "Light guard: no changes".to_string(),
+        RunStatus::Failed => format!("{} error(s) detected", errors.len()),
         _ => {
             let total = copied.len() + modified.len() + deleted.len();
             if total == 0 {
-                "Synchronisation sans transfert".to_string()
+                "No file transfers".to_string()
             } else {
                 format!("{}+, {}~, {}-", copied.len(), modified.len(), deleted.len())
             }

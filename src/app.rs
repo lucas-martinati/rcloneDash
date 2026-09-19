@@ -810,8 +810,8 @@ impl App {
         if self.live.resync_needed {
             alerts.push(Alert {
                 level: AlertLevel::Error,
-                message: "Erreur critique bisync : index corrompus ou inexistants.".to_string(),
-                hint: Some("Appuyez sur 'r' pour resynchroniser (--resync)".to_string()),
+                message: "Critical bisync error: corrupted or missing listings.".to_string(),
+                hint: Some("Press 'r' to resynchronize (--resync)".to_string()),
             });
         }
 
@@ -819,8 +819,8 @@ impl App {
         if failures >= 2 {
             alerts.push(Alert {
                 level: AlertLevel::Error,
-                message: format!("{} synchronisations consécutives en échec !", failures),
-                hint: Some("Consultez les logs pour voir le détail des erreurs".to_string()),
+                message: format!("{} consecutive sync failures!", failures),
+                hint: Some("Inspect logs to view error details".to_string()),
             });
         }
 
@@ -835,8 +835,8 @@ impl App {
             if duration_s > 300 {
                 alerts.push(Alert {
                     level: AlertLevel::Warning,
-                    message: format!("Synchronisation anormalement longue ({} min {} s)", duration_s / 60, duration_s % 60),
-                    hint: Some("Appuyez sur 'c' pour forcer l'annulation si bloqué".to_string()),
+                    message: format!("Abnormally long sync duration ({} min {} s)", duration_s / 60, duration_s % 60),
+                    hint: Some("Press 'c' to force abort if stuck".to_string()),
                 });
             }
         }
@@ -845,8 +845,8 @@ impl App {
         if disk > 90.0 {
             alerts.push(Alert {
                 level: AlertLevel::Error,
-                message: format!("Espace disque local critique ({:.1} % utilisé) !", disk),
-                hint: Some("Libérez de l'espace sur la partition locale".to_string()),
+                message: format!("Critical local disk space ({:.1}% used)!", disk),
+                hint: Some("Free up space on the local partition".to_string()),
             });
         }
 
@@ -3178,6 +3178,8 @@ mod tests {
     #[tokio::test]
     async fn test_total_history_runs_with_live_sync() {
         let mut app = App::new();
+        app.service_info.state = ServiceState::Idle;
+        app.live.is_syncing = false;
         app.past_runs.clear();
         assert_eq!(app.total_history_runs(), 0);
 
@@ -3281,6 +3283,8 @@ mod tests {
     #[tokio::test]
     async fn test_initial_unselected_and_btop_scroll() {
         let mut app = App::new();
+        app.service_info.state = ServiceState::Idle;
+        app.live.is_syncing = false;
         assert_eq!(app.recent_selected_idx, None);
         assert_eq!(app.selected_run_idx, None);
 

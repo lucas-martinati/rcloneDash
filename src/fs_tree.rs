@@ -312,7 +312,7 @@ pub fn add_exclude_rule(rel_path: &str, is_dir: bool) -> Result<(), String> {
 pub fn delete_entry(base: &Path, rel_path: &str) -> Result<(), String> {
     let full = base.join(rel_path);
     if !full.exists() {
-        return Err("Le fichier ou dossier n'existe pas".to_string());
+        return Err("File or folder does not exist".to_string());
     }
 
     if full.is_dir() {

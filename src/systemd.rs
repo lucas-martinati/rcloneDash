@@ -45,15 +45,15 @@ pub fn get_service_info() -> ServiceInfo {
         match status.as_str() {
             "active" | "activating" => {
                 info.state = ServiceState::Active;
-                info.active_substate = "En cours d'exécution".to_string();
+                info.active_substate = "Running".to_string();
             }
             "failed" => {
                 info.state = ServiceState::Failed;
-                info.active_substate = "Échec (Failed)".to_string();
+                info.active_substate = "Failed".to_string();
             }
             "inactive" | "deactivating" => {
                 info.state = ServiceState::Idle;
-                info.active_substate = "En veille".to_string();
+                info.active_substate = "Idle".to_string();
             }
             _ => {
                 info.state = ServiceState::Idle;

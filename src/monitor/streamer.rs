@@ -13,11 +13,11 @@ use crate::monitor::parser::{
 #[allow(dead_code)]
 pub const PHASES: &[&str] = &[
     "1. Listings",
-    "2. Diffs Locaux",
-    "3. Diffs Distants",
-    "4. Application",
-    "5. Mise à jour",
-    "6. Terminé",
+    "2. Local Diffs",
+    "3. Remote Diffs",
+    "4. Applying",
+    "5. Updating",
+    "6. Done",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,7 +98,7 @@ impl Default for StreamerState {
         Self {
             is_syncing: false,
             sync_start: None,
-            phase: "En attente".to_string(),
+            phase: "Idle".to_string(),
             phase_index: 0,
             transfer: TransferStats::default(),
             active_files: HashMap::new(),
@@ -146,7 +146,7 @@ pub fn spawn_log_streamer() -> SharedStreamer {
         if let Some(secs) = get_running_sync_elapsed_seconds() {
             s.is_syncing = true;
             s.sync_start = Some(Instant::now() - std::time::Duration::from_secs(secs));
-            s.phase = "En cours".to_string();
+            s.phase = "Running".to_string();
         }
         s
     }));
@@ -231,7 +231,7 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
         || ll.contains("copying path") || ll.contains("elapsed time:")
     ) {
         state.is_syncing = true;
-        state.phase = "4. Application".to_string();
+        state.phase = "4. Applying".to_string();
         state.phase_index = 3;
         if state.sync_start.is_none() {
             state.sync_start = Some(Instant::now());
@@ -240,21 +240,21 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
 
     // Détection de la phase du pipeline
     if ll.contains("updating listings") || ll.contains("updating path") {
-        state.phase = "5. Mise à jour".to_string();
+        state.phase = "5. Updating".to_string();
         state.phase_index = 4;
     } else if ll.contains("transferring:") || ll.contains("transferred:") || ll.contains("copying") || ll.contains("copied (") {
         if state.phase_index < 3 {
-            state.phase = "4. Application".to_string();
+            state.phase = "4. Applying".to_string();
             state.phase_index = 3;
         }
     } else if ll.contains("path2: checking") || ll.contains("path2: matching") || ll.contains("validating listings for path2") {
         if state.phase_index < 2 {
-            state.phase = "3. Diffs Distants".to_string();
+            state.phase = "3. Remote Diffs".to_string();
             state.phase_index = 2;
         }
     } else if ll.contains("path1: checking") || ll.contains("path1: matching") || ll.contains("validating listings for path1") {
         if state.phase_index < 1 {
-            state.phase = "2. Diffs Locaux".to_string();
+            state.phase = "2. Local Diffs".to_string();
             state.phase_index = 1;
         }
     }
@@ -319,7 +319,7 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
 
     if is_finished {
         state.is_syncing = false;
-        state.phase = "6. Terminé".to_string();
+        state.phase = "6. Done".to_string();
         state.phase_index = 5;
         state.transfer = TransferStats::default();
         state.active_files.clear();

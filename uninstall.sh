@@ -2,7 +2,7 @@
 set -e
 
 # --------------------------------------------------------------------------- #
-#  RcloneDash - Script de désinstallation
+#  RcloneDash - Uninstaller Script
 # --------------------------------------------------------------------------- #
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -18,34 +18,34 @@ warn()   { printf '   %s!%s %s\n'  "$YELLOW" "$RESET" "$1"; }
 detail() { printf '     %s%s%s\n' "$GREY"   "$1" "$RESET"; }
 
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
-    printf '\n%s%s   ✗ Erreur : ce script ne doit PAS être exécuté avec les privilèges root (sudo).%s\n\n' "$BOLD" "$RED" "$RESET" >&2
+    printf '\n%s%s   ✗ Error: This script must NOT be run with root privileges (sudo).%s\n\n' "$BOLD" "$RED" "$RESET" >&2
     exit 1
 fi
 
-printf '\n%s%sDésinstallation de RcloneDash...%s\n\n' "$BOLD" "$CYAN" "$RESET"
+printf '\n%s%sUninstalling RcloneDash...%s\n\n' "$BOLD" "$CYAN" "$RESET"
 
-# 1. Arrêt des services systemd
-info "Arrêt et désactivation des services systemd utilisateur..."
+# 1. Stop systemd services
+info "Stopping and disabling user systemd services..."
 systemctl --user stop rclone-bisync.timer 2>/dev/null || true
 systemctl --user disable rclone-bisync.timer 2>/dev/null || true
 systemctl --user stop rclone-bisync.service 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/rclone-bisync.service"
 rm -f "$HOME/.config/systemd/user/rclone-bisync.timer"
 systemctl --user daemon-reload 2>/dev/null || true
-ok "Services systemd retirés"
+ok "User systemd services removed"
 
-# 2. Suppression du script de garde
+# 2. Remove guard script directory
 if [ -d "$HOME/.local/share/RcloneDash" ]; then
     rm -rf "$HOME/.local/share/RcloneDash"
-    ok "Dossier applicatif ~/.local/share/RcloneDash supprimé"
+    ok "Application directory ~/.local/share/RcloneDash removed"
 fi
 
-# 3. Suppression du binaire TUI
+# 3. Remove TUI binary
 if [ -f "$HOME/.local/bin/rclonedash" ]; then
     rm -f "$HOME/.local/bin/rclonedash"
-    ok "Binaire ~/.local/bin/rclonedash supprimé"
+    ok "Binary ~/.local/bin/rclonedash removed"
 fi
 
-printf '\n%s%sRcloneDash a été désinstallé avec succès.%s\n' "$BOLD" "$GREEN" "$RESET"
-detail "Note : Vos configurations et filtres dans ~/.config/rclone/ ont été conservés."
+printf '\n%s%sRcloneDash has been uninstalled successfully.%s\n' "$BOLD" "$GREEN" "$RESET"
+detail "Note: Your configuration and exclusion filters in ~/.config/rclone/ have been preserved."
 printf '\n'
