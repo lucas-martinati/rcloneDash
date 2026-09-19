@@ -126,7 +126,6 @@ pub fn compute_active_modal_area(modal: &Modal, screen: Rect) -> Option<Rect> {
 }
 
 /// Helper pour générer un titre incrusté dans une bordure avec les bons caractères de jonction
-#[allow(dead_code)]
 pub fn format_border_title<'a>(
     glyphs: crate::config::BorderGlyphs,
     border_color: Color,
@@ -144,22 +143,6 @@ pub fn format_border_title<'a>(
     }
     spans.push(Span::styled(glyphs.top_right, Style::default().fg(border_color)));
     Line::from(spans)
-}
-
-/// Helper pour générer un footer incrusté en bas de bordure avec tirets décoratifs
-#[allow(dead_code)]
-pub fn format_border_footer<'a>(
-    glyphs: crate::config::BorderGlyphs,
-    border_color: Color,
-    text: &'a str,
-    text_color: Option<Color>,
-) -> Line<'a> {
-    let t_col = text_color.unwrap_or(border_color);
-    Line::from(vec![
-        Span::styled(format!("{} ", glyphs.horizontal), Style::default().fg(border_color)),
-        Span::styled(text, Style::default().fg(t_col)),
-        Span::styled(format!(" {}", glyphs.horizontal), Style::default().fg(border_color)),
-    ])
 }
 
 /// Rendu du conteneur/wrapper de base standardisé pour tous les panels et modales

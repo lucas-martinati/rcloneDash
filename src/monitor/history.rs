@@ -2,14 +2,12 @@ use std::process::Command;
 use crate::monitor::parser::{parse_synced_file, is_resync_trigger};
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct PastRun {
     pub id: usize,
     pub date: String,
     pub time: String,
     pub duration: String,
     pub status: RunStatus,
-    pub summary: String,
     pub files_copied: Vec<String>,
     pub files_modified: Vec<String>,
     pub files_deleted: Vec<String>,
@@ -42,13 +40,11 @@ impl PastRun {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunStatus {
     Success,
     Failed,
     Skipped,
-    Running,
 }
 
 pub fn fetch_past_runs(limit: usize) -> Vec<PastRun> {
@@ -197,26 +193,12 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
         }
     }
 
-    let summary = match status {
-        RunStatus::Skipped => "Light guard: no changes".to_string(),
-        RunStatus::Failed => format!("{} error(s) detected", errors.len()),
-        _ => {
-            let total = copied.len() + modified.len() + deleted.len();
-            if total == 0 {
-                "No file transfers".to_string()
-            } else {
-                format!("{}+, {}~, {}-", copied.len(), modified.len(), deleted.len())
-            }
-        }
-    };
-
     Some(PastRun {
         id,
         date,
         time,
         duration,
         status,
-        summary,
         files_copied: copied,
         files_modified: modified,
         files_deleted: deleted,

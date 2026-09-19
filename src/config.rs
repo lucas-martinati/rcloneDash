@@ -102,7 +102,6 @@ pub enum ContainerLayout {
 }
 
 impl ContainerLayout {
-    #[allow(dead_code)]
     pub fn all() -> &'static [ContainerLayout] {
         &[
             ContainerLayout::Default,
@@ -118,16 +117,6 @@ impl ContainerLayout {
             ContainerLayout::RecentFirst => "Recent First (Storage → Recent → Mid)",
             ContainerLayout::LogsTop => "Logs / Hist Top (Mid → Storage → Recent)",
             ContainerLayout::Inverted => "Inverted (Recent → Mid → Storage)",
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn short_name(&self) -> &'static str {
-        match self {
-            ContainerLayout::Default => "Standard",
-            ContainerLayout::RecentFirst => "Recent First",
-            ContainerLayout::LogsTop => "Logs/Hist Top",
-            ContainerLayout::Inverted => "Inverted",
         }
     }
 
@@ -158,7 +147,6 @@ pub enum MidPanelOrder {
 }
 
 impl MidPanelOrder {
-    #[allow(dead_code)]
     pub fn all() -> &'static [MidPanelOrder] {
         &[MidPanelOrder::HistoryLogs, MidPanelOrder::LogsHistory]
     }
@@ -201,7 +189,6 @@ pub struct BorderGlyphs {
 }
 
 impl BorderStyleChoice {
-    #[allow(dead_code)]
     pub fn all() -> &'static [BorderStyleChoice] {
         &[
             BorderStyleChoice::Rounded,
@@ -217,16 +204,6 @@ impl BorderStyleChoice {
             BorderStyleChoice::Sharp => "Sharp (Square)",
             BorderStyleChoice::Double => "Double (Retro)",
             BorderStyleChoice::Thick => "Thick (Bold)",
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn short_name(&self) -> &'static str {
-        match self {
-            BorderStyleChoice::Rounded => "Rounded",
-            BorderStyleChoice::Sharp => "Sharp",
-            BorderStyleChoice::Double => "Double",
-            BorderStyleChoice::Thick => "Thick",
         }
     }
 
@@ -293,7 +270,6 @@ pub enum GraphStyleChoice {
 }
 
 impl GraphStyleChoice {
-    #[allow(dead_code)]
     pub fn all() -> &'static [GraphStyleChoice] {
         &[
             GraphStyleChoice::Braille,
@@ -305,14 +281,6 @@ impl GraphStyleChoice {
         match self {
             GraphStyleChoice::Braille => "Braille (⡀⣀⣄⣤⣦⣶⣷⣿)",
             GraphStyleChoice::Blocks => "Blocks ( ▂▃▄▅▆▇█)",
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn short_name(&self) -> &'static str {
-        match self {
-            GraphStyleChoice::Braille => "Braille",
-            GraphStyleChoice::Blocks => "Blocks",
         }
     }
 
@@ -490,75 +458,6 @@ impl SettingId {
     }
 }
 
-/// Formatters for dynamic settings descriptions (source of truth)
-#[allow(dead_code)]
-pub fn format_tick_rate_options() -> String {
-    format_setting_options_list(&tick_rate_options(), "250ms")
-}
-
-#[allow(dead_code)]
-pub fn format_timer_interval_options() -> String {
-    TIMER_INTERVAL_OPTIONS.join(", ")
-}
-
-#[allow(dead_code)]
-pub fn format_full_sync_options() -> String {
-    FULL_SYNC_OPTIONS
-        .iter()
-        .map(|o| o.label)
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-#[allow(dead_code)]
-pub fn format_bwlimit_options() -> String {
-    BWLIMIT_OPTIONS.join(", ")
-}
-
-#[allow(dead_code)]
-pub fn format_theme_options() -> String {
-    ThemeChoice::all()
-        .iter()
-        .map(|t| format!("• {}", t.name()))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-#[allow(dead_code)]
-pub fn format_container_layout_options() -> String {
-    ContainerLayout::all()
-        .iter()
-        .map(|l| format!("• {}", l.name()))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-#[allow(dead_code)]
-pub fn format_mid_panel_order_options() -> String {
-    MidPanelOrder::all()
-        .iter()
-        .map(|m| format!("• {}", m.name()))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-#[allow(dead_code)]
-pub fn format_border_style_options() -> String {
-    BorderStyleChoice::all()
-        .iter()
-        .map(|b| format!("• {}", b.name()))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-#[allow(dead_code)]
-pub fn format_graph_style_options() -> String {
-    GraphStyleChoice::all()
-        .iter()
-        .map(|g| format!("• {}", g.name()))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -652,11 +551,6 @@ pub fn last_full_sync_marker() -> PathBuf {
     config_dir().join(".last-full-sync")
 }
 
-#[allow(dead_code)]
-pub fn auto_resync_notice_marker() -> PathBuf {
-    config_dir().join(".auto-resync-notice")
-}
-
 pub fn load_config() -> AppConfig {
     let path = config_file();
     let mut cfg = AppConfig::default();
@@ -695,7 +589,7 @@ pub fn save_config(cfg: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
-#[allow(dead_code)]
+#[cfg(not(test))]
 pub fn update_systemd_timer_interval(interval: &str) {
     if let Some(home) = dirs_home() {
         let timer_path = home.join(".config/systemd/user/rclone-bisync.timer");
@@ -902,14 +796,13 @@ mod tests {
 
     #[test]
     fn test_settings_dynamic_descriptions_sync() {
-        assert!(format_timer_interval_options().contains("10min, 15min, 30min, 1h, 2h, 4h"));
-        assert!(format_full_sync_options().contains("1h (Recommended)"));
-        assert!(format_full_sync_options().contains("Never (Local)"));
-        assert!(format_bwlimit_options().contains("Disabled, 5M, 10M, 20M, 50M"));
-        assert!(format_theme_options().contains("Nord"));
-        assert!(format_theme_options().contains("Dracula"));
-        assert!(format_border_style_options().contains("Retro"));
-        assert!(format_graph_style_options().contains("Braille"));
+        assert!(SettingId::TimerInterval.desc_intro().contains("rclone-bisync.timer"));
+        assert!(SettingId::CloudSafetyNet.desc_intro().contains("bidirectional sync"));
+        assert!(SettingId::BandwidthLimit.desc_intro().contains("bwlimit.env"));
+        assert!(SettingId::ColorTheme.desc_intro().contains("dashboard"));
+        assert!(SettingId::ContainerLayout.desc_intro().contains("containers"));
+        assert!(SettingId::BorderStyle.desc_intro().contains("dash-config.json"));
+        assert!(SettingId::GraphStyle.desc_intro().contains("sparkline"));
     }
 
     #[test]

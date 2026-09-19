@@ -11,9 +11,7 @@ pub enum ThemeChoice {
     MonokaiPro,
 }
 
-#[allow(dead_code)]
 impl ThemeChoice {
-    #[allow(dead_code)]
     pub fn all() -> &'static [ThemeChoice] {
         &[
             ThemeChoice::TokyoNight,
@@ -214,7 +212,6 @@ impl ThemeChoice {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub struct ThemePalette {
     pub accent: Color,
@@ -243,22 +240,6 @@ pub struct ThemePalette {
 }
 
 impl ThemePalette {
-    /// Retourne une couleur de dégradé pour la vitesse (style btop++)
-    #[allow(dead_code)]
-    pub fn speed_gradient_color(&self, speed_kibs: u64) -> Color {
-        if speed_kibs > 20_000 {
-            self.red
-        } else if speed_kibs > 5_000 {
-            self.orange
-        } else if speed_kibs > 1_000 {
-            self.yellow
-        } else if speed_kibs > 200 {
-            self.green
-        } else {
-            self.cyan
-        }
-    }
-
     /// Convertit l'ensemble des couleurs en nuances de gris (monochrome style btop++)
     pub fn to_grayscale(&self) -> ThemePalette {
         let to_gray = |c: Color| -> Color {

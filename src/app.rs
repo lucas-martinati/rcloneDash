@@ -31,14 +31,6 @@ impl FocusedPanel {
             FocusedPanel::RecentFiles => FocusedPanel::Logs,
         }
     }
-    #[allow(dead_code)]
-    pub fn label(self) -> &'static str {
-        match self {
-            FocusedPanel::History => "Historique",
-            FocusedPanel::Logs => "Logs",
-            FocusedPanel::RecentFiles => "Récents",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,21 +60,6 @@ impl LogFilter {
             LogFilter::All => "All",
             LogFilter::Files => "Files",
             LogFilter::Problems => "Problems",
-        }
-    }
-    #[allow(dead_code)]
-    pub fn index(self) -> usize {
-        match self {
-            LogFilter::All => 0,
-            LogFilter::Files => 1,
-            LogFilter::Problems => 2,
-        }
-    }
-    pub fn from_index(i: usize) -> Self {
-        match i {
-            1 => LogFilter::Files,
-            2 => LogFilter::Problems,
-            _ => LogFilter::All,
         }
     }
     /// Returns true if a log line passes this filter
@@ -150,22 +127,15 @@ pub enum ScrollbarTarget {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum HitAction {
-    ButtonMenu,
     ButtonSync,
     ButtonCancel,
     ButtonDryRun,
     ButtonFiles,
     ButtonFilters,
-    ButtonSettings,
-    ButtonQuit,
-    ButtonHelp,
-    ButtonTheme,
     ButtonPanel,
     TickRateDec,
     TickRateInc,
-    SparklinePoint(usize),
     ToggleCtrlMode,
     HistoryRow(usize),
     HistoryFile(usize),
@@ -177,19 +147,13 @@ pub enum HitAction {
     SettingOption(usize),
     SettingCycle(usize, bool),
     SettingsTab(usize),
-    SaveSettings,
     CloseModal,
     MenuOption(usize),
     FileEntry(usize),
-    FileOpen(usize),
-    FileParent,
     ToggleLogsAuto,
-    CopyLogs,
-    LogFilterTab(usize),
     LogFilterPrev,
     LogFilterNext,
     LogFilterCycle,
-    CopyHistoryErrors(usize),
     ButtonCopy,
     FilterArea,
     FilterRow(usize),
@@ -416,11 +380,6 @@ impl App {
         app
     }
 
-    #[allow(dead_code)]
-    pub fn clear_hitboxes(&mut self) {
-        self.hitboxes.clear();
-    }
-
     pub fn border_type(&self) -> BorderType {
         self.config.border_style.to_border_type()
     }
@@ -431,11 +390,6 @@ impl App {
 
     pub fn settings_items_count(&self) -> usize {
         config::SettingId::tab_count(self.settings_tab)
-    }
-
-    #[allow(dead_code)]
-    pub fn register_hitbox(&mut self, rect: Rect, action: HitAction) {
-        self.hitboxes.push(Hitbox { rect, action });
     }
 
     pub fn reload_files(&mut self) {
@@ -965,7 +919,6 @@ impl App {
     }
 
     /// Ensure history scroll offset keeps the selected run visible
-    #[allow(dead_code)]
     pub fn ensure_history_visible(&mut self, viewport_height: usize) {
         if viewport_height == 0 { return; }
         if let Some(idx) = self.selected_run_idx {
@@ -974,15 +927,6 @@ impl App {
             } else if idx >= self.history_scroll_offset + viewport_height {
                 self.history_scroll_offset = idx - viewport_height + 1;
             }
-        }
-    }
-
-    /// Clamp logs_scroll to prevent over-scrolling
-    #[allow(dead_code)]
-    pub fn clamp_logs_scroll(&mut self, total_lines: usize, visible_height: usize) {
-        let max_scroll = total_lines.saturating_sub(visible_height);
-        if self.logs_scroll > max_scroll {
-            self.logs_scroll = max_scroll;
         }
     }
 
@@ -1202,7 +1146,6 @@ impl App {
     }
 
     /// Ensure filter scroll offset keeps selected filter visible
-    #[allow(dead_code)]
     pub fn ensure_filter_visible(&mut self, viewport_height: usize) {
         if viewport_height == 0 { return; }
         if self.selected_filter_idx < self.filter_scroll_offset {
@@ -1576,38 +1519,6 @@ impl App {
         self.apply_scrollbar_ratio(target, ratio, total, visible);
     }
 
-    #[allow(dead_code)]
-    pub fn apply_scrollbar_jump(
-        &mut self,
-        target: ScrollbarTarget,
-        click_offset: u16,
-        track_height: u16,
-        total: usize,
-        visible: usize,
-    ) {
-        if total <= visible || track_height == 0 {
-            return;
-        }
-        let thumb_size = ((visible as f64 / total as f64) * track_height as f64).round().max(1.0) as usize;
-        let thumb_size = thumb_size.min(track_height as usize);
-        let available_travel = (track_height as usize).saturating_sub(thumb_size);
-
-        if available_travel == 0 {
-            return;
-        }
-
-        let ratio = if click_offset >= track_height.saturating_sub(1) {
-            1.0
-        } else if click_offset == 0 {
-            0.0
-        } else {
-            let grab_offset = (thumb_size / 2) as u16;
-            let target_thumb_start = (click_offset.saturating_sub(grab_offset) as usize).min(available_travel);
-            (target_thumb_start as f64 / available_travel as f64).clamp(0.0, 1.0)
-        };
-
-        self.apply_scrollbar_ratio(target, ratio, total, visible);
-    }
 
     pub fn apply_scrollbar_ratio(
         &mut self,
@@ -1891,11 +1802,6 @@ impl App {
 
     pub fn execute_hit_action(&mut self, action: HitAction, is_ctrl: bool, row: u16) -> Action {
         match action {
-            HitAction::ButtonMenu => {
-                self.menu_selected_idx = 0;
-                self.modal = Modal::Menu;
-                Action::None
-            }
             HitAction::ButtonSync => {
                 self.modal = Modal::ConfirmSync;
                 Action::None
@@ -1916,22 +1822,6 @@ impl App {
                 self.modal = if self.modal == Modal::Filters { Modal::None } else { Modal::Filters };
                 Action::None
             }
-            HitAction::ButtonSettings => {
-                self.modal = if self.modal == Modal::Settings { Modal::None } else { Modal::Settings };
-                Action::None
-            }
-            HitAction::ButtonQuit => {
-                self.running = false;
-                Action::None
-            }
-            HitAction::ButtonHelp => {
-                self.modal = if self.modal == Modal::Help { Modal::None } else { Modal::Help };
-                Action::None
-            }
-            HitAction::ButtonTheme => {
-                self.next_theme();
-                Action::None
-            }
             HitAction::ButtonPanel => {
                 self.focused_panel = self.focused_panel.next();
                 Action::None
@@ -1942,21 +1832,6 @@ impl App {
             }
             HitAction::TickRateInc => {
                 self.step_tick_rate(false);
-                Action::None
-            }
-            HitAction::SparklinePoint(idx) => {
-                if idx < self.past_runs.len() {
-                    self.selected_run_idx = Some(idx);
-                    let run = &self.past_runs[idx];
-                    let st = match run.status {
-                        RunStatus::Success => "✓ Success",
-                        RunStatus::Failed => "✗ Error",
-                        RunStatus::Skipped => "○ Skipped",
-                        RunStatus::Running => "⟳ Running",
-                    };
-                    let files_count = run.files_copied.len() + run.files_modified.len() + run.files_deleted.len();
-                    self.set_toast(format!("{} — {} · {} file(s) · {}", run.time, run.duration, files_count, st));
-                }
                 Action::None
             }
             HitAction::CloseModal => {
@@ -2103,11 +1978,6 @@ impl App {
                 }
                 Action::None
             }
-            HitAction::SaveSettings => {
-                self.commit_setting_edit();
-                self.save_current_settings();
-                Action::None
-            }
             HitAction::FileEntry(idx) => {
                 self.file_selected_idx = idx;
                 if is_ctrl {
@@ -2118,15 +1988,6 @@ impl App {
                 } else {
                     self.enter_selected_file_or_dir();
                 }
-                Action::None
-            }
-            HitAction::FileOpen(idx) => {
-                self.file_selected_idx = idx;
-                self.enter_selected_file_or_dir();
-                Action::None
-            }
-            HitAction::FileParent => {
-                self.parent_file_dir();
                 Action::None
             }
             HitAction::ToggleLogsAuto => {
@@ -2167,15 +2028,6 @@ impl App {
             }
             HitAction::FilterOpenEditor => Action::OpenEditor,
             HitAction::FilterArea => Action::None,
-            HitAction::CopyLogs => {
-                self.copy_logs_to_clipboard();
-                Action::None
-            }
-            HitAction::LogFilterTab(idx) => {
-                self.log_filter = LogFilter::from_index(idx);
-                self.focused_panel = FocusedPanel::Logs;
-                Action::None
-            }
             HitAction::LogFilterPrev => {
                 self.log_filter = self.log_filter.prev();
                 self.focused_panel = FocusedPanel::Logs;
@@ -2184,10 +2036,6 @@ impl App {
             HitAction::LogFilterNext | HitAction::LogFilterCycle => {
                 self.log_filter = self.log_filter.next();
                 self.focused_panel = FocusedPanel::Logs;
-                Action::None
-            }
-            HitAction::CopyHistoryErrors(idx) => {
-                self.copy_history_errors(idx);
                 Action::None
             }
             HitAction::ButtonCopy => {
@@ -3501,7 +3349,6 @@ mod tests {
                 time: "22:00".to_string(),
                 duration: "1m 30s".to_string(),
                 status: RunStatus::Success,
-                summary: "Sync OK".to_string(),
                 files_copied: vec!["file1.txt".to_string()],
                 files_modified: vec![],
                 files_deleted: vec![],
@@ -3746,7 +3593,6 @@ mod tests {
             time: "10:00".into(),
             duration: "5s".into(),
             status: RunStatus::Success,
-            summary: String::new(),
             files_copied: vec!["Documents/alpha.txt".into(), "Pictures/photo.jpg".into()],
             files_modified: vec!["Code/main.rs".into()],
             files_deleted: vec![],
@@ -3796,7 +3642,6 @@ mod tests {
             time: "10:00".into(),
             duration: "5s".into(),
             status: RunStatus::Success,
-            summary: String::new(),
             files_copied: vec![],
             files_modified: vec![],
             files_deleted: vec![],
@@ -3904,7 +3749,6 @@ mod tests {
                 time: format!("10:0{}", i),
                 duration: "2s".into(),
                 status: RunStatus::Success,
-                summary: String::new(),
                 files_copied: vec![],
                 files_modified: vec![],
                 files_deleted: vec![],
@@ -4165,11 +4009,11 @@ mod tests {
 
         // 3. Saut / Glissement (drag) sur la piste scrollbar
         // Piste de hauteur 10, offset 5 -> milieu
-        app.apply_scrollbar_jump(ScrollbarTarget::Logs, 5, 10, 20, 5);
+        app.apply_scrollbar_drag_to_row(ScrollbarTarget::Logs, 5, 0, 10, 20, 5, 1);
         assert!(app.logs_scroll > 0);
         assert!(!app.auto_scroll);
 
-        // 4. Test ScrollbarTarget::History step & jump
+        // 4. Test ScrollbarTarget::History step & drag
         app.past_runs = (0..10).map(|i| crate::monitor::history::PastRun {
             id: i,
             date: "2026-09-18".into(),
@@ -4181,7 +4025,6 @@ mod tests {
             files_deleted: vec![],
             synced_files: vec![],
             errors: vec![],
-            summary: "OK".into(),
         }).collect();
         app.history_viewport_height = 4;
         app.selected_run_idx = Some(0);
@@ -4192,7 +4035,7 @@ mod tests {
         app.apply_scrollbar_step(ScrollbarTarget::History, true);
         assert_eq!(app.selected_run_idx, Some(0));
 
-        app.apply_scrollbar_jump(ScrollbarTarget::History, 9, 10, 10, 4);
+        app.apply_scrollbar_drag_to_row(ScrollbarTarget::History, 9, 0, 10, 10, 4, 1);
         assert_eq!(app.selected_run_idx, Some(9));
     }
 
@@ -4202,11 +4045,10 @@ mod tests {
         use crate::ui::theme::ThemeChoice;
 
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Files), "b");
-        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Filters), "e");
-        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::QuickSync), "s");
-        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Resync), "r");
-        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Quit), "q");
-        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::CloseModal), "Échap / q");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::DecTickRate), "-");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::IncTickRate), "+");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Validate), "Entrée");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::CancelEdit), "Échap");
 
         let theme = ThemeChoice::TokyoNight.palette();
         let badge = KeybindingRegistry::format_key_badge("Ctrl+X", &theme);
@@ -4231,7 +4073,6 @@ mod tests {
             files_deleted: vec![],
             synced_files: vec![],
             errors: vec![],
-            summary: "OK".into(),
         }];
 
         // Simuler un conteneur rétréci par la synchronisation en cours (viewport de 2 lignes)
@@ -4338,7 +4179,6 @@ mod tests {
                 "Failed to sync /docs: Google Drive quota exceeded".into(),
                 "Connection timeout after 30s".into(),
             ],
-            summary: "2 erreurs".into(),
         }];
 
         app.copy_history_errors(0);
@@ -4431,7 +4271,6 @@ mod tests {
             files_deleted: vec![],
             synced_files: vec![],
             errors: vec![],
-            summary: "0 changement".into(),
         }];
 
         app.toast = None;
@@ -4477,17 +4316,17 @@ mod tests {
         app.active_scrollbar_drag = None;
         assert!(!app.is_dragging_scrollbar(ScrollbarTarget::History));
 
-        // 2. Test apply_scrollbar_jump positions cursor at top or bottom boundary
+        // 2. Test apply_scrollbar_drag_to_row positions cursor at top or bottom boundary
         app.history_viewport_height = 5;
         // Total 20 runs, viewport 5 -> max_offset = 15
-        // Jump to bottom (offset 9 / 10 -> ratio 1.0)
-        app.apply_scrollbar_jump(ScrollbarTarget::History, 9, 10, 20, 5);
+        // Jump to bottom (row 9, top 0, height 10 -> ratio 1.0)
+        app.apply_scrollbar_drag_to_row(ScrollbarTarget::History, 9, 0, 10, 20, 5, 1);
         assert_eq!(app.history_scroll_offset, 15);
         // Cursor at bottom of visible items: 15 + 5 - 1 = 19
         assert_eq!(app.selected_run_idx, Some(19));
 
-        // Jump to top (offset 0 / 10 -> ratio 0.0)
-        app.apply_scrollbar_jump(ScrollbarTarget::History, 0, 10, 20, 5);
+        // Jump to top (row 0, top 0, height 10 -> ratio 0.0)
+        app.apply_scrollbar_drag_to_row(ScrollbarTarget::History, 0, 0, 10, 20, 5, 1);
         assert_eq!(app.history_scroll_offset, 0);
         // Cursor at top of visible items: 0
         assert_eq!(app.selected_run_idx, Some(0));
@@ -4504,7 +4343,6 @@ mod tests {
             files_deleted: vec![],
             synced_files: vec![("new".into(), "file1.txt".into(), "14:00".into())],
             errors: vec![],
-            summary: "1 fichier copié".into(),
         }];
         app.modal = Modal::HistoryDetails(0);
         app.history_selected_file_idx = 0;
@@ -5004,7 +4842,7 @@ mod tests {
         app.apply_scrollbar_step(ScrollbarTarget::Filters, false);
         assert_eq!(app.selected_filter_idx, 1);
 
-        app.apply_scrollbar_jump(ScrollbarTarget::Filters, 5, 10, 20, 5);
+        app.apply_scrollbar_drag_to_row(ScrollbarTarget::Filters, 5, 0, 10, 20, 5, 1);
         assert!(app.filter_scroll_offset > 0);
         assert!(app.selected_filter_idx >= app.filter_scroll_offset);
     }

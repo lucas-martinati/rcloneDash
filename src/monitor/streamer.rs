@@ -10,16 +10,6 @@ use crate::monitor::parser::{
     ActiveFile, SyncedFile, TransferStats,
 };
 
-#[allow(dead_code)]
-pub const PHASES: &[&str] = &[
-    "1. Listings",
-    "2. Local Diffs",
-    "3. Remote Diffs",
-    "4. Applying",
-    "5. Updating",
-    "6. Done",
-];
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModifiedFileDetail {
     pub path: String,

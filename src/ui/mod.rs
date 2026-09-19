@@ -3,7 +3,6 @@ pub mod dashboard;
 pub mod files;
 pub mod filters;
 pub mod footer;
-pub mod header;
 pub mod history;
 pub mod logs;
 pub mod menu;
@@ -13,11 +12,7 @@ pub mod sparkline;
 pub mod theme;
 pub mod keys;
 
-#[allow(unused_imports)]
-pub use container::{
-    centered_fixed_rect, centered_rect, compute_active_modal_area, format_border_footer,
-    format_border_title, render_modal_container, ModalContainerConfig, NavArrowsConfig,
-};
+pub use container::compute_active_modal_area;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},

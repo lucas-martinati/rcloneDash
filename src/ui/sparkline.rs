@@ -1,9 +1,6 @@
 use ratatui::{
-    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
-    Frame,
 };
 
 use crate::config::GraphStyleChoice;
@@ -18,115 +15,6 @@ pub fn get_graph_chars(style: GraphStyleChoice) -> [char; 8] {
         GraphStyleChoice::Braille => BRAILLE,
         GraphStyleChoice::Blocks => BLOCKS,
     }
-}
-
-/// Render speed sparkline with btop++ gradient colors
-#[allow(dead_code)]
-pub fn render_speed_sparkline(
-    f: &mut Frame,
-    speed_history: &[u64],
-    current_speed: &str,
-    theme: &ThemePalette,
-    area: Rect,
-    border_type: BorderType,
-    graph_style: GraphStyleChoice,
-) {
-    let max_val = speed_history.iter().copied().max().unwrap_or(0).max(1);
-
-    let mut spans = Vec::new();
-    let display_len = (area.width.saturating_sub(4) as usize).min(speed_history.len());
-    let start_idx = speed_history.len().saturating_sub(display_len);
-    let chars = get_graph_chars(graph_style);
-
-    for &speed_kib in &speed_history[start_idx..] {
-        let level = if speed_kib > 0 {
-            (((speed_kib as f64 / max_val as f64) * 6.0).ceil() as usize).clamp(1, 7)
-        } else {
-            0
-        };
-        let block = if level == 0 { '·' } else { chars[level] };
-        let color = theme.speed_gradient_color(speed_kib);
-        spans.push(Span::styled(block.to_string(), Style::default().fg(color)));
-    }
-
-    let title = if current_speed.is_empty() || current_speed == "--" {
-        " ⚡ Transfer Speed ".to_string()
-    } else {
-        format!(" ⚡ Transfer Speed: {} ", current_speed)
-    };
-
-    let p = Paragraph::new(Line::from(spans))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(border_type)
-                .border_style(Style::default().fg(theme.border))
-                .style(Style::default().bg(theme.card_bg))
-                .title(Span::styled(title, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
-        );
-
-    f.render_widget(p, area);
-}
-
-/// Render duration sparkline of past runs with status and gradient colors
-#[allow(dead_code)]
-pub fn render_history_sparkline(
-    past_runs: &[PastRun],
-    theme: &ThemePalette,
-    width: usize,
-    selected_idx: Option<usize>,
-) -> Line<'static> {
-    if past_runs.is_empty() {
-        return Line::from(vec![Span::styled("[Aucun run]", Style::default().fg(theme.text_muted))]);
-    }
-
-    let count = past_runs.len().min(width).min(24);
-    let runs_slice: Vec<&PastRun> = past_runs.iter().take(count).rev().collect();
-
-    let durations: Vec<f64> = runs_slice.iter().map(|r| parse_duration_seconds(&r.duration)).collect();
-    let max_dur = durations.iter().copied().fold(0.0f64, f64::max).max(1.0);
-
-    let mut spans = Vec::new();
-
-    for (i, run) in runs_slice.iter().enumerate() {
-        let original_idx = count.saturating_sub(1 + i);
-        let is_sel = selected_idx == Some(original_idx);
-
-        let dur = durations[i];
-        let level = if dur > 0.0 {
-            (((dur / max_dur) * 6.0).ceil() as usize).clamp(1, 7)
-        } else {
-            1
-        };
-        let block = BLOCKS[level];
-
-        let color = match run.status {
-            RunStatus::Success => {
-                if level <= 2 {
-                    theme.green
-                } else if level <= 4 {
-                    theme.cyan
-                } else if level <= 6 {
-                    theme.yellow
-                } else {
-                    theme.orange
-                }
-            }
-            RunStatus::Failed => theme.red,
-            RunStatus::Skipped => theme.text_muted,
-            RunStatus::Running => theme.highlight,
-        };
-
-        let mut style = Style::default().fg(color).add_modifier(Modifier::BOLD);
-        if is_sel {
-            style = style.bg(theme.border_focus).add_modifier(Modifier::UNDERLINED);
-        }
-
-        spans.push(Span::styled(block.to_string(), style));
-        spans.push(Span::styled(" ", Style::default()));
-    }
-
-    Line::from(spans)
 }
 
 /// Renders a multi-line 2D duration bar chart (btop++ style) for past runs.
@@ -181,7 +69,6 @@ pub fn render_history_graph_multiline(
                 RunStatus::Success => Span::styled("● OK", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                 RunStatus::Failed => Span::styled("● FAILED", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 RunStatus::Skipped => Span::styled("● SKIPPED", Style::default().fg(theme.text_muted)),
-                RunStatus::Running => Span::styled("● RUNNING", Style::default().fg(theme.highlight)),
             };
             header_spans.push(Span::styled(format!("Run #{} : {} (", sel + 1, r.duration), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
             header_spans.push(status_span);
@@ -243,7 +130,6 @@ pub fn render_history_graph_multiline(
                 }
                 RunStatus::Failed => theme.red,
                 RunStatus::Skipped => theme.text_muted,
-                RunStatus::Running => theme.highlight,
             };
 
             let mut style = Style::default().fg(color);
@@ -431,7 +317,6 @@ mod tests {
                 time: "08:00".into(),
                 duration: "10s".into(),
                 status: RunStatus::Success,
-                summary: "".into(),
                 files_copied: vec!["a.txt".into()],
                 files_modified: vec![],
                 files_deleted: vec![],
@@ -444,7 +329,6 @@ mod tests {
                 time: "08:15".into(),
                 duration: "20s".into(),
                 status: RunStatus::Failed,
-                summary: "".into(),
                 files_copied: vec![],
                 files_modified: vec![],
                 files_deleted: vec![],

@@ -10,10 +10,6 @@ use crate::app::{App, HitAction, Hitbox};
 use crate::config;
 use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
-
-#[allow(dead_code)]
-pub const SETTINGS_ITEMS_COUNT: usize = 7;
-
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let screen = f.area();
     let is_wide = screen.width >= 88;

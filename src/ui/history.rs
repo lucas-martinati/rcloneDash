@@ -1,10 +1,8 @@
-#![allow(dead_code)]
-
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -12,93 +10,6 @@ use crate::app::{App, HitAction, Hitbox};
 use crate::monitor::history::RunStatus;
 use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
-
-pub fn render_history(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(45),
-            Constraint::Percentage(55),
-        ])
-        .split(area);
-
-    render_run_list(f, app, theme, chunks[0]);
-    render_run_details(f, app, app.selected_run_idx.unwrap_or(0), theme, chunks[1], &mut Vec::new());
-}
-
-fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
-    let items: Vec<ListItem> = if app.past_runs.is_empty() {
-        vec![ListItem::new(Line::from(vec![
-            Span::styled(" No runs recorded in journalctl", Style::default().fg(theme.text_muted)),
-        ]))]
-    } else {
-        app.past_runs
-            .iter()
-            .enumerate()
-            .map(|(i, run)| {
-                let is_selected = app.selected_run_idx == Some(i);
-
-                let (status_badge, status_color) = match run.status {
-                    RunStatus::Success => ("✔", theme.green),
-                    RunStatus::Failed => ("✗", theme.red),
-                    RunStatus::Skipped => ("⊘", theme.text_muted),
-                    RunStatus::Running => ("▶", theme.accent),
-                };
-
-                let cursor = if is_selected {
-                    Span::styled("▶ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
-                } else {
-                    Span::styled("  ", Style::default())
-                };
-
-                let title_style = if is_selected {
-                    Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.text_bright)
-                };
-
-                let line1 = Line::from(vec![
-                    cursor,
-                    Span::styled(format!("{} ", status_badge), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("{} {} ", run.date, run.time), title_style),
-                    Span::styled(format!("({}) ", run.duration), Style::default().fg(theme.text_muted)),
-                ]);
-
-                let line2 = Line::from(vec![
-                    Span::styled("     ", Style::default()),
-                    Span::styled(&run.summary, Style::default().fg(if is_selected { theme.cyan } else { theme.text_muted })),
-                ]);
-
-                ListItem::new(vec![line1, line2])
-            })
-            .collect()
-    };
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(app.border_type())
-                .border_style(Style::default().fg(theme.border))
-                .style(Style::default().bg(theme.card_bg))
-                .title(Span::styled(" Synchronization History ", Style::default().fg(theme.accent))),
-        );
-
-    f.render_widget(list, area);
-
-    let visible_height = area.height.saturating_sub(3) as usize;
-    let mut dummy_hitboxes = Vec::new();
-    crate::ui::render_btop_scrollbar(
-        f,
-        area,
-        app.past_runs.len(),
-        app.history_scroll_offset,
-        visible_height,
-        theme,
-        &mut dummy_hitboxes,
-        crate::app::ScrollbarTarget::History,
-    );
-}
 
 pub fn render_history_details_modal(f: &mut Frame, app: &App, run_idx: usize, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(78, 74, f.area());
@@ -138,7 +49,6 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         RunStatus::Success => ("✔ SUCCESS", theme.green),
         RunStatus::Failed => ("✗ FAILED", theme.red),
         RunStatus::Skipped => ("⊘ SKIPPED (No changes)", theme.text_muted),
-        RunStatus::Running => ("▶ RUNNING", theme.cyan),
     };
 
     all_lines.push((Line::from(vec![

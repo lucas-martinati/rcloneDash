@@ -15,15 +15,11 @@ pub struct TransferStats {
     pub elapsed: String,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ActiveFile {
     pub name: String,
     pub pct: u8,
-    pub size: String,
     pub speed: String,
-    pub eta: String,
-    pub status: String,
     pub last_seen: std::time::Instant,
 }
 
@@ -146,16 +142,11 @@ pub fn parse_active_file(line: &str) -> Option<ActiveFile> {
     if let Some(caps) = RE_ACTIVE_FULL.captures(line) {
         let name = caps.get(1)?.as_str().trim().to_string();
         let pct = caps.get(2)?.as_str().parse().unwrap_or(0);
-        let size = caps.get(3)?.as_str().trim().to_string();
         let speed = caps.get(4)?.as_str().trim().to_string();
-        let eta = caps.get(5)?.as_str().trim().to_string();
         return Some(ActiveFile {
             name,
             pct,
-            size,
             speed,
-            eta,
-            status: "transferring".to_string(),
             last_seen: std::time::Instant::now(),
         });
     }
@@ -163,28 +154,20 @@ pub fn parse_active_file(line: &str) -> Option<ActiveFile> {
     if let Some(caps) = RE_ACTIVE_SHORT.captures(line) {
         let name = caps.get(1)?.as_str().trim().to_string();
         let pct = caps.get(2)?.as_str().parse().unwrap_or(0);
-        let size = caps.get(3)?.as_str().trim().to_string();
         return Some(ActiveFile {
             name,
             pct,
-            size,
             speed: "".to_string(),
-            eta: "".to_string(),
-            status: "transferring".to_string(),
             last_seen: std::time::Instant::now(),
         });
     }
 
     if let Some(caps) = RE_ACTIVE_STATUS.captures(line) {
         let name = caps.get(1)?.as_str().trim().to_string();
-        let status = caps.get(2)?.as_str().trim().to_string();
         return Some(ActiveFile {
             name,
             pct: 0,
-            size: "".to_string(),
             speed: "".to_string(),
-            eta: "".to_string(),
-            status,
             last_seen: std::time::Instant::now(),
         });
     }
@@ -258,14 +241,11 @@ mod tests {
         let res1 = parse_active_file(l1).expect("should parse full active transfer");
         assert_eq!(res1.name, "Documents/video.mp4");
         assert_eq!(res1.pct, 45);
-        assert_eq!(res1.size, "1.234Mi");
         assert_eq!(res1.speed, "4.5Mi/s");
-        assert_eq!(res1.eta, "2m3s");
 
         let l2 = "* Audio/album.flac: checking";
         let res2 = parse_active_file(l2).expect("should parse checking file");
         assert_eq!(res2.name, "Audio/album.flac");
-        assert_eq!(res2.status, "checking");
         assert_eq!(res2.pct, 0);
     }
 
