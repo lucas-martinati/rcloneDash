@@ -21,49 +21,108 @@ impl App {
 
     pub fn commit_setting_edit(&mut self) {
         let (tab, idx, trimmed) = match &self.edit_state {
-            EditState::Setting { tab, index, buffer } => (*tab, *index, buffer.trim().to_string()),
+            EditState::Setting { tab, index, buffer, .. } => (*tab, *index, buffer.trim().to_string()),
             _ => return,
         };
-        if tab == 0 && idx == 3 {
-            if !trimmed.is_empty() {
-                if self.config.local_dir != trimmed {
-                    self.config.local_dir = trimmed;
-                    self.reload_files();
-                    self.save_current_settings();
-                    self.set_toast(format!("✔ Local directory updated: {}", self.config.local_dir));
-                } else {
-                    self.set_toast("✔ Local directory kept");
-                }
-            } else {
-                self.set_toast("ℹ Empty value: keeping previous directory");
+
+        let setting = match config::SettingId::from_tab_and_idx(tab, idx) {
+            Some(s) => s,
+            None => {
+                self.edit_state = EditState::Idle;
+                return;
             }
-        } else if tab == 0 && idx == 4 {
-            if !trimmed.is_empty() {
-                if self.config.remote != trimmed {
-                    self.config.remote = trimmed;
-                    self.save_current_settings();
-                    self.set_toast(format!("✔ Remote storage updated: {}", self.config.remote));
+        };
+
+        match setting {
+            config::SettingId::LocalDirectory => {
+                if !trimmed.is_empty() {
+                    if self.config.local_dir != trimmed {
+                        self.config.local_dir = trimmed;
+                        self.reload_files();
+                        self.save_current_settings();
+                        self.set_toast(format!("✔ Local directory updated: {}", self.config.local_dir));
+                    } else {
+                        self.set_toast("✔ Local directory kept");
+                    }
                 } else {
-                    self.set_toast("✔ Remote storage kept");
+                    self.set_toast("ℹ Empty value: keeping previous directory");
                 }
-            } else {
-                self.set_toast("ℹ Empty value: keeping previous remote");
             }
+            config::SettingId::RemoteStorage => {
+                if !trimmed.is_empty() {
+                    if self.config.remote != trimmed {
+                        self.config.remote = trimmed;
+                        self.save_current_settings();
+                        self.set_toast(format!("✔ Remote storage updated: {}", self.config.remote));
+                    } else {
+                        self.set_toast("✔ Remote storage kept");
+                    }
+                } else {
+                    self.set_toast("ℹ Empty value: keeping previous remote");
+                }
+            }
+            config::SettingId::GoogleClientId => {
+                let (old_id, old_secret) = config::read_rclone_credentials(&self.config.remote);
+                let secret = old_secret.unwrap_or_default();
+                if old_id.as_deref() != Some(&trimmed) {
+                    if let Err(e) = config::write_rclone_credentials(&self.config.remote, &trimmed, &secret) {
+                        self.set_toast(format!("✗ Failed to update Client ID: {}", e));
+                    } else {
+                        self.set_toast("✔ Google Client ID updated in rclone.conf!");
+                    }
+                } else {
+                    self.set_toast("✔ Google Client ID unchanged");
+                }
+            }
+            config::SettingId::GoogleClientSecret => {
+                let (old_id, old_secret) = config::read_rclone_credentials(&self.config.remote);
+                let id = old_id.unwrap_or_default();
+                if old_secret.as_deref() != Some(&trimmed) {
+                    if let Err(e) = config::write_rclone_credentials(&self.config.remote, &id, &trimmed) {
+                        self.set_toast(format!("✗ Failed to update Client Secret: {}", e));
+                    } else {
+                        self.set_toast("✔ Google Client Secret updated in rclone.conf!");
+                    }
+                } else {
+                    self.set_toast("✔ Google Client Secret unchanged");
+                }
+            }
+            _ => {}
         }
         self.edit_state = EditState::Idle;
     }
 
+    #[allow(dead_code)]
+    pub fn cancel_setting_edit(&mut self) {
+        self.edit_state = EditState::Idle;
+        self.set_toast("ℹ Edit cancelled");
+    }
+
     /// Enter editing mode for the currently selected setting (text fields only).
     pub fn start_editing_setting(&mut self) {
-        let buffer = if self.settings_selected_idx == 3 {
-            self.config.local_dir.clone()
-        } else {
-            self.config.remote.clone()
+        let setting = match config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+            Some(s) if s.is_text_input() => s,
+            _ => return,
         };
+
+        let buffer = match setting {
+            config::SettingId::LocalDirectory => self.config.local_dir.clone(),
+            config::SettingId::RemoteStorage => self.config.remote.clone(),
+            config::SettingId::GoogleClientId => {
+                config::read_rclone_credentials(&self.config.remote).0.unwrap_or_default()
+            }
+            config::SettingId::GoogleClientSecret => {
+                config::read_rclone_credentials(&self.config.remote).1.unwrap_or_default()
+            }
+            _ => String::new(),
+        };
+
+        let cursor = buffer.chars().count();
         self.edit_state = EditState::Setting {
             tab: self.settings_tab,
             index: self.settings_selected_idx,
             buffer,
+            cursor,
         };
     }
 

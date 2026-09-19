@@ -7,6 +7,7 @@ mod systemd;
 mod ui;
 pub mod updater;
 pub mod cmd;
+pub mod installer;
 
 use std::io;
 use std::panic;
@@ -31,7 +32,9 @@ use app::App;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle command-line arguments (before initializing TUI / raw mode)
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
+    let force_first_run = args.iter().any(|a| a == "--first-run" || a == "--wizard");
+
+    if args.len() > 1 && !force_first_run {
         match args[1].as_str() {
             "--help" | "-h" => {
                 println!("rcloneDash - Terminal Dashboard for Rclone\n");
@@ -39,6 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Options:");
                 println!("  -h, --help            Print help information");
                 println!("  -v, -V, --version     Print version information");
+                println!("  --first-run, --wizard Run initial setup wizard (Google credentials & rclone check)");
                 println!("  --check-update        Check if a newer version is available");
                 println!("  -u, --update          Update rcloneDash to the latest release");
                 return Ok(());
@@ -126,6 +130,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Initialize application state
     let mut app = App::new();
+    if force_first_run {
+        app.open_first_run();
+    }
 
     // 4. Async event streams and intervals
     let mut reader = EventStream::new();

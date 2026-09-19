@@ -118,13 +118,9 @@ pub fn parse_journal_history(journal_text: &str, limit: usize) -> Vec<PastRun> {
         }
     }
 
-    if in_run && !current_lines.is_empty() {
-        if let Some(run) = analyze_run(&current_lines, runs.len() + 1) {
-            if run.status != RunStatus::Skipped {
-                runs.push(run);
-            }
-        }
-    }
+    // Note: If `in_run` is still true at the end of the journal, that run has started
+    // but not finished yet. It is currently in progress and will be displayed by the live
+    // "In progress" row of the dashboard. Do NOT add it to `runs` (PastRun) to avoid duplicate entries.
 
     // Most recent first
     runs.reverse();
@@ -231,6 +227,24 @@ mod tests {
         assert_eq!(runs[0].files_copied.len(), 1);
         assert_eq!(runs[0].files_copied[0], "Documents/notes.txt");
         assert_eq!(runs[0].duration, "4.2s");
+    }
+
+    #[test]
+    fn test_in_progress_sync_not_added_to_history() {
+        let sample_journal = r#"
+2026-09-17T20:10:00+0200 mypc systemd[1]: Starting rclone-bisync.service...
+2026-09-17T20:10:05+0200 mypc rclone[1235]: Bisync successful
+2026-09-17T20:10:06+0200 mypc systemd[1]: Finished rclone-bisync.service.
+2026-09-17T20:30:00+0200 mypc systemd[1]: Starting rclone-bisync.service...
+2026-09-17T20:30:01+0200 mypc rclone-bisync-guard[1400]: Lancement du bisync
+2026-09-17T20:30:02+0200 mypc rclone[1401]: Synching Path1 with Path2
+2026-09-17T20:30:03+0200 mypc rclone[1401]: INFO  : Photos/vacances.jpg: Copied (new)
+"#;
+
+        let runs = parse_journal_history(sample_journal, 10);
+        // Only the finished sync from 20:10 should be in history, NOT the currently running sync from 20:30
+        assert_eq!(runs.len(), 1, "The ongoing in-progress sync must not appear in past history runs");
+        assert_eq!(runs[0].time, "20:10:00");
     }
 }
 

@@ -361,20 +361,24 @@ impl App {
                     self.commit_setting_edit();
                 }
                 self.settings_selected_idx = idx;
-                if self.settings_tab == 0 {
-                    if idx == 6 {
-                        return Action::OpenFullLogs;
-                    } else if idx == 5 {
-                        self.modal = Modal::ConfirmResync;
-                    } else if idx == 3 || idx == 4 {
-                        if !self.is_editing_setting() || self.settings_selected_idx != idx {
-                            self.start_editing_setting();
+                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, idx) {
+                    match setting.kind() {
+                        config::SettingKind::TextInput => {
+                            if !self.is_editing_setting() || self.settings_selected_idx != idx {
+                                self.start_editing_setting();
+                            }
                         }
-                    } else {
-                        self.cycle_setting(true);
+                        config::SettingKind::Action => {
+                            if setting == config::SettingId::LogJournalAction {
+                                return Action::OpenFullLogs;
+                            } else if setting == config::SettingId::ResyncAction {
+                                self.modal = Modal::ConfirmResync;
+                            }
+                        }
+                        config::SettingKind::Cycle => {
+                            self.cycle_setting(true);
+                        }
                     }
-                } else {
-                    self.cycle_setting(true);
                 }
                 Action::None
             }
@@ -383,20 +387,74 @@ impl App {
                     self.commit_setting_edit();
                 }
                 self.settings_selected_idx = idx;
-                if self.settings_tab == 0 {
-                    if idx == 6 {
-                        return Action::OpenFullLogs;
-                    } else if idx == 5 {
-                        self.modal = Modal::ConfirmResync;
-                    } else if idx == 3 || idx == 4 {
-                        if !self.is_editing_setting() || self.settings_selected_idx != idx {
-                            self.start_editing_setting();
+                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, idx) {
+                    match setting.kind() {
+                        config::SettingKind::TextInput => {
+                            if !self.is_editing_setting() || self.settings_selected_idx != idx {
+                                self.start_editing_setting();
+                            }
                         }
-                    } else {
-                        self.cycle_setting(forward);
+                        config::SettingKind::Action => {
+                            if setting == config::SettingId::LogJournalAction {
+                                return Action::OpenFullLogs;
+                            } else if setting == config::SettingId::ResyncAction {
+                                self.modal = Modal::ConfirmResync;
+                            }
+                        }
+                        config::SettingKind::Cycle => {
+                            self.cycle_setting(forward);
+                        }
                     }
-                } else {
-                    self.cycle_setting(forward);
+                }
+                Action::None
+            }
+            HitAction::FirstRunInstall => {
+                self.start_rclone_install();
+                Action::None
+            }
+            HitAction::FirstRunContinue | HitAction::FirstRunSkipRclone => {
+                if let Modal::FirstRun(ref mut state) = self.modal {
+                    state.step = FirstRunStep::GoogleCredentials;
+                    state.active_field = FirstRunField::ClientIdInput;
+                }
+                Action::None
+            }
+            HitAction::FirstRunClientId => {
+                if let Modal::FirstRun(ref mut state) = self.modal {
+                    state.active_field = FirstRunField::ClientIdInput;
+                    state.client_id_cursor = state.client_id.chars().count();
+                }
+                Action::None
+            }
+            HitAction::FirstRunClientSecret => {
+                if let Modal::FirstRun(ref mut state) = self.modal {
+                    state.active_field = FirstRunField::ClientSecretInput;
+                    state.client_secret_cursor = state.client_secret.chars().count();
+                }
+                Action::None
+            }
+            HitAction::FirstRunSaveCredentials => {
+                if let Modal::FirstRun(ref state) = self.modal {
+                    let _ = config::write_rclone_credentials(&self.config.remote, &state.client_id, &state.client_secret);
+                    self.config.first_run_completed = Some(true);
+                    let _ = config::save_config(&self.config);
+                    self.set_toast("✔ Google Drive credentials saved! Setup complete.");
+                }
+                self.modal = Modal::None;
+                self.hit_mgr.active_modal_area = None;
+                Action::None
+            }
+            HitAction::FirstRunSkipCredentials => {
+                self.config.first_run_completed = Some(true);
+                let _ = config::save_config(&self.config);
+                self.set_toast("✔ Setup skipped. You can configure credentials anytime in Settings.");
+                self.modal = Modal::None;
+                self.hit_mgr.active_modal_area = None;
+                Action::None
+            }
+            HitAction::FirstRunToggleHelp => {
+                if let Modal::FirstRun(ref mut state) = self.modal {
+                    state.show_help = !state.show_help;
                 }
                 Action::None
             }
@@ -536,6 +594,253 @@ impl App {
 
         // 1. Priority modals
         if self.modal != Modal::None {
+            // FirstRun modal keyboard handling
+            if let Modal::FirstRun(ref mut state) = self.modal {
+                enum FirstRunKeyAction {
+                    None,
+                    InstallRclone,
+                    SaveCredentials(String, String),
+                    SkipCredentials,
+                }
+
+                let mut action_to_do = FirstRunKeyAction::None;
+
+                match state.step {
+                    FirstRunStep::RcloneCheck => match key.code {
+                        KeyCode::Enter => {
+                            match state.rclone_status {
+                                RcloneInstallStatus::Installed(_) => {
+                                    state.step = FirstRunStep::GoogleCredentials;
+                                    state.active_field = FirstRunField::ClientIdInput;
+                                }
+                                RcloneInstallStatus::NotInstalled | RcloneInstallStatus::Failed(_) => {
+                                    if state.active_field == FirstRunField::SkipRcloneButton {
+                                        state.step = FirstRunStep::GoogleCredentials;
+                                        state.active_field = FirstRunField::ClientIdInput;
+                                    } else {
+                                        action_to_do = FirstRunKeyAction::InstallRclone;
+                                    }
+                                }
+                                RcloneInstallStatus::Installing => {}
+                            }
+                        }
+                        KeyCode::Tab | KeyCode::Right | KeyCode::Down => {
+                            if !matches!(state.rclone_status, RcloneInstallStatus::Installed(_) | RcloneInstallStatus::Installing) {
+                                state.active_field = match state.active_field {
+                                    FirstRunField::InstallRcloneButton => FirstRunField::SkipRcloneButton,
+                                    _ => FirstRunField::InstallRcloneButton,
+                                };
+                            }
+                        }
+                        KeyCode::BackTab | KeyCode::Left | KeyCode::Up => {
+                            if !matches!(state.rclone_status, RcloneInstallStatus::Installed(_) | RcloneInstallStatus::Installing) {
+                                state.active_field = match state.active_field {
+                                    FirstRunField::SkipRcloneButton => FirstRunField::InstallRcloneButton,
+                                    _ => FirstRunField::SkipRcloneButton,
+                                };
+                            }
+                        }
+                        KeyCode::Esc => {
+                            state.step = FirstRunStep::GoogleCredentials;
+                            state.active_field = FirstRunField::ClientIdInput;
+                        }
+                        _ => {}
+                    },
+                    FirstRunStep::GoogleCredentials => match key.code {
+                        KeyCode::Tab | KeyCode::Down => {
+                            state.active_field = match state.active_field {
+                                FirstRunField::ClientIdInput => FirstRunField::ClientSecretInput,
+                                FirstRunField::ClientSecretInput => FirstRunField::SaveCredentialsButton,
+                                FirstRunField::SaveCredentialsButton => FirstRunField::SkipCredentialsButton,
+                                FirstRunField::SkipCredentialsButton => FirstRunField::ToggleHelpButton,
+                                FirstRunField::ToggleHelpButton => FirstRunField::ClientIdInput,
+                                _ => FirstRunField::ClientIdInput,
+                            };
+                        }
+                        KeyCode::BackTab | KeyCode::Up => {
+                            state.active_field = match state.active_field {
+                                FirstRunField::ClientIdInput => FirstRunField::ToggleHelpButton,
+                                FirstRunField::ClientSecretInput => FirstRunField::ClientIdInput,
+                                FirstRunField::SaveCredentialsButton => FirstRunField::ClientSecretInput,
+                                FirstRunField::SkipCredentialsButton => FirstRunField::SaveCredentialsButton,
+                                FirstRunField::ToggleHelpButton => FirstRunField::SkipCredentialsButton,
+                                _ => FirstRunField::ClientIdInput,
+                            };
+                        }
+                        KeyCode::Enter => {
+                            match state.active_field {
+                                FirstRunField::ClientIdInput => {
+                                    state.active_field = FirstRunField::ClientSecretInput;
+                                }
+                                FirstRunField::ClientSecretInput => {
+                                    state.active_field = FirstRunField::SaveCredentialsButton;
+                                }
+                                FirstRunField::SaveCredentialsButton => {
+                                    action_to_do = FirstRunKeyAction::SaveCredentials(state.client_id.clone(), state.client_secret.clone());
+                                }
+                                FirstRunField::SkipCredentialsButton => {
+                                    action_to_do = FirstRunKeyAction::SkipCredentials;
+                                }
+                                FirstRunField::ToggleHelpButton => {
+                                    state.show_help = !state.show_help;
+                                }
+                                _ => {}
+                            }
+                        }
+                        KeyCode::Esc => {
+                            action_to_do = FirstRunKeyAction::SkipCredentials;
+                        }
+                        KeyCode::Char('?') | KeyCode::Char('h') if state.active_field != FirstRunField::ClientIdInput && state.active_field != FirstRunField::ClientSecretInput => {
+                            state.show_help = !state.show_help;
+                        }
+                        KeyCode::Left if state.active_field == FirstRunField::ClientIdInput => {
+                            if state.client_id_cursor > 0 {
+                                state.client_id_cursor -= 1;
+                            }
+                        }
+                        KeyCode::Left if state.active_field == FirstRunField::ClientSecretInput => {
+                            if state.client_secret_cursor > 0 {
+                                state.client_secret_cursor -= 1;
+                            }
+                        }
+                        KeyCode::Right if state.active_field == FirstRunField::ClientIdInput => {
+                            if state.client_id_cursor < state.client_id.chars().count() {
+                                state.client_id_cursor += 1;
+                            }
+                        }
+                        KeyCode::Right if state.active_field == FirstRunField::ClientSecretInput => {
+                            if state.client_secret_cursor < state.client_secret.chars().count() {
+                                state.client_secret_cursor += 1;
+                            }
+                        }
+                        KeyCode::Home if state.active_field == FirstRunField::ClientIdInput => {
+                            state.client_id_cursor = 0;
+                        }
+                        KeyCode::Home if state.active_field == FirstRunField::ClientSecretInput => {
+                            state.client_secret_cursor = 0;
+                        }
+                        KeyCode::End if state.active_field == FirstRunField::ClientIdInput => {
+                            state.client_id_cursor = state.client_id.chars().count();
+                        }
+                        KeyCode::End if state.active_field == FirstRunField::ClientSecretInput => {
+                            state.client_secret_cursor = state.client_secret.chars().count();
+                        }
+                        KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            if let Some(pasted) = crate::clipboard::paste_from_clipboard() {
+                                let clean = pasted.trim().replace('\n', "").replace('\r', "");
+                                let clean_chars: Vec<char> = clean.chars().collect();
+                                let clean_len = clean_chars.len();
+                                match state.active_field {
+                                    FirstRunField::ClientIdInput => {
+                                        let mut chars: Vec<char> = state.client_id.chars().collect();
+                                        let cur = state.client_id_cursor.min(chars.len());
+                                        chars.splice(cur..cur, clean_chars);
+                                        state.client_id = chars.into_iter().collect();
+                                        state.client_id_cursor = cur + clean_len;
+                                    }
+                                    FirstRunField::ClientSecretInput => {
+                                        let mut chars: Vec<char> = state.client_secret.chars().collect();
+                                        let cur = state.client_secret_cursor.min(chars.len());
+                                        chars.splice(cur..cur, clean_chars);
+                                        state.client_secret = chars.into_iter().collect();
+                                        state.client_secret_cursor = cur + clean_len;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        KeyCode::Backspace => {
+                            match state.active_field {
+                                FirstRunField::ClientIdInput => {
+                                    if state.client_id_cursor > 0 {
+                                        let mut chars: Vec<char> = state.client_id.chars().collect();
+                                        if state.client_id_cursor <= chars.len() {
+                                            chars.remove(state.client_id_cursor - 1);
+                                            state.client_id = chars.into_iter().collect();
+                                            state.client_id_cursor -= 1;
+                                        }
+                                    }
+                                }
+                                FirstRunField::ClientSecretInput => {
+                                    if state.client_secret_cursor > 0 {
+                                        let mut chars: Vec<char> = state.client_secret.chars().collect();
+                                        if state.client_secret_cursor <= chars.len() {
+                                            chars.remove(state.client_secret_cursor - 1);
+                                            state.client_secret = chars.into_iter().collect();
+                                            state.client_secret_cursor -= 1;
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        KeyCode::Delete => {
+                            match state.active_field {
+                                FirstRunField::ClientIdInput => {
+                                    let mut chars: Vec<char> = state.client_id.chars().collect();
+                                    if state.client_id_cursor < chars.len() {
+                                        chars.remove(state.client_id_cursor);
+                                        state.client_id = chars.into_iter().collect();
+                                    }
+                                }
+                                FirstRunField::ClientSecretInput => {
+                                    let mut chars: Vec<char> = state.client_secret.chars().collect();
+                                    if state.client_secret_cursor < chars.len() {
+                                        chars.remove(state.client_secret_cursor);
+                                        state.client_secret = chars.into_iter().collect();
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        KeyCode::Char(c) => {
+                            match state.active_field {
+                                FirstRunField::ClientIdInput => {
+                                    let mut chars: Vec<char> = state.client_id.chars().collect();
+                                    let cur = state.client_id_cursor.min(chars.len());
+                                    chars.insert(cur, c);
+                                    state.client_id = chars.into_iter().collect();
+                                    state.client_id_cursor = cur + 1;
+                                }
+                                FirstRunField::ClientSecretInput => {
+                                    let mut chars: Vec<char> = state.client_secret.chars().collect();
+                                    let cur = state.client_secret_cursor.min(chars.len());
+                                    chars.insert(cur, c);
+                                    state.client_secret = chars.into_iter().collect();
+                                    state.client_secret_cursor = cur + 1;
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    },
+                }
+
+                match action_to_do {
+                    FirstRunKeyAction::InstallRclone => {
+                        self.start_rclone_install();
+                    }
+                    FirstRunKeyAction::SaveCredentials(id, sec) => {
+                        let _ = config::write_rclone_credentials(&self.config.remote, &id, &sec);
+                        self.config.first_run_completed = Some(true);
+                        let _ = config::save_config(&self.config);
+                        self.modal = Modal::None;
+                        self.hit_mgr.active_modal_area = None;
+                        self.set_toast("✔ Google Drive credentials saved! Setup complete.");
+                    }
+                    FirstRunKeyAction::SkipCredentials => {
+                        self.config.first_run_completed = Some(true);
+                        let _ = config::save_config(&self.config);
+                        self.modal = Modal::None;
+                        self.hit_mgr.active_modal_area = None;
+                        self.set_toast("✔ Setup skipped. You can configure credentials anytime in Settings.");
+                    }
+                    FirstRunKeyAction::None => {}
+                }
+
+                return Action::None;
+            }
+
             // Universal 'q' key to close any modal (except Menu where 'q' quits the application)
             if key.code == KeyCode::Char('q') && self.modal != Modal::Menu && self.edit_state == EditState::Idle {
                 self.modal = Modal::None;
@@ -640,15 +945,81 @@ impl App {
                 }
                 Modal::Settings => {
                     if self.is_editing_setting() {
+                        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('v') {
+                            if let Some(clip) = crate::clipboard::paste_from_clipboard() {
+                                let clean = clip.trim().replace(['\r', '\n'], "");
+                                if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
+                                    let mut chars: Vec<char> = buffer.chars().collect();
+                                    let cur = (*cursor).min(chars.len());
+                                    let clean_chars: Vec<char> = clean.chars().collect();
+                                    let clean_len = clean_chars.len();
+                                    chars.splice(cur..cur, clean_chars);
+                                    *buffer = chars.into_iter().collect();
+                                    *cursor = cur + clean_len;
+                                }
+                            }
+                            return Action::None;
+                        }
                         match key.code {
                             KeyCode::Esc | KeyCode::Enter => {
                                 self.commit_setting_edit();
                             }
+                            KeyCode::Left => {
+                                if let EditState::Setting { cursor, .. } = &mut self.edit_state {
+                                    if *cursor > 0 {
+                                        *cursor -= 1;
+                                    }
+                                }
+                            }
+                            KeyCode::Right => {
+                                if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
+                                    let count = buffer.chars().count();
+                                    if *cursor < count {
+                                        *cursor += 1;
+                                    }
+                                }
+                            }
+                            KeyCode::Home => {
+                                if let EditState::Setting { cursor, .. } = &mut self.edit_state {
+                                    *cursor = 0;
+                                }
+                            }
+                            KeyCode::End => {
+                                if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
+                                    *cursor = buffer.chars().count();
+                                }
+                            }
                             KeyCode::Backspace => {
-                                if let Some(buf) = self.edit_buffer_mut() { buf.pop(); }
+                                if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
+                                    if *cursor > 0 {
+                                        let mut chars: Vec<char> = buffer.chars().collect();
+                                        if *cursor <= chars.len() {
+                                            chars.remove(*cursor - 1);
+                                            *buffer = chars.into_iter().collect();
+                                            *cursor -= 1;
+                                        }
+                                    }
+                                }
+                            }
+                            KeyCode::Delete => {
+                                if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
+                                    let mut chars: Vec<char> = buffer.chars().collect();
+                                    if *cursor < chars.len() {
+                                        chars.remove(*cursor);
+                                        *buffer = chars.into_iter().collect();
+                                    }
+                                }
                             }
                             KeyCode::Char(c) => {
-                                if let Some(buf) = self.edit_buffer_mut() { buf.push(c); }
+                                if !key.modifiers.contains(KeyModifiers::CONTROL) {
+                                    if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
+                                        let mut chars: Vec<char> = buffer.chars().collect();
+                                        let cur = (*cursor).min(chars.len());
+                                        chars.insert(cur, c);
+                                        *buffer = chars.into_iter().collect();
+                                        *cursor = cur + 1;
+                                    }
+                                }
                             }
                             _ => {}
                         }
@@ -687,55 +1058,69 @@ impl App {
                             }
                         }
                         KeyCode::Enter => {
-                            if self.settings_tab == 0 {
-                                if self.settings_selected_idx == 6 {
-                                    return Action::OpenFullLogs;
-                                } else if self.settings_selected_idx == 5 {
-                                    self.modal = Modal::ConfirmResync;
-                                } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
-                                    self.start_editing_setting();
-                                } else {
-                                    self.cycle_setting(true);
+                            if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+                                match setting.kind() {
+                                    config::SettingKind::TextInput => {
+                                        self.start_editing_setting();
+                                    }
+                                    config::SettingKind::Action => {
+                                        if setting == config::SettingId::LogJournalAction {
+                                            return Action::OpenFullLogs;
+                                        } else if setting == config::SettingId::ResyncAction {
+                                            self.modal = Modal::ConfirmResync;
+                                        }
+                                    }
+                                    config::SettingKind::Cycle => {
+                                        self.cycle_setting(true);
+                                    }
                                 }
-                            } else {
-                                self.cycle_setting(true);
                             }
                         }
                         KeyCode::Char('e') | KeyCode::Char(' ') => {
-                            if self.settings_tab == 0 && (self.settings_selected_idx == 3 || self.settings_selected_idx == 4) {
-                                self.start_editing_setting();
-                            } else {
-                                self.cycle_setting(true);
+                            if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+                                if setting.is_text_input() {
+                                    self.start_editing_setting();
+                                } else if setting.is_cycle() {
+                                    self.cycle_setting(true);
+                                }
                             }
                         }
                         KeyCode::Right | KeyCode::Char('l') => {
-                            if self.settings_tab == 0 {
-                                if self.settings_selected_idx == 6 {
-                                    return Action::OpenFullLogs;
-                                } else if self.settings_selected_idx == 5 {
-                                    self.modal = Modal::ConfirmResync;
-                                } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
-                                    self.start_editing_setting();
-                                } else {
-                                    self.cycle_setting(true);
+                            if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+                                match setting.kind() {
+                                    config::SettingKind::TextInput => {
+                                        self.start_editing_setting();
+                                    }
+                                    config::SettingKind::Action => {
+                                        if setting == config::SettingId::LogJournalAction {
+                                            return Action::OpenFullLogs;
+                                        } else if setting == config::SettingId::ResyncAction {
+                                            self.modal = Modal::ConfirmResync;
+                                        }
+                                    }
+                                    config::SettingKind::Cycle => {
+                                        self.cycle_setting(true);
+                                    }
                                 }
-                            } else {
-                                self.cycle_setting(true);
                             }
                         }
                         KeyCode::Left | KeyCode::Char('h') => {
-                            if self.settings_tab == 0 {
-                                if self.settings_selected_idx == 6 {
-                                    return Action::OpenFullLogs;
-                                } else if self.settings_selected_idx == 5 {
-                                    self.modal = Modal::ConfirmResync;
-                                } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
-                                    self.start_editing_setting();
-                                } else {
-                                    self.cycle_setting(false);
+                            if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+                                match setting.kind() {
+                                    config::SettingKind::TextInput => {
+                                        self.start_editing_setting();
+                                    }
+                                    config::SettingKind::Action => {
+                                        if setting == config::SettingId::LogJournalAction {
+                                            return Action::OpenFullLogs;
+                                        } else if setting == config::SettingId::ResyncAction {
+                                            self.modal = Modal::ConfirmResync;
+                                        }
+                                    }
+                                    config::SettingKind::Cycle => {
+                                        self.cycle_setting(false);
+                                    }
                                 }
-                            } else {
-                                self.cycle_setting(false);
                             }
                         }
                         _ => {}
@@ -1017,7 +1402,7 @@ impl App {
                         _ => {}
                     }
                 }
-                Modal::None => {}
+                Modal::FirstRun(_) | Modal::None => {}
             }
             return Action::None;
         }

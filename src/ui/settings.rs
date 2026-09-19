@@ -75,19 +75,25 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         spans.push(Span::styled("  ", Style::default()));
         spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "confirm", theme.green, Color::White));
         spans
-    } else if app.settings_tab == 0 {
-        if app.settings_selected_idx == 6 {
-            crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "open full log", theme.cyan, Color::White)
-        } else if app.settings_selected_idx == 5 {
-            crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "launch resync", theme.red, Color::White)
-        } else if app.settings_selected_idx == 3 || app.settings_selected_idx == 4 {
-            crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "edit", theme.red, Color::White)
-        } else {
-            vec![
-                Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" change ", Style::default().fg(Color::White)),
-                Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            ]
+    } else if let Some(setting) = config::SettingId::from_tab_and_idx(app.settings_tab, app.settings_selected_idx) {
+        match setting.kind() {
+            config::SettingKind::TextInput => {
+                crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "edit", theme.red, Color::White)
+            }
+            config::SettingKind::Action => {
+                if setting == config::SettingId::LogJournalAction {
+                    crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "open full log", theme.cyan, Color::White)
+                } else {
+                    crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "launch resync", theme.red, Color::White)
+                }
+            }
+            config::SettingKind::Cycle => {
+                vec![
+                    Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(" change ", Style::default().fg(Color::White)),
+                    Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                ]
+            }
         }
     } else {
         vec![
@@ -202,6 +208,10 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     // Settings data based on active tab
     let full_sync_display = config::full_sync_label(&app.config.full_sync_interval).to_string();
 
+    let (google_id, google_secret) = config::read_rclone_credentials(&app.config.remote);
+    let id_disp = google_id.as_deref().unwrap_or("(default / unset)").to_string();
+    let sec_disp = if google_secret.is_some() { "••••••••••••".to_string() } else { "(default / unset)".to_string() };
+
     let settings: Vec<(&str, String)> = if app.settings_tab == 0 {
         vec![
             (SettingId::TimerInterval.label(), app.config.timer_interval.clone()),
@@ -210,7 +220,9 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             (SettingId::LocalDirectory.label(), app.config.local_dir.clone()),
             (SettingId::RemoteStorage.label(), app.config.remote.clone()),
             (SettingId::ResyncAction.label(), "Run (--resync)".to_string()),
-            (SettingId::LogJournalAction.label(), "Open logs (↵)".to_string()),
+            (SettingId::LogJournalAction.label(), "Open logs".to_string()),
+            (SettingId::GoogleClientId.label(), id_disp),
+            (SettingId::GoogleClientSecret.label(), sec_disp),
         ]
     } else {
         vec![
@@ -261,6 +273,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         });
 
         let w = left_area.width as usize;
+        let setting_opt = SettingId::from_tab_and_idx(app.settings_tab, i);
+        let setting_kind = setting_opt.map(|s| s.kind()).unwrap_or(config::SettingKind::Cycle);
 
         if is_selected {
             // Highlight background banner (deep red/brown #5A2222)
@@ -271,44 +285,39 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             ]);
 
             let inner_w = w.saturating_sub(4);
-            let line2 = if app.settings_tab == 0 {
-                if app.is_editing_setting() && (i == 3 || i == 4) {
-                    let edit_text = format!("{}_", app.edit_buffer());
-                    let edit_centered = format!("{:^width$}", edit_text, width = inner_w);
-                    Line::from(vec![
-                        Span::styled(format!("[{}]", edit_centered), Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
-                    ])
-                } else if i == 5 || i == 6 {
-                    let val_centered = format!("{:^width$}", val, width = inner_w);
-                    Line::from(vec![
-                        Span::styled(format!("↵ {} ↵", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                    ])
-                } else if i == 3 || i == 4 {
-                    let val_centered = format!("{:^width$}", val, width = inner_w);
-                    Line::from(vec![
-                        Span::styled(format!("↵ {} ↵", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                    ])
-                } else {
-                    let val_centered = format!("{:^width$}", val, width = inner_w);
-                    Line::from(vec![
-                        Span::styled(format!("← {} →", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                    ])
-                }
-            } else {
-                let val_centered = format!("{:^width$}", val, width = inner_w);
+            let line2 = if app.is_editing_setting() && setting_kind == config::SettingKind::TextInput {
+                let buf = app.edit_buffer();
+                let visible = format_scrolled_input_with_cursor(buf, app.edit_cursor(), inner_w);
+                let edit_centered = format!("{:^width$}", visible, width = inner_w);
                 Line::from(vec![
-                    Span::styled(format!("← {} →", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("[{}]", edit_centered), Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
                 ])
+            } else {
+                let truncated = truncate_chars(val, inner_w);
+                let val_centered = format!("{:^width$}", truncated, width = inner_w);
+                match setting_kind {
+                    config::SettingKind::TextInput | config::SettingKind::Action => {
+                        Line::from(vec![
+                            Span::styled(format!("↵ {} ↵", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                        ])
+                    }
+                    config::SettingKind::Cycle => {
+                        Line::from(vec![
+                            Span::styled(format!("← {} →", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                        ])
+                    }
+                }
             };
 
             left_lines.push(line1);
             left_lines.push(line2);
         } else {
+            let truncated = truncate_chars(val, w);
             let line1 = Line::from(vec![
                 Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::Rgb(220, 222, 230))),
             ]);
             let line2 = Line::from(vec![
-                Span::styled(format!("{:^width$}", val, width = w), Style::default().fg(Color::Rgb(165, 170, 185))),
+                Span::styled(format!("{:^width$}", truncated, width = w), Style::default().fg(Color::Rgb(165, 170, 185))),
             ]);
             left_lines.push(line1);
             left_lines.push(line2);
@@ -395,6 +404,28 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 k_enter
             ),
         ),
+        Some(SettingId::GoogleClientId) => {
+            let cur = google_id.as_deref().unwrap_or("(default / unset)");
+            (
+                SettingId::GoogleClientId.desc_title(),
+                format!(
+                    "{}\n\nPress [{}] to edit, then [{}] to confirm or [{}] to cancel.\nPress [Ctrl+V] to paste from clipboard.\n\nCurrent Client ID:\n  ▶ {}",
+                    SettingId::GoogleClientId.desc_intro(),
+                    k_enter, k_enter, k_esc, cur
+                ),
+            )
+        }
+        Some(SettingId::GoogleClientSecret) => {
+            let cur_display = if google_secret.is_some() { "•••••••••••• (configured)" } else { "(default / unset)" };
+            (
+                SettingId::GoogleClientSecret.desc_title(),
+                format!(
+                    "{}\n\nPress [{}] to edit, then [{}] to confirm or [{}] to cancel.\nPress [Ctrl+V] to paste from clipboard.\n\nCurrent Client Secret:\n  ▶ {}",
+                    SettingId::GoogleClientSecret.desc_intro(),
+                    k_enter, k_enter, k_esc, cur_display
+                ),
+            )
+        }
 
         // --- Category 1: UI & Appearance ---
         Some(SettingId::ColorTheme) => {
@@ -539,26 +570,32 @@ fn parse_option_line(line: &str, theme: &ThemePalette) -> Line<'static> {
     let mut rem = line;
 
     while !rem.is_empty() {
-        if let Some(pos) = rem.find(|c| c == '▶' || c == '•') {
+        let next_bullet = rem.match_indices("▶ ")
+            .chain(rem.match_indices("• "))
+            .min_by_key(|&(idx, _)| idx);
+
+        if let Some((pos, bullet_str)) = next_bullet {
             if pos > 0 {
                 spans.push(Span::raw(rem[..pos].to_string()));
             }
-            let is_active = rem[pos..].starts_with('▶');
-            let bullet = if is_active { "▶ " } else { "• " };
-            let bullet_len = bullet.len();
+            let is_active = bullet_str == "▶ ";
             let bullet_style = if is_active {
                 Style::default().fg(theme.green).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme.text_muted)
             };
-            spans.push(Span::styled(bullet.to_string(), bullet_style));
+            spans.push(Span::styled(bullet_str.to_string(), bullet_style));
 
-            rem = &rem[pos + bullet_len..];
+            rem = &rem[pos + bullet_str.len()..];
 
-            // End of this item at next bullet indicator or end of string
-            let next_bullet = rem.find(|c| c == '▶' || c == '•').unwrap_or(rem.len());
-            let item_part = &rem[..next_bullet];
-            rem = &rem[next_bullet..];
+            let next_end = rem.match_indices("▶ ")
+                .chain(rem.match_indices("• "))
+                .min_by_key(|&(idx, _)| idx)
+                .map(|(idx, _)| idx)
+                .unwrap_or(rem.len());
+
+            let item_part = &rem[..next_end];
+            rem = &rem[next_end..];
 
             if is_active {
                 if let Some((name, after)) = item_part.split_once(" (active)") {
@@ -591,3 +628,60 @@ fn parse_option_line(line: &str, theme: &ThemePalette) -> Line<'static> {
 
     Line::from(spans)
 }
+
+fn truncate_chars(s: &str, max_chars: usize) -> String {
+    let count = s.chars().count();
+    if count > max_chars {
+        let prefix: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{}…", prefix)
+    } else {
+        s.to_string()
+    }
+}
+
+
+pub fn format_scrolled_input_with_cursor(buf: &str, cursor_pos: usize, max_w: usize) -> String {
+    let chars: Vec<char> = buf.chars().collect();
+    let cursor_pos = cursor_pos.min(chars.len());
+    let mut with_cursor: Vec<char> = Vec::with_capacity(chars.len() + 1);
+    for (i, &c) in chars.iter().enumerate() {
+        if i == cursor_pos {
+            with_cursor.push('_');
+        }
+        with_cursor.push(c);
+    }
+    if cursor_pos == chars.len() {
+        with_cursor.push('_');
+    }
+
+    let total = with_cursor.len();
+    if total <= max_w {
+        with_cursor.into_iter().collect()
+    } else if max_w <= 3 {
+        with_cursor.into_iter().take(max_w).collect()
+    } else {
+        let half = (max_w.saturating_sub(2)) / 2;
+        let start = if cursor_pos <= half {
+            0
+        } else if cursor_pos + half >= total {
+            total.saturating_sub(max_w.saturating_sub(1))
+        } else {
+            cursor_pos - half
+        };
+        let end = (start + max_w.saturating_sub(2)).min(total);
+
+        let mut res = String::new();
+        if start > 0 {
+            res.push('…');
+        }
+        for &ch in &with_cursor[start..end] {
+            res.push(ch);
+        }
+        if end < total {
+            res.push('…');
+        }
+        res
+    }
+}
+
+

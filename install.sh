@@ -115,10 +115,53 @@ if ! command -v systemctl >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! command -v rclone >/dev/null 2>&1; then
-    warn "rclone is not detected in your PATH."
-    detail "RcloneDash monitors your syncs, but requires rclone to execute them."
-    detail "Install it with: sudo apt install rclone (or https://rclone.org/install/)"
+if ! command -v rclone >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/rclone" ]; then
+    info "rclone is not detected. Installing rclone automatically..."
+    RCLONE_INSTALLED=0
+    # 1. Try official installer if sudo without password or root is available
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        if curl -fsSL https://rclone.org/install.sh | sudo bash >> "$LOG_FILE" 2>&1; then
+            RCLONE_INSTALLED=1
+            ok "rclone installed system-wide via official installer"
+        fi
+    fi
+
+    # 2. If not installed, download precompiled standalone binary directly to ~/.local/bin/rclone
+    if [ "$RCLONE_INSTALLED" -eq 0 ]; then
+        mkdir -p "$HOME/.local/bin"
+        ARCH="$(uname -m)"
+        case "$ARCH" in
+            x86_64)  ARCH_TAG="linux-amd64" ;;
+            aarch64) ARCH_TAG="linux-arm64" ;;
+            armv7*)  ARCH_TAG="linux-arm-v7" ;;
+            *)       ARCH_TAG="linux-amd64" ;;
+        esac
+        RCLONE_URL="https://downloads.rclone.org/rclone-current-${ARCH_TAG}.zip"
+        TMP_ZIP=$(mktemp "${TMPDIR:-/tmp}/rclone-dl-XXXXXX.zip")
+        if curl -fsSL "$RCLONE_URL" -o "$TMP_ZIP" 2>>"$LOG_FILE"; then
+            if command -v unzip >/dev/null 2>&1; then
+                unzip -p "$TMP_ZIP" "*/rclone" > "$HOME/.local/bin/rclone" 2>>"$LOG_FILE"
+                chmod 755 "$HOME/.local/bin/rclone"
+                RCLONE_INSTALLED=1
+            elif command -v python3 >/dev/null 2>&1; then
+                python3 -c "import zipfile, sys; z = zipfile.ZipFile('$TMP_ZIP'); f = next(n for n in z.namelist() if n.endswith('/rclone') or n == 'rclone'); sys.stdout.buffer.write(z.read(f))" > "$HOME/.local/bin/rclone" 2>>"$LOG_FILE"
+                chmod 755 "$HOME/.local/bin/rclone"
+                RCLONE_INSTALLED=1
+            fi
+            rm -f "$TMP_ZIP"
+            if [ "$RCLONE_INSTALLED" -eq 1 ]; then
+                ok "rclone standalone binary installed to $HOME/.local/bin/rclone"
+            fi
+        fi
+    fi
+
+    if ! command -v rclone >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/rclone" ]; then
+        warn "Could not automatically install rclone."
+        detail "Install it manually with: sudo apt install rclone (or https://rclone.org/install/)"
+    fi
+else
+    RCLONE_BIN="$(command -v rclone 2>/dev/null || echo "$HOME/.local/bin/rclone")"
+    ok "rclone detected: $($RCLONE_BIN --version 2>/dev/null | head -n 1)"
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then

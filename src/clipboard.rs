@@ -83,6 +83,52 @@ pub fn copy_to_clipboard(text: &str) -> bool {
     success || !text.is_empty()
 }
 
+/// Reads text content from the system clipboard on Linux (Wayland via wl-paste, or X11 via xclip/xsel).
+pub fn paste_from_clipboard() -> Option<String> {
+    // 1. Try wl-paste (Wayland)
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        if let Ok(output) = Command::new("wl-paste").arg("--no-newline").output() {
+            if output.status.success() {
+                if let Ok(s) = String::from_utf8(output.stdout) {
+                    if !s.is_empty() {
+                        return Some(s);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Try xclip (X11)
+    if let Ok(output) = Command::new("xclip")
+        .args(["-selection", "clipboard", "-out"])
+        .output()
+    {
+        if output.status.success() {
+            if let Ok(s) = String::from_utf8(output.stdout) {
+                if !s.is_empty() {
+                    return Some(s);
+                }
+            }
+        }
+    }
+
+    // 3. Try xsel (alternative X11)
+    if let Ok(output) = Command::new("xsel")
+        .args(["--clipboard", "--output"])
+        .output()
+    {
+        if output.status.success() {
+            if let Ok(s) = String::from_utf8(output.stdout) {
+                if !s.is_empty() {
+                    return Some(s);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 pub fn base64_encode(data: &str) -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let bytes = data.as_bytes();

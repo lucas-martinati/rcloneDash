@@ -12,6 +12,7 @@ pub mod sparkline;
 pub mod theme;
 pub mod keys;
 pub mod scrollbar;
+pub mod first_run;
 
 pub use container::compute_active_modal_area;
 

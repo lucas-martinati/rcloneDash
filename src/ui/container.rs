@@ -122,6 +122,10 @@ pub fn compute_active_modal_area(modal: &Modal, screen: Rect) -> Option<Rect> {
             let total_h = logo_h + 1 + box_h;
             Some(centered_fixed_rect(box_w, total_h, screen))
         }
+        Modal::FirstRun(state) => {
+            let (width, height) = crate::ui::first_run::first_run_modal_dimensions(screen, state.show_help);
+            Some(centered_fixed_rect(width, height, screen))
+        }
     }
 }
 

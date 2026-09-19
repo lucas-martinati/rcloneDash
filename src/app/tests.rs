@@ -739,7 +739,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         // Enter editing with 'e', modify and validate with Enter
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
         assert!(app.is_editing_setting());
-        app.edit_state = EditState::Setting { tab: 0, index: 3, buffer: "/home/new/path".to_string() };
+        app.edit_state = EditState::Setting { tab: 0, index: 3, buffer: "/home/new/path".to_string(), cursor: 14 };
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(!app.is_editing_setting());
         assert_eq!(app.config.local_dir, "/home/new/path");
@@ -756,6 +756,106 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(!app.is_editing_setting());
         assert_eq!(app.config.remote, "GoogleDrive:");
+    }
+
+    #[tokio::test]
+    async fn test_settings_text_input_cursor_navigation() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        app.settings_tab = 0;
+        app.settings_selected_idx = 3; // LocalDirectory
+        app.start_editing_setting();
+        assert!(app.is_editing_setting());
+
+        // Start buffer
+        app.edit_state = EditState::Setting {
+            tab: 0,
+            index: 3,
+            buffer: "hello".to_string(),
+            cursor: 5,
+        };
+        assert_eq!(app.edit_cursor(), 5);
+
+        // Move cursor left twice
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        assert_eq!(app.edit_cursor(), 4);
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        assert_eq!(app.edit_cursor(), 3);
+
+        // Insert 'X' at cursor 3 -> "helXlo"
+        app.handle_key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
+        assert_eq!(app.edit_buffer(), "helXlo");
+        assert_eq!(app.edit_cursor(), 4);
+
+        // Home key
+        app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+        assert_eq!(app.edit_cursor(), 0);
+
+        // Delete at cursor 0 (deletes 'h') -> "elXlo"
+        app.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE));
+        assert_eq!(app.edit_buffer(), "elXlo");
+        assert_eq!(app.edit_cursor(), 0);
+
+        // End key
+        app.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        assert_eq!(app.edit_cursor(), 5);
+
+        // Backspace at end (deletes 'o') -> "elXl"
+        app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.edit_buffer(), "elXl");
+        assert_eq!(app.edit_cursor(), 4);
+
+        // Cancel with Esc
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!app.is_editing_setting());
+    }
+
+    #[tokio::test]
+    async fn test_google_credentials_settings_editing() {
+        let mut app = App::new();
+        app.config.remote = "TestGoogleRemote:".to_string();
+        app.modal = Modal::Settings;
+        app.settings_tab = 0;
+
+        // Option 7: GoogleClientId
+        app.settings_selected_idx = 7;
+        assert_eq!(config::SettingId::from_tab_and_idx(0, 7), Some(config::SettingId::GoogleClientId));
+        assert!(config::SettingId::GoogleClientId.is_text_input());
+        assert!(!config::SettingId::GoogleClientId.is_secret());
+
+        // Press Enter to start editing
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.is_editing_setting());
+
+        // Set buffer to test client id and commit
+        if let Some(buf) = app.edit_buffer_mut() {
+            buf.clear();
+            buf.push_str("123456789.apps.googleusercontent.com");
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!app.is_editing_setting());
+
+        // Option 8: GoogleClientSecret
+        app.settings_selected_idx = 8;
+        assert_eq!(config::SettingId::from_tab_and_idx(0, 8), Some(config::SettingId::GoogleClientSecret));
+        assert!(config::SettingId::GoogleClientSecret.is_text_input());
+        assert!(config::SettingId::GoogleClientSecret.is_secret());
+
+        // Press 'e' to start editing
+        app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+        assert!(app.is_editing_setting());
+
+        // Test cancel_setting_edit
+        app.cancel_setting_edit();
+        assert!(!app.is_editing_setting());
+
+        // Test open_first_run
+        app.open_first_run();
+        assert!(matches!(app.modal, Modal::FirstRun(_)));
+
+        // Clean up test remote credentials
+        let _ = config::write_rclone_credentials("TestGoogleRemote:", "", "");
+        let _ = config::write_rclone_credentials("GoogleDrive:", "", "");
     }
 
     #[tokio::test]
@@ -1720,4 +1820,83 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert!(rendered_large.contains("10000ms"), "Le dernier élément 10000ms doit être présent sur grand écran");
     }
 
+    #[tokio::test]
+    async fn test_first_run_modal_flow() {
+        let mut app = App::new();
+        let mut first_run = FirstRunState::new(&app.config.remote);
+        first_run.client_id.clear();
+        first_run.client_secret.clear();
+        first_run.step = FirstRunStep::RcloneCheck;
+        first_run.rclone_status = RcloneInstallStatus::Installed("rclone v1.68.0".to_string());
+        first_run.active_field = FirstRunField::ContinueButton;
+        app.modal = Modal::FirstRun(Box::new(first_run));
+
+        // 1. Press Enter to transition to Google Credentials step
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        app.handle_key(enter);
+
+        match &app.modal {
+            Modal::FirstRun(st) => {
+                assert_eq!(st.step, FirstRunStep::GoogleCredentials);
+                assert_eq!(st.active_field, FirstRunField::ClientIdInput);
+            }
+            _ => panic!("Expected Modal::FirstRun in GoogleCredentials step"),
+        }
+
+        // 2. Type into Client ID
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+
+        // 3. Tab to Client Secret
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => {
+                assert_eq!(st.client_id, "abc");
+                assert_eq!(st.active_field, FirstRunField::ClientSecretInput);
+            }
+            _ => panic!("Expected ClientSecretInput"),
+        }
+
+        // 4. Type into Client Secret
+        app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+
+        // 5. Tab to Save button
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        match &app.modal {
+            Modal::FirstRun(st) => {
+                assert_eq!(st.client_secret, "xy");
+                assert_eq!(st.active_field, FirstRunField::SaveCredentialsButton);
+            }
+            _ => panic!("Expected SaveCredentialsButton"),
+        }
+
+        // 6. Enter to Save & Complete
+        app.handle_key(enter);
+        assert_eq!(app.modal, Modal::None);
+        assert_eq!(app.config.first_run_completed, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_settings_google_client_secret_render_no_panic() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        app.settings_tab = 0;
+        app.settings_selected_idx = 8; // GoogleClientSecret
+
+        // Set credentials so that secret is configured ("••••••••••••")
+        let _ = config::write_rclone_credentials(&app.config.remote, "test-client-id", "test-client-secret-12345");
+
+        let backend = ratatui::backend::TestBackend::new(100, 30);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+
+        // Must render without any panic
+        terminal.draw(|f| {
+            crate::ui::render(f, &mut app);
+        }).unwrap();
+
+        // Clean up
+        let _ = config::write_rclone_credentials(&app.config.remote, "", "");
+    }
 

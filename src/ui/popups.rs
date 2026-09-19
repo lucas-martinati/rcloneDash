@@ -18,6 +18,9 @@ use crate::ui::theme::ThemePalette;
 pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     // 1. Modales
     match &app.modal {
+        Modal::FirstRun(state) => {
+            crate::ui::first_run::render_first_run_modal(f, app, state, theme, hitboxes);
+        }
         Modal::Menu => {
             render_menu_modal(f, app, theme, hitboxes);
         }

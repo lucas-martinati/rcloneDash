@@ -121,6 +121,83 @@ pub enum Modal {
     ConfirmDelete(String),
     Help,
     HistoryDetails(usize),
+    FirstRun(Box<FirstRunState>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FirstRunStep {
+    RcloneCheck,
+    GoogleCredentials,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RcloneInstallStatus {
+    NotInstalled,
+    Installing,
+    Installed(String),
+    Failed(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirstRunField {
+    // Step 1
+    InstallRcloneButton,
+    ContinueButton,
+    SkipRcloneButton,
+
+    // Step 2
+    ClientIdInput,
+    ClientSecretInput,
+    SaveCredentialsButton,
+    SkipCredentialsButton,
+    ToggleHelpButton,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirstRunState {
+    pub step: FirstRunStep,
+    pub rclone_status: RcloneInstallStatus,
+    pub client_id: String,
+    pub client_secret: String,
+    pub active_field: FirstRunField,
+    pub show_help: bool,
+    pub client_id_cursor: usize,
+    pub client_secret_cursor: usize,
+}
+
+impl FirstRunState {
+    pub fn new(remote: &str) -> Self {
+        let rclone_version = crate::installer::check_rclone_installed();
+        let (existing_id, existing_secret) = crate::config::read_rclone_credentials(remote);
+        let (status, step, field) = match rclone_version {
+            Some(ver) => (
+                RcloneInstallStatus::Installed(ver),
+                FirstRunStep::RcloneCheck,
+                FirstRunField::ContinueButton,
+            ),
+            None => (
+                RcloneInstallStatus::NotInstalled,
+                FirstRunStep::RcloneCheck,
+                FirstRunField::InstallRcloneButton,
+            ),
+        };
+
+        let client_id = existing_id.unwrap_or_default();
+        let client_secret = existing_secret.unwrap_or_default();
+        let client_id_cursor = client_id.len();
+        let client_secret_cursor = client_secret.len();
+
+        Self {
+            step,
+            rclone_status: status,
+            client_id,
+            client_secret,
+            active_field: field,
+            show_help: false,
+            client_id_cursor,
+            client_secret_cursor,
+        }
+    }
 }
 
 /// Sub-state for inline text editing within Settings or Filters modals.
@@ -130,8 +207,8 @@ pub enum Modal {
 pub enum EditState {
     /// No editing is active.
     Idle,
-    /// Editing a setting value (tab + index identify *which* setting).
-    Setting { tab: usize, index: usize, buffer: String },
+    /// Editing a setting value (tab + index identify *which* setting, cursor is char offset).
+    Setting { tab: usize, index: usize, buffer: String, cursor: usize },
     /// Editing an existing filter rule.
     Filter { index: usize, buffer: String },
     /// Adding a brand-new filter rule.
@@ -187,6 +264,14 @@ pub enum HitAction {
     FilterAdd,
     FilterDelete(usize),
     FilterOpenEditor,
+    FirstRunInstall,
+    FirstRunContinue,
+    FirstRunSkipRclone,
+    FirstRunClientId,
+    FirstRunClientSecret,
+    FirstRunSaveCredentials,
+    FirstRunSkipCredentials,
+    FirstRunToggleHelp,
     ScrollbarArrowUp(ScrollbarTarget),
     ScrollbarArrowDown(ScrollbarTarget),
     ScrollbarTrack {
@@ -318,6 +403,7 @@ pub struct App {
     file_count_rx: Option<std::sync::mpsc::Receiver<usize>>,
     service_info_rx: Option<std::sync::mpsc::Receiver<ServiceInfo>>,
     past_runs_rx: Option<std::sync::mpsc::Receiver<Vec<PastRun>>>,
+    pub rclone_install_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
 
     last_systemd_check: Instant,
     last_history_check: Instant,
@@ -415,6 +501,7 @@ impl App {
             file_count_rx: None,
             service_info_rx: None,
             past_runs_rx: None,
+            rclone_install_rx: None,
 
             last_systemd_check: Instant::now(),
             last_history_check: Instant::now(),
@@ -434,7 +521,32 @@ impl App {
         }
 
         app.reload_files();
+
+        #[cfg(not(test))]
+        if app.config.first_run_completed != Some(true) {
+            app.modal = Modal::FirstRun(Box::new(FirstRunState::new(&app.config.remote)));
+        }
+
         app
+    }
+
+    pub fn start_rclone_install(&mut self) {
+        if self.rclone_install_rx.is_some() {
+            return;
+        }
+        if let Modal::FirstRun(ref mut state) = self.modal {
+            state.rclone_status = RcloneInstallStatus::Installing;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.rclone_install_rx = Some(rx);
+        tokio::spawn(async move {
+            let res = crate::installer::install_rclone_user().await;
+            let _ = tx.send(res);
+        });
+    }
+
+    pub fn open_first_run(&mut self) {
+        self.modal = Modal::FirstRun(Box::new(FirstRunState::new(&self.config.remote)));
     }
 
     pub fn border_type(&self) -> BorderType {
@@ -482,10 +594,38 @@ impl App {
         }
     }
 
+    /// Returns the cursor position (in characters) within the current edit buffer.
+    pub fn edit_cursor(&self) -> usize {
+        match &self.edit_state {
+            EditState::Setting { cursor, .. } => *cursor,
+            _ => self.edit_buffer().chars().count(),
+        }
+    }
+
     pub async fn on_tick(&mut self) {
         {
             let st = self.streamer.read().await;
             self.live = st.clone();
+        }
+
+        if let Some(rx) = &self.rclone_install_rx {
+            if let Ok(res) = rx.try_recv() {
+                self.rclone_install_rx = None;
+                if let Modal::FirstRun(ref mut state) = self.modal {
+                    match res {
+                        Ok(msg) => {
+                            state.rclone_status = RcloneInstallStatus::Installed(msg);
+                            state.active_field = FirstRunField::ContinueButton;
+                            self.set_toast("✔ Rclone installed successfully!");
+                        }
+                        Err(err) => {
+                            state.rclone_status = RcloneInstallStatus::Failed(err);
+                            state.active_field = FirstRunField::InstallRcloneButton;
+                            self.set_toast("✗ Rclone installation failed");
+                        }
+                    }
+                }
+            }
         }
 
         if let Some(rx) = &self.service_info_rx {

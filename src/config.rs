@@ -352,6 +352,8 @@ pub enum SettingId {
     RemoteStorage,
     ResyncAction,
     LogJournalAction,
+    GoogleClientId,
+    GoogleClientSecret,
 
     // Onglet 1 : UI & Apparence
     ColorTheme,
@@ -362,7 +364,43 @@ pub enum SettingId {
     TickRate,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingKind {
+    Cycle,
+    TextInput,
+    Action,
+}
+
 impl SettingId {
+    pub fn kind(&self) -> SettingKind {
+        match self {
+            Self::LocalDirectory | Self::RemoteStorage | Self::GoogleClientId | Self::GoogleClientSecret => {
+                SettingKind::TextInput
+            }
+            Self::ResyncAction | Self::LogJournalAction => SettingKind::Action,
+            _ => SettingKind::Cycle,
+        }
+    }
+
+    pub fn is_text_input(&self) -> bool {
+        matches!(self.kind(), SettingKind::TextInput)
+    }
+
+    #[allow(dead_code)]
+    pub fn is_action(&self) -> bool {
+        matches!(self.kind(), SettingKind::Action)
+    }
+
+    #[allow(dead_code)]
+    pub fn is_cycle(&self) -> bool {
+        matches!(self.kind(), SettingKind::Cycle)
+    }
+
+    #[allow(dead_code)]
+    pub fn is_secret(&self) -> bool {
+        matches!(self, Self::GoogleClientSecret)
+    }
+
     pub fn from_tab_and_idx(tab: usize, idx: usize) -> Option<Self> {
         match (tab, idx) {
             (0, 0) => Some(Self::TimerInterval),
@@ -372,6 +410,8 @@ impl SettingId {
             (0, 4) => Some(Self::RemoteStorage),
             (0, 5) => Some(Self::ResyncAction),
             (0, 6) => Some(Self::LogJournalAction),
+            (0, 7) => Some(Self::GoogleClientId),
+            (0, 8) => Some(Self::GoogleClientSecret),
             (1, 0) => Some(Self::ColorTheme),
             (1, 1) => Some(Self::ContainerLayout),
             (1, 2) => Some(Self::MidPanelOrder),
@@ -383,7 +423,7 @@ impl SettingId {
     }
 
     pub fn tab_count(tab: usize) -> usize {
-        if tab == 0 { 7 } else { 6 }
+        if tab == 0 { 9 } else { 6 }
     }
 
     pub fn label(&self) -> &'static str {
@@ -395,6 +435,8 @@ impl SettingId {
             Self::RemoteStorage => "Remote storage",
             Self::ResyncAction => "Full resynchronization",
             Self::LogJournalAction => "Full rclone log journal",
+            Self::GoogleClientId => "Google Client ID",
+            Self::GoogleClientSecret => "Google Client Secret",
             Self::ColorTheme => "Color theme",
             Self::ContainerLayout => "Container layout",
             Self::MidPanelOrder => "Mid-panel order",
@@ -413,6 +455,8 @@ impl SettingId {
             Self::RemoteStorage => "Remote cloud storage.",
             Self::ResyncAction => "Full resynchronization (--resync).",
             Self::LogJournalAction => "Full rclone log journal (rclone-bisync).",
+            Self::GoogleClientId => "Google Cloud Console Client ID.",
+            Self::GoogleClientSecret => "Google Cloud Console Client Secret.",
             Self::ColorTheme => "Color theme.",
             Self::ContainerLayout => "Container layout.",
             Self::MidPanelOrder => "Mid-panel order.",
@@ -431,6 +475,8 @@ impl SettingId {
             Self::RemoteStorage => "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nUsed for cloud quota inquiries, remote listings, and bidirectional synchronization.",
             Self::ResyncAction => "In case of critical bisync errors or corrupted sync listings, this action rebuilds listing databases by comparing the local directory and Google Drive (keeping the newest files: --resync-mode newer).",
             Self::LogJournalAction => "Opens the complete rclone-bisync systemd journal log in your external viewer (less or configured editor).\n\nAllows navigating the full history, searching text, and inspecting detailed file transfers.",
+            Self::GoogleClientId => "OAuth 2.0 Client ID generated in Google Cloud Console.\n\nProvides a dedicated API quota to prevent 'Rate Limit Exceeded' (403) errors.\nStored directly in ~/.config/rclone/rclone.conf under your configured remote.",
+            Self::GoogleClientSecret => "OAuth 2.0 Client Secret paired with your Google Client ID.\n\nStored securely in ~/.config/rclone/rclone.conf (file permissions 0600).",
             Self::ColorTheme => "Sets the color theme applied across the entire dashboard.\n\nEach theme dynamically adapts borders, text, and gradient charts.",
             Self::ContainerLayout => "Reorder the main dashboard containers to match your preferred workflow.\n\nApplies instantly across the entire dashboard.",
             Self::MidPanelOrder => "Horizontal placement of the middle section containers.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.",
@@ -476,6 +522,8 @@ pub struct AppConfig {
     pub border_style: BorderStyleChoice,
     #[serde(default)]
     pub graph_style: GraphStyleChoice,
+    #[serde(default)]
+    pub first_run_completed: Option<bool>,
 }
 
 impl Default for AppConfig {
@@ -492,6 +540,7 @@ impl Default for AppConfig {
             mid_panel_order: MidPanelOrder::HistoryLogs,
             border_style: BorderStyleChoice::Rounded,
             graph_style: GraphStyleChoice::Braille,
+            first_run_completed: None,
         }
     }
 }
@@ -549,6 +598,157 @@ pub fn resync_marker() -> PathBuf {
 
 pub fn last_full_sync_marker() -> PathBuf {
     config_dir().join(".last-full-sync")
+}
+
+pub fn rclone_config_file() -> PathBuf {
+    config_dir().join("rclone.conf")
+}
+
+/// Reads Google Drive OAuth credentials (client_id, client_secret) from rclone.conf for the specified remote.
+pub fn read_rclone_credentials(remote: &str) -> (Option<String>, Option<String>) {
+    let path = rclone_config_file();
+    if !path.exists() {
+        return (None, None);
+    }
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return (None, None),
+    };
+
+    let target_section = remote.trim_end_matches(':').trim().to_lowercase();
+    let mut in_target_section = false;
+    let mut client_id = None;
+    let mut client_secret = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let section = trimmed[1..trimmed.len() - 1].trim().to_lowercase();
+            in_target_section = section == target_section;
+            continue;
+        }
+
+        if in_target_section {
+            if let Some((key, val)) = trimmed.split_once('=') {
+                let key = key.trim().to_lowercase();
+                let val = val.trim().to_string();
+                if key == "client_id" && !val.is_empty() {
+                    client_id = Some(val);
+                } else if key == "client_secret" && !val.is_empty() {
+                    client_secret = Some(val);
+                }
+            }
+        }
+    }
+
+    (client_id, client_secret)
+}
+
+/// Writes or updates Google Drive OAuth credentials (client_id, client_secret) in rclone.conf for the specified remote.
+/// Ensures the file exists with secure 0600 permissions.
+pub fn write_rclone_credentials(remote: &str, client_id: &str, client_secret: &str) -> Result<(), String> {
+    let path = rclone_config_file();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    let target_section_clean = remote.trim_end_matches(':').trim();
+    let target_header = format!("[{}]", target_section_clean);
+    let target_section_lower = target_section_clean.to_lowercase();
+
+    let mut new_lines = Vec::new();
+    let mut section_found = false;
+    let mut in_target = false;
+    let mut client_id_written = false;
+    let mut client_secret_written = false;
+
+    if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                if in_target {
+                    if !client_id.trim().is_empty() && !client_id_written {
+                        new_lines.push(format!("client_id = {}", client_id.trim()));
+                        client_id_written = true;
+                    }
+                    if !client_secret.trim().is_empty() && !client_secret_written {
+                        new_lines.push(format!("client_secret = {}", client_secret.trim()));
+                        client_secret_written = true;
+                    }
+                    in_target = false;
+                }
+
+                let section = trimmed[1..trimmed.len() - 1].trim().to_lowercase();
+                if section == target_section_lower {
+                    section_found = true;
+                    in_target = true;
+                }
+                new_lines.push(line.to_string());
+                continue;
+            }
+
+            if in_target {
+                if let Some((key, _)) = trimmed.split_once('=') {
+                    let key = key.trim().to_lowercase();
+                    if key == "client_id" {
+                        if !client_id.trim().is_empty() {
+                            new_lines.push(format!("client_id = {}", client_id.trim()));
+                        }
+                        client_id_written = true;
+                        continue;
+                    } else if key == "client_secret" {
+                        if !client_secret.trim().is_empty() {
+                            new_lines.push(format!("client_secret = {}", client_secret.trim()));
+                        }
+                        client_secret_written = true;
+                        continue;
+                    }
+                }
+            }
+
+            new_lines.push(line.to_string());
+        }
+
+        if in_target {
+            if !client_id.trim().is_empty() && !client_id_written {
+                new_lines.push(format!("client_id = {}", client_id.trim()));
+            }
+            if !client_secret.trim().is_empty() && !client_secret_written {
+                new_lines.push(format!("client_secret = {}", client_secret.trim()));
+            }
+        }
+    }
+
+    if !section_found {
+        if !new_lines.is_empty() && !new_lines.last().map(|s| s.is_empty()).unwrap_or(false) {
+            new_lines.push(String::new());
+        }
+        new_lines.push(target_header);
+        new_lines.push("type = drive".to_string());
+        if !client_id.trim().is_empty() {
+            new_lines.push(format!("client_id = {}", client_id.trim()));
+        }
+        if !client_secret.trim().is_empty() {
+            new_lines.push(format!("client_secret = {}", client_secret.trim()));
+        }
+        new_lines.push("scope = drive".to_string());
+    }
+
+    let mut result = new_lines.join("\n");
+    if !result.ends_with('\n') {
+        result.push('\n');
+    }
+
+    fs::write(&path, result).map_err(|e| e.to_string())?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+
+    Ok(())
 }
 
 pub fn load_config() -> AppConfig {
@@ -887,5 +1087,67 @@ mod tests {
         assert!(formatted_250.contains("▶ 250ms (active)"));
         assert!(!formatted_250.contains("▶ 2500ms (active)"));
         assert!(formatted_250.contains("• 2500ms"));
+    }
+
+    #[test]
+    fn test_rclone_credentials_read_write_roundtrip() {
+        let test_dir = config_dir();
+        let _ = fs::create_dir_all(&test_dir);
+        let conf_file = rclone_config_file();
+        let _ = fs::remove_file(&conf_file);
+
+        // 1. Initial read should be None
+        let (id, secret) = read_rclone_credentials("GoogleDrive:");
+        assert_eq!(id, None);
+        assert_eq!(secret, None);
+
+        // 2. Write new credentials
+        let res = write_rclone_credentials("GoogleDrive:", "test-client-id-123.apps.googleusercontent.com", "test-secret-456");
+        assert!(res.is_ok());
+
+        // 3. Read back with colon
+        let (id, secret) = read_rclone_credentials("GoogleDrive:");
+        assert_eq!(id.as_deref(), Some("test-client-id-123.apps.googleusercontent.com"));
+        assert_eq!(secret.as_deref(), Some("test-secret-456"));
+
+        // 4. Read back without colon
+        let (id_no_colon, secret_no_colon) = read_rclone_credentials("GoogleDrive");
+        assert_eq!(id_no_colon.as_deref(), Some("test-client-id-123.apps.googleusercontent.com"));
+        assert_eq!(secret_no_colon.as_deref(), Some("test-secret-456"));
+
+        // 5. Update credentials
+        let res_update = write_rclone_credentials("GoogleDrive", "updated-id-789", "updated-secret-abc");
+        assert!(res_update.is_ok());
+
+        let (id_up, secret_up) = read_rclone_credentials("GoogleDrive:");
+        assert_eq!(id_up.as_deref(), Some("updated-id-789"));
+        assert_eq!(secret_up.as_deref(), Some("updated-secret-abc"));
+
+        // Clean up
+        let _ = fs::remove_file(&conf_file);
+    }
+
+    #[test]
+    fn test_first_run_completed_deserialization() {
+        let legacy_json = r#"{
+            "remote": "GoogleDrive:",
+            "local_dir": "~/GoogleDrive",
+            "timer_interval": "10min",
+            "full_sync_interval": "60"
+        }"#;
+
+        let cfg: AppConfig = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(cfg.first_run_completed, None);
+
+        let completed_json = r#"{
+            "remote": "GoogleDrive:",
+            "local_dir": "~/GoogleDrive",
+            "timer_interval": "10min",
+            "full_sync_interval": "60",
+            "first_run_completed": true
+        }"#;
+
+        let cfg_completed: AppConfig = serde_json::from_str(completed_json).unwrap();
+        assert_eq!(cfg_completed.first_run_completed, Some(true));
     }
 }
