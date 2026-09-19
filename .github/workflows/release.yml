@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.0.1 or v1.0.1). Leave empty to use existing Cargo.toml version.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -17,6 +22,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -26,6 +34,43 @@ jobs:
 
       - name: Install cargo-deb
         uses: taiki-e/install-action@cargo-deb
+
+      - name: Synchronize version in Cargo.toml
+        id: version_step
+        run: |
+          RAW_VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$RAW_VERSION" ]; then
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              RAW_VERSION="${GITHUB_REF_NAME}"
+            else
+              RAW_VERSION=$(grep '^version = ' Cargo.toml | head -n1 | cut -d '"' -f2)
+            fi
+          fi
+
+          # Nettoyer le préfixe 'v' éventuel pour Cargo.toml (ex: v1.0.1 -> 1.0.1)
+          CLEAN_VERSION="${RAW_VERSION#v}"
+          TAG_VERSION="v${CLEAN_VERSION}"
+
+          echo "Synchronizing version to ${CLEAN_VERSION} (${TAG_VERSION})..."
+
+          # Mettre à jour la source unique de vérité dans Cargo.toml
+          sed -i -E "s/^version = \".*\"/version = \"${CLEAN_VERSION}\"/" Cargo.toml
+
+          echo "clean_version=${CLEAN_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit updated version if manual dispatch
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cargo check
+          git add Cargo.toml Cargo.lock
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(release): bump version to ${{ steps.version_step.outputs.clean_version }}"
+            git tag -f "${{ steps.version_step.outputs.tag_version }}"
+            git push origin HEAD --tags
+          fi
 
       - name: Build release binary
         run: cargo build --release
@@ -44,7 +89,7 @@ jobs:
       - name: Prepare release archive
         id: package
         run: |
-          VERSION="${GITHUB_REF_NAME:-v1.0.0}"
+          VERSION="${{ steps.version_step.outputs.tag_version }}"
           ARCH="linux-x86_64"
           PACKAGE_NAME="rclonedash-${VERSION}-${ARCH}"
           
@@ -67,6 +112,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "RcloneDash ${{ steps.package.outputs.version }}"
+          tag_name: ${{ steps.version_step.outputs.tag_version }}
           body_path: RELEASED.md
           draft: false
           prerelease: false

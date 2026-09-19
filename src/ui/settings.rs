@@ -46,7 +46,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             .split(container_area);
         crate::ui::menu::render_btop_logo(f, v_chunks[0]);
         let ver_line = Line::from(vec![
-            Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+            Span::styled(format!("v{}", config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
         ]);
         f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
         v_chunks[2]
@@ -317,39 +317,50 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     let (desc_title, desc_body): (&str, String) = match (app.settings_tab, app.settings_selected_idx) {
         // --- Catégorie 0 : Rclone ---
-        (0, 0) => (
-            "Bisync timer interval.",
-            format!(
-                "Frequency of automatic checks and synchronization managed by systemd.\n\nConfigures how often rclone-bisync.timer wakes up to inspect changes.\n\nAvailable values: {}.\nRecommended: 15m for an ideal balance between responsiveness and CPU usage.",
-                config::format_timer_interval_options()
-            ),
-        ),
-        (0, 1) => (
-            "Cloud safety net.",
-            format!(
-                "Maximum time elapsed before running a full bidirectional sync.\n\nEven if no local changes were detected, this safety net ensures files created or updated remotely from another computer or the web interface are retrieved.\n\nAvailable values: {}.\n'Never' option is available if you only want sync triggered upon local changes.",
-                config::format_full_sync_options()
-            ),
-        ),
-        (0, 2) => (
-            "Bandwidth limit (bwlimit).",
-            format!(
-                "Maximum allowed transfer speed for rclone.\n\nPreserves your internet connection by limiting network bandwidth used by rclone.\n\nAvailable presets: {}.\nSetting stored in bwlimit.env and injected into the systemd service.\nValue 'Disabled' uses 100% of available bandwidth.",
-                config::format_bwlimit_options()
-            ),
-        ),
+        (0, 0) => {
+            let choices = config::TIMER_INTERVAL_OPTIONS;
+            (
+                "Bisync timer interval.",
+                format!(
+                    "Frequency of automatic checks and synchronization managed by systemd.\n\nConfigures how often rclone-bisync.timer wakes up to inspect changes.\nRecommended: 15min for an ideal balance between responsiveness and CPU usage.\n\nAvailable options:\n{}",
+                    config::format_setting_options_list(choices, &app.config.timer_interval)
+                ),
+            )
+        }
+        (0, 1) => {
+            let choices: Vec<&str> = config::FULL_SYNC_OPTIONS.iter().map(|o| o.label).collect();
+            let current = config::full_sync_label(&app.config.full_sync_interval);
+            (
+                "Cloud safety net.",
+                format!(
+                    "Maximum time elapsed before running a full bidirectional sync.\n\nEnsures files created or updated remotely from another computer or the web interface are retrieved, even if no local changes were detected.\n'Never' triggers sync only upon local changes.\n\nAvailable options:\n{}",
+                    config::format_setting_options_list(&choices, current)
+                ),
+            )
+        }
+        (0, 2) => {
+            let choices = config::BWLIMIT_OPTIONS;
+            let current = app.config.bwlimit.as_deref().unwrap_or("Disabled");
+            (
+                "Bandwidth limit (bwlimit).",
+                format!(
+                    "Maximum allowed transfer speed for rclone.\n\nPreserves your internet connection by limiting network bandwidth used by rclone.\nStored in bwlimit.env and injected into the systemd service.\nValue 'Disabled' uses 100% of available bandwidth.\n\nAvailable presets:\n{}",
+                    config::format_setting_options_list(choices, current)
+                ),
+            )
+        }
         (0, 3) => (
             "Monitored local directory.",
             format!(
-                "Path to the root local directory synchronized with cloud storage.\n\nContains your local data replicated by bisync.\nOpen the file explorer ([{}]) to inspect its tree structure.\n\nPress [{}] to edit the path, then [{}] to confirm or [{}] to cancel.",
-                k_files, k_enter, k_enter, k_esc
+                "Path to the root local directory synchronized with cloud storage.\n\nContains your local data replicated by bisync.\nOpen the file explorer ([{}]) to inspect its tree structure.\n\nPress [{}] to edit the path, then [{}] to confirm or [{}] to cancel.\n\nCurrent path:\n  ▶ {} (active)",
+                k_files, k_enter, k_enter, k_esc, app.config.local_dir
             ),
         ),
         (0, 4) => (
             "Remote cloud storage.",
             format!(
-                "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nUsed for cloud quota inquiries, remote listings, and bidirectional synchronization.\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.",
-                k_enter, k_enter, k_esc
+                "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nUsed for cloud quota inquiries, remote listings, and bidirectional synchronization.\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.\n\nCurrent remote:\n  ▶ {} (active)",
+                k_enter, k_enter, k_esc, app.config.remote
             ),
         ),
         (0, 5) => (
@@ -368,50 +379,73 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         ),
 
         // --- Catégorie 1 : UI & Apparence ---
-        (1, 0) => (
-            "Color theme.",
-            format!(
-                "Sets the color theme applied across the entire dashboard.\n\nSupports {} curated themes for optimal readability:\n{}\n\nEach theme dynamically adapts borders, text, and btop++ gradient charts.",
-                crate::ui::theme::ThemeChoice::all().len(),
-                config::format_theme_options()
-            ),
-        ),
-        (1, 1) => (
-            "Container layout.",
-            format!(
-                "Reorder the main dashboard containers to match your preferred workflow.\n\nAvailable presets:\n{}\n\nApplies instantly across the entire dashboard.",
-                config::format_container_layout_options()
-            ),
-        ),
-        (1, 2) => (
-            "Mid-panel order.",
-            format!(
-                "Horizontal placement of the middle section containers.\n\nAvailable configurations:\n{}\n\nAll keyboard shortcuts and mouse interactions adapt automatically.",
-                config::format_mid_panel_order_options()
-            ),
-        ),
-        (1, 3) => (
-            "Border style.",
-            format!(
-                "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nAvailable styles:\n{}\n\nPersisted across sessions in dash-config.json.",
-                config::format_border_style_options()
-            ),
-        ),
-        (1, 4) => (
-            "Graph style.",
-            format!(
-                "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nAvailable styles:\n{}\n\nPersisted across sessions in dash-config.json.",
-                config::format_graph_style_options()
-            ),
-        ),
-        (1, 5) => (
-            "UI Loop frequency (tick rate).",
-            format!(
-                "Refresh rate of the TUI display engine in milliseconds.\n\nControls smoothness of log scrolling, metrics calculation, and micro-animations.\n\nAvailable presets: {}.\n\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.",
-                config::format_tick_rate_options(),
-                k_dec, k_inc
-            ),
-        ),
+        (1, 0) => {
+            let choices: Vec<&str> = crate::ui::theme::ThemeChoice::all().iter().map(|t| t.name()).collect();
+            let current = app.current_theme.name();
+            (
+                "Color theme.",
+                format!(
+                    "Sets the color theme applied across the entire dashboard.\n\nEach theme dynamically adapts borders, text, and btop++ gradient charts.\n\nAvailable options:\n{}",
+                    config::format_setting_options_list(&choices, current)
+                ),
+            )
+        }
+        (1, 1) => {
+            let choices: Vec<&str> = config::ContainerLayout::all().iter().map(|l| l.name()).collect();
+            let current = app.config.container_layout.name();
+            (
+                "Container layout.",
+                format!(
+                    "Reorder the main dashboard containers to match your preferred workflow.\n\nApplies instantly across the entire dashboard.\n\nAvailable options:\n{}",
+                    config::format_setting_options_list(&choices, current)
+                ),
+            )
+        }
+        (1, 2) => {
+            let choices: Vec<&str> = config::MidPanelOrder::all().iter().map(|m| m.name()).collect();
+            let current = app.config.mid_panel_order.name();
+            (
+                "Mid-panel order.",
+                format!(
+                    "Horizontal placement of the middle section containers.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.\n\nAvailable options:\n{}",
+                    config::format_setting_options_list(&choices, current)
+                ),
+            )
+        }
+        (1, 3) => {
+            let choices: Vec<&str> = config::BorderStyleChoice::all().iter().map(|b| b.name()).collect();
+            let current = app.config.border_style.name();
+            (
+                "Border style.",
+                format!(
+                    "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nPersisted across sessions in dash-config.json.\n\nAvailable options:\n{}",
+                    config::format_setting_options_list(&choices, current)
+                ),
+            )
+        }
+        (1, 4) => {
+            let choices: Vec<&str> = config::GraphStyleChoice::all().iter().map(|g| g.name()).collect();
+            let current = app.config.graph_style.name();
+            (
+                "Graph style.",
+                format!(
+                    "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nPersisted across sessions in dash-config.json.\n\nAvailable options:\n{}",
+                    config::format_setting_options_list(&choices, current)
+                ),
+            )
+        }
+        (1, 5) => {
+            let current_str = format!("{}ms", app.tick_rate_ms_live);
+            let choices = &["100ms", "250ms", "500ms", "1000ms", "2000ms", "5000ms", "10000ms"];
+            (
+                "UI Loop frequency (tick rate).",
+                format!(
+                    "Refresh rate of the TUI display engine in milliseconds.\n\nControls smoothness of log scrolling, metrics calculation, and micro-animations.\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.\n\nAvailable options:\n{}",
+                    k_dec, k_inc,
+                    config::format_setting_options_list(choices, &current_str)
+                ),
+            )
+        }
         _ => ("Description.", "Select a setting to view its detailed documentation.".to_string()),
     };
 
@@ -430,6 +464,23 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     for para in desc_body.split('\n') {
         if para.is_empty() {
             desc_lines.push(Line::from(""));
+        } else if let Some(rest) = para.strip_prefix("  ▶ ") {
+            let mut spans = vec![
+                Span::styled("  ▶ ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            ];
+            if let Some((opt_name, _)) = rest.split_once(" (active)") {
+                spans.push(Span::styled(opt_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
+                spans.push(Span::styled(" (active)", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+            } else {
+                spans.push(Span::styled(rest, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
+            }
+            desc_lines.push(Line::from(spans));
+        } else if let Some(rest) = para.strip_prefix("  • ") {
+            let spans = vec![
+                Span::styled("  • ", Style::default().fg(theme.text_muted)),
+                Span::styled(rest, Style::default().fg(Color::Rgb(185, 190, 205))),
+            ];
+            desc_lines.push(Line::from(spans));
         } else {
             let mut spans = Vec::new();
             let mut rem = para;

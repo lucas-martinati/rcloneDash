@@ -112,7 +112,7 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
 
     // 2. Version alignée
     let ver_line = Line::from(vec![
-        Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+        Span::styled(format!("v{}", crate::config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
     ]);
     let ver_p = Paragraph::new(ver_line).alignment(Alignment::Center);
     f.render_widget(ver_p, chunks[1]);

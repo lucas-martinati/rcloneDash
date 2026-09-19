@@ -220,7 +220,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
 
             // Version
             let ver_line = Line::from(vec![
-                Span::styled("v1.0.0", Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+                Span::styled(format!("v{}", crate::config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
             ]);
             f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
 

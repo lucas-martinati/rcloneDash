@@ -3,6 +3,28 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use crate::ui::theme::ThemeChoice;
 
+/// Version centralisée de l'application rcloneDash (synchronisée depuis Cargo.toml)
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Formateur unifié pour afficher la liste des options avec indication claire de la valeur active
+pub fn format_setting_options_list(choices: &[&str], current: &str) -> String {
+    choices
+        .iter()
+        .map(|&c| {
+            let is_active = c.eq_ignore_ascii_case(current)
+                || (c == "Disabled" && (current.is_empty() || current.eq_ignore_ascii_case("Disabled")))
+                || (c.starts_with(current) && !current.is_empty())
+                || (current.starts_with(c) && !c.is_empty());
+            if is_active {
+                format!("  ▶ {} (active)", c)
+            } else {
+                format!("  • {}", c)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ContainerLayout {
     #[default]
@@ -278,13 +300,16 @@ pub const TICK_RATE_STEPS: &[u64] = &[
 ];
 
 /// Formatters for dynamic settings descriptions (source of truth)
+#[allow(dead_code)]
 pub fn format_tick_rate_options() -> String {
     "100ms to 10s (100ms, 200ms, 500ms, 1s, 2s, 5s, 10s)".to_string()
 }
+#[allow(dead_code)]
 pub fn format_timer_interval_options() -> String {
     TIMER_INTERVAL_OPTIONS.join(", ")
 }
 
+#[allow(dead_code)]
 pub fn format_full_sync_options() -> String {
     FULL_SYNC_OPTIONS
         .iter()
@@ -293,10 +318,12 @@ pub fn format_full_sync_options() -> String {
         .join(", ")
 }
 
+#[allow(dead_code)]
 pub fn format_bwlimit_options() -> String {
     BWLIMIT_OPTIONS.join(", ")
 }
 
+#[allow(dead_code)]
 pub fn format_theme_options() -> String {
     ThemeChoice::all()
         .iter()
@@ -305,6 +332,7 @@ pub fn format_theme_options() -> String {
         .join("\n")
 }
 
+#[allow(dead_code)]
 pub fn format_container_layout_options() -> String {
     ContainerLayout::all()
         .iter()
@@ -313,6 +341,7 @@ pub fn format_container_layout_options() -> String {
         .join("\n")
 }
 
+#[allow(dead_code)]
 pub fn format_mid_panel_order_options() -> String {
     MidPanelOrder::all()
         .iter()
