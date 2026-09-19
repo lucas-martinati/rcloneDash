@@ -7,7 +7,8 @@ use ratatui::{
 };
 
 use crate::app::{App, HitAction, Hitbox};
-use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig};
+use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
+use crate::ui::keys::KeybindingRegistry;
 use crate::ui::theme::ThemePalette;
 
 pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
@@ -22,17 +23,9 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
     let total_files = app.file_entries.len();
     let cur_file = if total_files > 0 { app.file_selected_idx + 1 } else { 0 };
 
-    let (up_col, down_col) = if total_files <= 1 {
-        (theme.text_muted, theme.text_muted)
-    } else if app.file_selected_idx == 0 {
-        (theme.text_muted, theme.red)
-    } else if app.file_selected_idx >= total_files.saturating_sub(1) {
-        (theme.red, theme.text_muted)
-    } else {
-        (theme.red, theme.red)
-    };
+    let can_up = total_files > 1 && app.file_selected_idx > 0;
+    let can_down = total_files > 1 && app.file_selected_idx < total_files.saturating_sub(1);
 
-    let bg = app.border_glyphs();
     let max_title_path_len = (area.width.saturating_sub(42) as usize).max(10);
     let display_title_path = if title_path.len() > max_title_path_len {
         format!("…{}", &title_path[title_path.len().saturating_sub(max_title_path_len - 1)..])
@@ -42,19 +35,10 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
 
     let border_color = theme.border_history;
 
-    let bottom_shortcuts = Line::from(vec![
-        Span::styled(bg.bot_left, Style::default().fg(theme.border_history)),
-        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
-        Span::styled(" select ", Style::default().fg(Color::White)),
-        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
-        Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled(" parent ", Style::default().fg(Color::White)),
-        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
-        Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled(" open", Style::default().fg(Color::White)),
-        Span::styled(bg.bot_right, Style::default().fg(theme.border_history)),
-    ]);
+    let actions = vec![
+        KeybindingRegistry::format_shortcut_label("←", "parent", theme.red, Color::White),
+        KeybindingRegistry::format_shortcut_label("↵", "open", theme.red, Color::White),
+    ];
 
     let inner_area = render_modal_container(
         f,
@@ -65,7 +49,12 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
             title_prefix: "file explorer",
             title_color: Some(theme.blue),
             title_extra: Some(vec![Span::styled(format!(": {}", display_title_path), Style::default().fg(theme.text_muted))]),
-            bottom_shortcuts: Some(bottom_shortcuts),
+            nav_arrows: Some(NavArrowsConfig {
+                label: "select",
+                up_active: can_up,
+                down_active: can_down,
+            }),
+            action_shortcuts: Some(actions),
             counter: Some((cur_file, total_files)),
             border_color,
             show_close_button: true,

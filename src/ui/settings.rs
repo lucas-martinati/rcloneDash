@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::config;
-use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig};
+use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 
 #[allow(dead_code)]
@@ -58,28 +58,34 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let total_opts = app.settings_items_count();
     let cur_opt = (app.settings_selected_idx + 1).min(total_opts);
 
-    let (up_col, down_col) = if app.settings_selected_idx == 0 {
-        (theme.text_muted, theme.red)
-    } else if app.settings_selected_idx >= total_opts.saturating_sub(1) {
-        (theme.red, theme.text_muted)
-    } else {
-        (theme.red, theme.red)
-    };
+    let can_up = total_opts > 1 && app.settings_selected_idx > 0;
+    let can_down = total_opts > 1 && app.settings_selected_idx < total_opts.saturating_sub(1);
 
-    let mid_cmd = if app.is_editing_setting {
-        Span::styled("Esc cancel  ↵ confirm", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+    let mid_cmd: Vec<Span> = if app.is_editing_setting {
+        let mut spans = crate::ui::keys::KeybindingRegistry::format_shortcut_label("Esc", "cancel", theme.red, Color::White);
+        spans.push(Span::styled("  ", Style::default()));
+        spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "confirm", theme.green, Color::White));
+        spans
     } else if app.settings_tab == 0 {
         if app.settings_selected_idx == 6 {
-            Span::styled("↵ open full log", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))
+            crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "open full log", theme.cyan, Color::White)
         } else if app.settings_selected_idx == 5 {
-            Span::styled("↵ launch resync", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))
+            crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "launch resync", theme.red, Color::White)
         } else if app.settings_selected_idx == 3 || app.settings_selected_idx == 4 {
-            Span::styled("↵ edit", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+            crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "edit", theme.red, Color::White)
         } else {
-            Span::styled("← change →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+            vec![
+                Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(" change ", Style::default().fg(Color::White)),
+                Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            ]
         }
     } else {
-        Span::styled("← change →", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+        vec![
+            Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(" change ", Style::default().fg(Color::White)),
+            Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        ]
     };
 
     // Tab bar title in outer block: tab→   [1 rclone]    2ui
@@ -103,16 +109,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         tab1_span,
     ];
 
-    let bottom_shortcuts = Line::from(vec![
-        Span::styled(bg.bot_left, Style::default().fg(theme.red)),
-        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
-        Span::styled(" select ", Style::default().fg(Color::White)),
-        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.red)),
-        mid_cmd,
-        Span::styled(bg.bot_right, Style::default().fg(theme.red)),
-    ]);
-
     let inner = render_modal_container(
         f,
         app,
@@ -122,7 +118,12 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             title_prefix: "settings",
             title_color: Some(theme.red),
             title_extra: Some(title_extra),
-            bottom_shortcuts: Some(bottom_shortcuts),
+            nav_arrows: Some(NavArrowsConfig {
+                label: "select",
+                up_active: can_up,
+                down_active: can_down,
+            }),
+            action_shortcuts: Some(vec![mid_cmd]),
             counter: Some((cur_opt, total_opts)),
             border_color: theme.red,
             show_close_button: true,

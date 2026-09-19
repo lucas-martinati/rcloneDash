@@ -722,16 +722,16 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
     };
 
     let bg = app.border_glyphs();
-    let left_bottom = Line::from(vec![
+    let mut left_bottom_spans = vec![
         Span::styled(bg.bot_left, Style::default().fg(border_color)),
         Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" select ", Style::default().fg(Color::White)),
         Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
-        Span::styled("details ", Style::default().fg(det_col)),
-        Span::styled("↵", Style::default().fg(key_col).add_modifier(Modifier::BOLD)),
-        Span::styled(bg.bot_right, Style::default().fg(border_color)),
-    ]);
+    ];
+    left_bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "details", key_col, det_col));
+    left_bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(border_color)));
+    let left_bottom = Line::from(left_bottom_spans);
     let right_bottom = Line::from(vec![
         Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_run, total_runs, bg.horizontal), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
@@ -1272,16 +1272,15 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
     };
 
     let bg = app.border_glyphs();
-    let bottom_spans = vec![
+    let mut bottom_spans = vec![
         Span::styled(bg.bot_left, Style::default().fg(border_color)),
         Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" select ", Style::default().fg(ratatui::style::Color::White)),
         Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
-        Span::styled("open ", Style::default().fg(opn_col)),
-        Span::styled("↵", Style::default().fg(key_col).add_modifier(Modifier::BOLD)),
-        Span::styled(bg.bot_right, Style::default().fg(border_color)),
     ];
+    bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "open", key_col, opn_col));
+    bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(border_color)));
 
     let left_bottom = Line::from(bottom_spans);
     let right_bottom = Line::from(vec![
@@ -1307,19 +1306,17 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         top_spans.push(Span::styled(")", Style::default().fg(theme.text_muted)));
         11 + app.recent_filter.chars().count() as u16
     } else {
-        top_spans.push(Span::styled("f", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
-        top_spans.push(Span::styled(" filter", Style::default().fg(theme.text_bright)));
-        8
+        top_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("f", "filter", theme.red, theme.text_bright));
+        6
     };
 
     top_spans.push(Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)));
-    top_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     let (dossier_text, dossier_color) = if app.ctrl_mode {
-        (" folder [ON]", theme.yellow)
+        ("folder [ON]", theme.yellow)
     } else {
-        (" folder", theme.text_bright)
+        ("folder", theme.text_bright)
     };
-    top_spans.push(Span::styled(dossier_text, Style::default().fg(dossier_color).add_modifier(Modifier::BOLD)));
+    top_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("Ctrl+X", dossier_text, theme.red, dossier_color));
     top_spans.push(Span::styled(bg.top_right, Style::default().fg(border_color)));
 
     let outer_block = Block::default()

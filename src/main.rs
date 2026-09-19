@@ -62,7 +62,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Flux d'événements asynchrones
     let mut reader = EventStream::new();
     let tick_ms = app.config.tick_rate_ms.unwrap_or(250);
-    let mut tick_rate = interval(Duration::from_millis(tick_ms));
+    let mut data_interval = interval(Duration::from_millis(tick_ms));
+    let mut ui_interval = interval(Duration::from_millis(50));
 
     // Premier rendu immédiat
     terminal.draw(|f| ui::render(f, &mut app))?;
@@ -70,56 +71,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Boucle d'événements (clavier + souris + ticks)
     while app.running {
         tokio::select! {
-            _ = tick_rate.tick() => {
+            _ = data_interval.tick() => {
                 app.on_tick().await;
                 terminal.draw(|f| ui::render(f, &mut app))?;
             }
+            _ = ui_interval.tick() => {
+                if app.running {
+                    terminal.draw(|f| ui::render(f, &mut app))?;
+                }
+            }
             maybe_event = reader.next() => {
                 if let Some(Ok(event)) = maybe_event {
-                    match event {
-                        Event::Key(key) => {
-                            if key.kind == crossterm::event::KeyEventKind::Press {
-                                let action = app.handle_key(key);
-                                if action == app::Action::OpenEditor {
-                                    // Suspendre temporairement le TUI et la souris pour l'éditeur
-                                    disable_raw_mode()?;
-                                    execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags, DisableMouseCapture, LeaveAlternateScreen)?;
-                                    terminal.show_cursor()?;
+                    let mut needs_draw = handle_single_event(event, &mut app, &mut terminal)?;
 
-                                    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
-                                    let path = config::filters_file();
-                                    let _ = std::process::Command::new(&editor).arg(&path).status();
-
-                                    enable_raw_mode()?;
-                                    execute!(terminal.backend_mut(), EnterAlternateScreen, EnableMouseCapture, PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES))?;
-                                    terminal.clear()?;
-
-                                    app.filters = config::read_filters();
-                                    app.reload_files();
-                                    app.set_toast("✔ gdrive-filters.txt reloaded!");
-                                } else if action == app::Action::OpenFullLogs {
-                                    open_full_logs(&mut terminal, &mut app)?;
-                                }
-                                terminal.draw(|f| ui::render(f, &mut app))?;
-                            } else if key.kind == crossterm::event::KeyEventKind::Release {
-                                terminal.draw(|f| ui::render(f, &mut app))?;
-                            }
+                    // Évite l'engorgement lors de défilements rapides (molette souris / trackpad)
+                    // Draine tous les événements déjà disponibles dans le tampon sans écraser le waker Tokio
+                    while let Ok(Some(Ok(buffered_event))) = tokio::time::timeout(Duration::ZERO, reader.next()).await {
+                        if handle_single_event(buffered_event, &mut app, &mut terminal)? {
+                            needs_draw = true;
                         }
-                        Event::Mouse(mouse) => {
-                            let action = app.handle_mouse(mouse);
-                            if action == app::Action::OpenEditor {
-                                // Cas où un clic déclencherait l'éditeur
-                            } else if action == app::Action::OpenFullLogs {
-                                open_full_logs(&mut terminal, &mut app)?;
-                            }
-                            terminal.draw(|f| ui::render(f, &mut app))?;
-                        }
-                        _ => {}
+                    }
+
+                    if needs_draw && app.running {
+                        terminal.draw(|f| ui::render(f, &mut app))?;
                     }
                 }
                 if app.tick_rate_changed {
                     app.tick_rate_changed = false;
-                    tick_rate = interval(Duration::from_millis(app.tick_rate_ms_live));
+                    data_interval = interval(Duration::from_millis(app.tick_rate_ms_live));
                 }
             }
         }
@@ -185,4 +164,67 @@ fn open_full_logs(
 
     app.set_toast("✔ Full logs viewer closed");
     Ok(())
+}
+
+fn handle_single_event(
+    event: Event,
+    app: &mut App,
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    match event {
+        Event::Key(key) => {
+            if key.kind == crossterm::event::KeyEventKind::Press
+                || key.kind == crossterm::event::KeyEventKind::Repeat
+            {
+                let action = app.handle_key(key);
+                if action == app::Action::OpenEditor {
+                    disable_raw_mode()?;
+                    execute!(
+                        terminal.backend_mut(),
+                        PopKeyboardEnhancementFlags,
+                        DisableMouseCapture,
+                        LeaveAlternateScreen
+                    )?;
+                    terminal.show_cursor()?;
+
+                    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
+                    let path = config::filters_file();
+                    let _ = std::process::Command::new(&editor).arg(&path).status();
+
+                    enable_raw_mode()?;
+                    execute!(
+                        terminal.backend_mut(),
+                        EnterAlternateScreen,
+                        EnableMouseCapture,
+                        PushKeyboardEnhancementFlags(
+                            KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                                | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                        )
+                    )?;
+                    terminal.clear()?;
+
+                    app.filters = config::read_filters();
+                    app.reload_files();
+                    app.set_toast("✔ gdrive-filters.txt reloaded!");
+                } else if action == app::Action::OpenFullLogs {
+                    open_full_logs(terminal, app)?;
+                }
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+        Event::Mouse(mouse) => {
+            let action = app.handle_mouse(mouse);
+            if action == app::Action::OpenFullLogs {
+                open_full_logs(terminal, app)?;
+            }
+            Ok(true)
+        }
+        Event::Resize(_, _) => {
+            terminal.autoresize()?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
 }

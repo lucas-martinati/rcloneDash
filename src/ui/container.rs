@@ -189,13 +189,10 @@ pub fn render_modal_container<'a>(
 
     // 3. Bouton de fermeture uniforme en haut à droite
     if cfg.show_close_button {
-        let close_title = Line::from(vec![
-            Span::styled(bg.top_left, Style::default().fg(border_col)),
-            Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-            Span::styled(" close", Style::default().fg(theme.text_bright)),
-            Span::styled(bg.top_right, Style::default().fg(border_col)),
-        ])
-        .alignment(Alignment::Right);
+        let mut close_spans = vec![Span::styled(bg.top_left, Style::default().fg(border_col))];
+        close_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("Esc, q", "close", theme.red, theme.text_bright));
+        close_spans.push(Span::styled(bg.top_right, Style::default().fg(border_col)));
+        let close_title = Line::from(close_spans).alignment(Alignment::Right);
         outer_block = outer_block.title(close_title);
 
         // Enregistrer la hitbox de fermeture standardisée

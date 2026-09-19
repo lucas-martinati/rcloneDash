@@ -256,6 +256,23 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("y", "Copy", theme.green, Color::White));
     }
 
+    let (can_up, can_down, nav_label) = if has_files {
+        let total = affected_files.len();
+        if total <= 1 {
+            (false, false, "select")
+        } else {
+            (
+                app.history_selected_file_idx > 0,
+                app.history_selected_file_idx < total - 1,
+                "select",
+            )
+        }
+    } else if max_scroll == 0 {
+        (false, false, "scroll")
+    } else {
+        (scroll > 0, scroll < max_scroll, "scroll")
+    };
+
     let inner = render_modal_container(
         f,
         app,
@@ -266,9 +283,9 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             title_color: Some(theme.blue),
             title_extra: Some(vec![Span::styled(format!(": #{} ({} {})", run.id, run.date, run.time), Style::default().fg(theme.text_muted))]),
             nav_arrows: Some(NavArrowsConfig {
-                label: "select",
-                up_active: scroll > 0,
-                down_active: scroll < max_scroll,
+                label: nav_label,
+                up_active: can_up,
+                down_active: can_down,
             }),
             action_shortcuts: Some(actions),
             counter: Some((scroll + 1, total_lines.max(1))),

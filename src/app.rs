@@ -302,6 +302,8 @@ pub struct App {
     pub tracked_files_count: usize,
     quota_rx: Option<std::sync::mpsc::Receiver<CloudQuota>>,
     file_count_rx: Option<std::sync::mpsc::Receiver<usize>>,
+    service_info_rx: Option<std::sync::mpsc::Receiver<ServiceInfo>>,
+    past_runs_rx: Option<std::sync::mpsc::Receiver<Vec<PastRun>>>,
 
     last_systemd_check: Instant,
     last_history_check: Instant,
@@ -401,6 +403,8 @@ impl App {
             tracked_files_count: 0,
             quota_rx: None,
             file_count_rx: None,
+            service_info_rx: None,
+            past_runs_rx: None,
 
             last_systemd_check: Instant::now(),
             last_history_check: Instant::now(),
@@ -450,18 +454,42 @@ impl App {
             self.live = st.clone();
         }
 
-        if self.last_systemd_check.elapsed().as_secs() >= 1 {
-            self.service_info = get_service_info();
-            self.last_systemd_check = Instant::now();
-            if self.service_info.state == ServiceState::Idle || self.service_info.state == ServiceState::Failed {
-                self.live.is_syncing = false;
-                self.live.transfer = crate::monitor::parser::TransferStats::default();
+        if let Some(rx) = &self.service_info_rx {
+            if let Ok(info) = rx.try_recv() {
+                self.service_info = info;
+                self.service_info_rx = None;
+                if self.service_info.state == ServiceState::Idle || self.service_info.state == ServiceState::Failed {
+                    self.live.is_syncing = false;
+                    self.live.transfer = crate::monitor::parser::TransferStats::default();
+                }
             }
         }
 
-        if self.last_history_check.elapsed().as_secs() >= 6 {
-            self.past_runs = fetch_past_runs(50);
+        if let Some(rx) = &self.past_runs_rx {
+            if let Ok(runs) = rx.try_recv() {
+                self.past_runs = runs;
+                self.past_runs_rx = None;
+            }
+        }
+
+        if self.last_systemd_check.elapsed().as_secs() >= 1 && self.service_info_rx.is_none() {
+            self.last_systemd_check = Instant::now();
+            let (tx, rx) = std::sync::mpsc::channel();
+            self.service_info_rx = Some(rx);
+            std::thread::spawn(move || {
+                let info = get_service_info();
+                let _ = tx.send(info);
+            });
+        }
+
+        if self.last_history_check.elapsed().as_secs() >= 6 && self.past_runs_rx.is_none() {
             self.last_history_check = Instant::now();
+            let (tx, rx) = std::sync::mpsc::channel();
+            self.past_runs_rx = Some(rx);
+            std::thread::spawn(move || {
+                let runs = fetch_past_runs(50);
+                let _ = tx.send(runs);
+            });
         }
 
         if let Some((_, created)) = self.toast {
