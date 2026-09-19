@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table},
     Frame,
 };
 
@@ -45,40 +45,70 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
         (theme.red, theme.red)
     };
 
+    let bg = app.border_glyphs();
+    let max_title_path_len = (area.width.saturating_sub(42) as usize).max(10);
+    let display_title_path = if title_path.len() > max_title_path_len {
+        format!("…{}", &title_path[title_path.len().saturating_sub(max_title_path_len - 1)..])
+    } else {
+        title_path.clone()
+    };
+
+    let border_color = theme.border_history;
+
     let title_line = Line::from(vec![
-        Span::styled("┌📁 file explorer", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(": {}┐", title_path), Style::default().fg(theme.text_muted)),
-        Span::styled("┌open: ↵┐", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("┌close: Esc, q┐", Style::default().fg(theme.text_muted)),
+        Span::styled(bg.top_left, Style::default().fg(border_color)),
+        Span::styled("file explorer", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(": {}", display_title_path), Style::default().fg(theme.text_muted)),
+        Span::styled(bg.top_right, Style::default().fg(border_color)),
+    ]);
+
+    let right_title = Line::from(vec![
+        Span::styled(bg.top_left, Style::default().fg(border_color)),
+        Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled(" close", Style::default().fg(theme.text_bright)),
+        Span::styled(bg.top_right, Style::default().fg(border_color)),
     ]);
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme.border_history))
+        .border_type(app.border_type())
+        .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(title_line)
+        .title(right_title.alignment(Alignment::Right))
         .title_bottom(
             Line::from(vec![
+                Span::styled(bg.bot_left, Style::default().fg(theme.border_history)),
                 Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
-                Span::styled("/", Style::default().fg(theme.text_muted)),
+                Span::styled(" select ", Style::default().fg(Color::White)),
                 Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-                Span::styled(" navigate  ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
                 Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" parent  ", Style::default().fg(theme.text_muted)),
-                Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled("/", Style::default().fg(theme.text_muted)),
+                Span::styled(" parent ", Style::default().fg(Color::White)),
+                Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(theme.border_history)),
                 Span::styled("↵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" enter  ", Style::default().fg(theme.text_muted)),
-                Span::styled("d", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" folder  ", Style::default().fg(theme.text_muted)),
-                Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                Span::styled(" close ", Style::default().fg(theme.text_muted)),
-                Span::styled(format!("─ {}/{} ─", cur_file, total_files), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+                Span::styled(" open", Style::default().fg(Color::White)),
+                Span::styled(bg.bot_right, Style::default().fg(theme.border_history)),
+            ])
+            .alignment(Alignment::Left),
+        )
+        .title_bottom(
+            Line::from(vec![
+                Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_file, total_files, bg.horizontal), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );
     f.render_widget(outer_block, area);
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x + area.width.saturating_sub(14),
+            y: area.y,
+            width: 12,
+            height: 1,
+        },
+        action: HitAction::CloseModal,
+    });
 
     render_file_table(f, app, theme, main_chunks[0], hitboxes);
     render_file_actions(f, app, theme, main_chunks[1], hitboxes);

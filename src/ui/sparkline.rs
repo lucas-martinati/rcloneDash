@@ -6,10 +6,19 @@ use ratatui::{
     Frame,
 };
 
+use crate::config::GraphStyleChoice;
 use crate::monitor::history::{PastRun, RunStatus};
 use crate::ui::theme::ThemePalette;
 
 pub const BLOCKS: [char; 8] = [' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+pub const BRAILLE: [char; 8] = ['⡀', '⣀', '⣄', '⣤', '⣦', '⣶', '⣷', '⣿'];
+
+pub fn get_graph_chars(style: GraphStyleChoice) -> [char; 8] {
+    match style {
+        GraphStyleChoice::Braille => BRAILLE,
+        GraphStyleChoice::Blocks => BLOCKS,
+    }
+}
 
 /// Render speed sparkline with btop++ gradient colors
 #[allow(dead_code)]
@@ -19,12 +28,15 @@ pub fn render_speed_sparkline(
     current_speed: &str,
     theme: &ThemePalette,
     area: Rect,
+    border_type: BorderType,
+    graph_style: GraphStyleChoice,
 ) {
     let max_val = speed_history.iter().copied().max().unwrap_or(0).max(1);
 
     let mut spans = Vec::new();
     let display_len = (area.width.saturating_sub(4) as usize).min(speed_history.len());
     let start_idx = speed_history.len().saturating_sub(display_len);
+    let chars = get_graph_chars(graph_style);
 
     for &speed_kib in &speed_history[start_idx..] {
         let level = if speed_kib > 0 {
@@ -32,7 +44,7 @@ pub fn render_speed_sparkline(
         } else {
             0
         };
-        let block = if level == 0 { '·' } else { BLOCKS[level] };
+        let block = if level == 0 { '·' } else { chars[level] };
         let color = theme.speed_gradient_color(speed_kib);
         spans.push(Span::styled(block.to_string(), Style::default().fg(color)));
     }
@@ -47,7 +59,7 @@ pub fn render_speed_sparkline(
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(border_type)
                 .border_style(Style::default().fg(theme.border))
                 .style(Style::default().bg(theme.card_bg))
                 .title(Span::styled(title, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
@@ -125,6 +137,7 @@ pub fn render_history_graph_multiline(
     width: usize,
     height: usize,
     selected_idx: Option<usize>,
+    graph_style: GraphStyleChoice,
 ) -> (Vec<Line<'static>>, Vec<(usize, usize, usize)>) {
     if past_runs.is_empty() || width < 10 || height < 2 {
         let empty_line = Line::from(vec![Span::styled(" [Aucun run dans l'historique]", Style::default().fg(theme.text_muted))]);
@@ -205,13 +218,14 @@ pub fn render_history_graph_multiline(
                 1
             };
 
+            let chars = get_graph_chars(graph_style);
             let block_char = if level >= high_thresh {
-                '█'
+                chars[7]
             } else if level <= low_thresh {
                 ' '
             } else {
                 let frac = level - low_thresh;
-                BLOCKS[frac.clamp(0, 7)]
+                chars[frac.clamp(0, 7)]
             };
 
             let is_sel = selected_idx == Some(*orig_idx);
@@ -269,10 +283,11 @@ fn format_duration_clean(sec: f64) -> String {
     }
 }
 
-/// Render btop++ style horizontal gradient progress bar: [████████░░░░░░]
+/// Render btop++ style horizontal gradient progress bar: [████████····] or [⣿⣿⣿⣿····]
 pub fn render_gradient_bar(
     pct: f64,
     width: usize,
+    graph_style: GraphStyleChoice,
     theme: &ThemePalette,
 ) -> Vec<Span<'static>> {
     if width == 0 {
@@ -281,6 +296,11 @@ pub fn render_gradient_bar(
 
     let clamped_pct = pct.clamp(0.0, 100.0);
     let filled_slots = ((clamped_pct / 100.0) * width as f64).round() as usize;
+
+    let fill_char = match graph_style {
+        GraphStyleChoice::Braille => "⣿",
+        GraphStyleChoice::Blocks => "█",
+    };
 
     let mut spans = Vec::new();
     spans.push(Span::styled("[", Style::default().fg(theme.border)));
@@ -298,7 +318,42 @@ pub fn render_gradient_bar(
             } else {
                 theme.red
             };
-            spans.push(Span::styled("■", Style::default().fg(color).add_modifier(Modifier::BOLD)));
+            spans.push(Span::styled(fill_char, Style::default().fg(color).add_modifier(Modifier::BOLD)));
+        } else {
+            spans.push(Span::styled("·", Style::default().fg(theme.separator)));
+        }
+    }
+
+    spans.push(Span::styled("]", Style::default().fg(theme.border)));
+    spans
+}
+
+/// Render btop++ style solid progress bar with uniform color: [████····] or [⣿⣿⣿⣿····]
+pub fn render_solid_bar(
+    pct: f64,
+    width: usize,
+    color: ratatui::style::Color,
+    graph_style: GraphStyleChoice,
+    theme: &ThemePalette,
+) -> Vec<Span<'static>> {
+    if width == 0 {
+        return vec![];
+    }
+
+    let clamped_pct = pct.clamp(0.0, 100.0);
+    let filled_slots = ((clamped_pct / 100.0) * width as f64).round() as usize;
+
+    let fill_char = match graph_style {
+        GraphStyleChoice::Braille => "⣿",
+        GraphStyleChoice::Blocks => "█",
+    };
+
+    let mut spans = Vec::new();
+    spans.push(Span::styled("[", Style::default().fg(theme.border)));
+
+    for i in 0..width {
+        if i < filled_slots {
+            spans.push(Span::styled(fill_char, Style::default().fg(color).add_modifier(Modifier::BOLD)));
         } else {
             spans.push(Span::styled("·", Style::default().fg(theme.separator)));
         }
@@ -398,8 +453,35 @@ mod tests {
             },
         ];
 
-        let (lines, hitboxes) = render_history_graph_multiline(&runs, &theme, 60, 5, Some(0));
+        let (lines, hitboxes) = render_history_graph_multiline(&runs, &theme, 60, 5, Some(0), GraphStyleChoice::Blocks);
         assert_eq!(lines.len(), 5); // 1 header line + 4 chart rows
         assert_eq!(hitboxes.len(), 2);
+    }
+
+    #[test]
+    fn test_render_gradient_bar_styles() {
+        use crate::ui::theme::ThemeChoice;
+        let theme = ThemeChoice::TokyoNight.palette();
+        let spans_braille = render_gradient_bar(50.0, 10, GraphStyleChoice::Braille, &theme);
+        let text_braille: String = spans_braille.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text_braille.contains('⣿'), "Braille bar should contain '⣿'");
+
+        let spans_blocks = render_gradient_bar(50.0, 10, GraphStyleChoice::Blocks, &theme);
+        let text_blocks: String = spans_blocks.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text_blocks.contains('█'), "Blocks bar should contain '█'");
+    }
+
+    #[test]
+    fn test_render_solid_bar_styles() {
+        use crate::ui::theme::ThemeChoice;
+        use ratatui::style::Color;
+        let theme = ThemeChoice::TokyoNight.palette();
+        let spans_braille = render_solid_bar(50.0, 10, Color::Green, GraphStyleChoice::Braille, &theme);
+        let text_braille: String = spans_braille.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text_braille.contains('⣿'), "Braille bar should contain '⣿'");
+
+        let spans_blocks = render_solid_bar(50.0, 10, Color::Green, GraphStyleChoice::Blocks, &theme);
+        let text_blocks: String = spans_blocks.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text_blocks.contains('█'), "Blocks bar should contain '█'");
     }
 }

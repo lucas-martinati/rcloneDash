@@ -3,7 +3,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Cell, Paragraph, Row, Table,
+        Block, Borders, Cell, Paragraph, Row, Table,
     },
     Frame,
 };
@@ -12,69 +12,146 @@ use crate::app::{Alert, AlertLevel, App, FocusedPanel, HitAction, Hitbox};
 use crate::monitor::history::RunStatus;
 use crate::ui::theme::ThemePalette;
 
-pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
-    let alerts = app.active_alerts();
-    let show_alert = !alerts.is_empty();
+#[derive(Debug, Clone, Copy)]
+pub struct DashboardLayout {
+    pub cadrans_area: Rect,
+    pub alert_area: Option<Rect>,
+    pub sync_area: Option<Rect>,
+    pub history_area: Rect,
+    pub logs_area: Rect,
+    pub recent_area: Rect,
+}
+
+pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
+    let show_alert = !app.active_alerts().is_empty();
     let show_active_sync = app.is_syncing();
 
-    let mut constraints = Vec::new();
-    // 1. Cadran Stockage & Métriques (6 lignes pour intégrer horloge, fréquence, quota et KPIs)
-    constraints.push(Constraint::Length(6));
+    let sys_h: u16 = 6 + if show_alert { 3 } else { 0 } + if show_active_sync { 7 } else { 0 };
+    let rem_h = area.height.saturating_sub(sys_h);
+    let mid_h = (rem_h * 62 / 100).max(8);
+    let recent_h = rem_h.saturating_sub(mid_h).max(4);
 
-    // 2. Bannière d'alerte contextuelle si alerte active
+    let (sys_rect, mid_rect, recent_rect) = match app.config.container_layout {
+        crate::config::ContainerLayout::Default => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(sys_h),
+                    Constraint::Length(mid_h),
+                    Constraint::Min(recent_h),
+                ])
+                .split(area);
+            (chunks[0], chunks[1], chunks[2])
+        }
+        crate::config::ContainerLayout::RecentFirst => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(sys_h),
+                    Constraint::Length(recent_h),
+                    Constraint::Min(mid_h),
+                ])
+                .split(area);
+            (chunks[0], chunks[2], chunks[1])
+        }
+        crate::config::ContainerLayout::LogsTop => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(mid_h),
+                    Constraint::Length(sys_h),
+                    Constraint::Min(recent_h),
+                ])
+                .split(area);
+            (chunks[1], chunks[0], chunks[2])
+        }
+        crate::config::ContainerLayout::Inverted => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(recent_h),
+                    Constraint::Length(mid_h),
+                    Constraint::Min(sys_h),
+                ])
+                .split(area);
+            (chunks[2], chunks[1], chunks[0])
+        }
+    };
+
+    // Subdivide sys_rect into cadrans, alert, sync
+    let mut sys_constraints = vec![Constraint::Length(6)];
     if show_alert {
-        constraints.push(Constraint::Length(3));
+        sys_constraints.push(Constraint::Length(3));
     }
-
-    // 3. Barre de sync active (Phase stepper + 7 KPIs + Fichiers modifiés précis)
     if show_active_sync {
-        constraints.push(Constraint::Length(7));
+        sys_constraints.push(Constraint::Length(7));
     }
-
-    // 4. Zone centrale (Historique + Logs)
-    constraints.push(Constraint::Percentage(55));
-
-    // 5. Zone inférieure (Fichiers récents)
-    constraints.push(Constraint::Min(6));
-
-    let chunks = Layout::default()
+    let sys_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(constraints)
-        .split(area);
+        .constraints(sys_constraints)
+        .split(sys_rect);
 
-    let mut chunk_idx = 0;
+    let cadrans_area = sys_chunks[0];
+    let mut idx = 1;
+    let alert_area = if show_alert {
+        let a = sys_chunks[idx];
+        idx += 1;
+        Some(a)
+    } else {
+        None
+    };
+    let sync_area = if show_active_sync {
+        Some(sys_chunks[idx])
+    } else {
+        None
+    };
 
-    // 1. Cadrans Stockage & Métriques (2 cadrans spacieux)
-    render_system_cadrans(f, app, theme, chunks[chunk_idx], hitboxes);
-    chunk_idx += 1;
+    // Subdivide mid_rect horizontally according to mid_panel_order
+    let mid_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(mid_rect);
+
+    let (history_area, logs_area) = match app.config.mid_panel_order {
+        crate::config::MidPanelOrder::HistoryLogs => (mid_chunks[0], mid_chunks[1]),
+        crate::config::MidPanelOrder::LogsHistory => (mid_chunks[1], mid_chunks[0]),
+    };
+
+    DashboardLayout {
+        cadrans_area,
+        alert_area,
+        sync_area,
+        history_area,
+        logs_area,
+        recent_area: recent_rect,
+    }
+}
+
+pub fn render_dashboard(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
+    let layout = compute_dashboard_layout(area, app);
+
+    // 1. Cadrans Stockage & Métriques
+    render_system_cadrans(f, app, theme, layout.cadrans_area, hitboxes);
 
     // 2. Alerte
-    if show_alert {
-        render_alert_banner(f, &alerts[0], theme, chunks[chunk_idx]);
-        chunk_idx += 1;
+    if let Some(alert_area) = layout.alert_area {
+        let alerts = app.active_alerts();
+        if !alerts.is_empty() {
+            render_alert_banner(f, app, &alerts[0], theme, alert_area);
+        }
     }
 
     // 3. Sync active
-    if show_active_sync {
-        render_active_sync_section(f, app, theme, chunks[chunk_idx]);
-        chunk_idx += 1;
+    if let Some(sync_area) = layout.sync_area {
+        render_active_sync_section(f, app, theme, sync_area);
     }
 
-    // 4. Milieu : Historique + Logs
-    let middle_area = chunks[chunk_idx];
-    chunk_idx += 1;
-    let bottom_area = chunks[chunk_idx];
-
-    let middle_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(middle_area);
-
-    render_history_panel(f, app, theme, middle_chunks[0], hitboxes);
-    render_logs_panel(f, app, theme, middle_chunks[1], hitboxes);
+    // 4. Milieu : Historique & Logs
+    render_history_panel(f, app, theme, layout.history_area, hitboxes);
+    render_logs_panel(f, app, theme, layout.logs_area, hitboxes);
 
     // 5. Fichiers récents
-    render_recent_files_panel(f, app, theme, bottom_area, hitboxes);
+    render_recent_files_panel(f, app, theme, layout.recent_area, hitboxes);
 }
 
 /// Affiche 2 cadrans élégants (Stockage/Cloud à gauche, Métriques/Fiabilité à droite)
@@ -90,19 +167,20 @@ fn render_system_cadrans(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
 }
 
 fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+    let bg = app.border_glyphs();
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(theme.border_storage))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┐", Style::default().fg(theme.border_storage)),
+            Span::styled(bg.top_left, Style::default().fg(theme.border_storage)),
             Span::styled("disks & cloud", Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
-            Span::styled("┌", Style::default().fg(theme.border_storage)),
+            Span::styled(bg.top_right, Style::default().fg(theme.border_storage)),
         ]))
         .title_bottom(
             Line::from(vec![
-                Span::styled("─ statvfs / bisync ─", Style::default().fg(theme.border_storage)),
+                Span::styled(format!("{} statvfs / bisync {}", bg.horizontal, bg.horizontal), Style::default().fg(theme.border_storage)),
             ])
             .alignment(Alignment::Right),
         );
@@ -115,17 +193,24 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
         height: area.height.saturating_sub(2),
     };
 
-    let bar_width = 8usize.min((inner.width.saturating_sub(45) / 2) as usize);
+    let bar_width = 8usize.min((inner.width.saturating_sub(48) / 2) as usize);
 
     // 1. Disque local
     let (used_gb, free_gb, total_gb, pct) = app.local_disk_stats();
-    let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, theme);
+    let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, app.config.graph_style, theme);
     let mut line1_spans = vec![
         Span::styled("Disk:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
     line1_spans.extend(disk_bar);
+    let disk_info = if inner.width >= 55 {
+        format!(" {:>3.0}%  {:.1} GB / {:.1} GB ({:.1} GB free)", pct, used_gb, total_gb, free_gb)
+    } else if inner.width >= 42 {
+        format!(" {:>3.0}%  {:.0}G/{:.0}G ({:.0}G free)", pct, used_gb, total_gb, free_gb)
+    } else {
+        format!(" {:>3.0}%  {:.1}G free", pct, free_gb)
+    };
     line1_spans.push(Span::styled(
-        format!(" {:>3.0}%  {:.1} GB / {:.1} GB ({:.1} GB free)", pct, used_gb, total_gb, free_gb),
+        disk_info,
         Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
     ));
 
@@ -138,19 +223,31 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
         let total_tb = q.total_bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
         let free_tb = q.free_bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
         let q_pct = if q.total_bytes > 0 { (q.used_bytes as f64 / q.total_bytes as f64) * 100.0 } else { 0.0 };
-        let cloud_bar = crate::ui::sparkline::render_gradient_bar(q_pct, bar_width, theme);
+        let cloud_bar = crate::ui::sparkline::render_gradient_bar(q_pct, bar_width, app.config.graph_style, theme);
         line2_spans.extend(cloud_bar);
         let used_str = if used_mb >= 1024.0 {
             format!("{:.1} GB", used_mb / 1024.0)
         } else {
             format!("{:.1} MB", used_mb)
         };
+        let cloud_info = if inner.width >= 55 {
+            format!(" {:>3.0}%  {} / {:.2} TB ({:.2} TB free)", q_pct, used_str, total_tb, free_tb)
+        } else if inner.width >= 42 {
+            format!(" {:>3.0}%  {}/{:.1}TB", q_pct, used_str, total_tb)
+        } else {
+            format!(" {:>3.0}%  {:.1}TB free", q_pct, free_tb)
+        };
         line2_spans.push(Span::styled(
-            format!(" {:>3.0}%  {} / {:.2} TB ({:.2} TB free)", q_pct, used_str, total_tb, free_tb),
+            cloud_info,
             Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
         ));
     } else {
-        line2_spans.push(Span::styled(format!("{:<15}", &app.config.remote), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
+        let remote_display = if app.config.remote.len() > 16 {
+            format!("{}…", &app.config.remote[..15])
+        } else {
+            app.config.remote.clone()
+        };
+        line2_spans.push(Span::styled(format!("{:<15} ", remote_display), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
         line2_spans.push(Span::styled("· syncing quota...", Style::default().fg(theme.text_muted)));
     }
 
@@ -161,9 +258,15 @@ fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: 
     } else {
         "analyzing...".to_string()
     };
+    let max_dir_len = (inner.width.saturating_sub(24) as usize).max(8);
+    let display_dir = if app.config.local_dir.len() > max_dir_len {
+        format!("…{}", &app.config.local_dir[app.config.local_dir.len().saturating_sub(max_dir_len - 1)..])
+    } else {
+        app.config.local_dir.clone()
+    };
     let line3_spans = vec![
         Span::styled("Folder:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{} ", &app.config.local_dir), Style::default().fg(theme.text_bright)),
+        Span::styled(format!("{} ", display_dir), Style::default().fg(theme.text_bright)),
         Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
     ];
 
@@ -219,29 +322,30 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         action: HitAction::TickRateInc,
     });
 
+    let bg = app.border_glyphs();
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(theme.border_sys))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┐", Style::default().fg(theme.border_sys)),
+            Span::styled(bg.top_left, Style::default().fg(theme.border_sys)),
             Span::styled("metrics", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
-            Span::styled("┌── ", Style::default().fg(theme.border_sys)),
+            Span::styled(format!("{} ", bg.horizontal), Style::default().fg(theme.border_sys)),
             Span::styled(clock_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-            Span::styled(" ──", Style::default().fg(theme.border_sys)),
+            Span::styled(format!(" {}", bg.horizontal), Style::default().fg(theme.border_sys)),
         ]))
         .title({
             let dec_col = if app.can_dec_tick_rate() { theme.red } else { theme.text_muted };
             let inc_col = if app.can_inc_tick_rate() { theme.red } else { theme.text_muted };
             Line::from(vec![
-                Span::styled("┐", Style::default().fg(theme.border_sys)),
+                Span::styled(bg.top_left, Style::default().fg(theme.border_sys)),
                 Span::styled("-", Style::default().fg(dec_col).add_modifier(Modifier::BOLD)),
                 Span::styled(" ", Style::default().fg(theme.border_sys)),
                 Span::styled(tick_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
                 Span::styled(" ", Style::default().fg(theme.border_sys)),
                 Span::styled("+", Style::default().fg(inc_col).add_modifier(Modifier::BOLD)),
-                Span::styled("┌", Style::default().fg(theme.border_sys)),
+                Span::styled(bg.top_right, Style::default().fg(theme.border_sys)),
             ])
             .alignment(Alignment::Right)
         });
@@ -323,10 +427,17 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         ),
     ];
 
-    // 4. Fiabilité 7 jours avec barre à dégradé btop++
+    // 4. Fiabilité 7 jours : totalement négatif si bas (<70%), moyen si moyen (70-89%), vert si bon (>=90%)
     let (rate, _) = app.calculate_success_rate();
-    let bar_width = 8usize.min((inner.width.saturating_sub(45) / 2) as usize);
-    let rel_bar = crate::ui::sparkline::render_gradient_bar(rate, bar_width, theme);
+    let bar_width = 8usize.min((inner.width.saturating_sub(48) / 2) as usize);
+    let rel_color = if rate >= 90.0 {
+        theme.green
+    } else if rate >= 70.0 {
+        theme.yellow
+    } else {
+        theme.red
+    };
+    let rel_bar = crate::ui::sparkline::render_solid_bar(rate, bar_width, rel_color, app.config.graph_style, theme);
 
     let mut line4_spans = vec![
         Span::styled("Reliability: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
@@ -334,7 +445,7 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     line4_spans.extend(rel_bar.clone());
     line4_spans.push(Span::styled(
         format!(" {:>3.0}% success rate (7 days)", rate),
-        Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
+        Style::default().fg(rel_color).add_modifier(Modifier::BOLD),
     ));
 
     let mut lines = vec![Line::from(line1_spans)];
@@ -351,7 +462,7 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
         line2_compact.extend(rel_bar);
         line2_compact.push(Span::styled(
             format!(" {:>3.0}% (7d)", rate),
-            Style::default().fg(if rate >= 90.0 { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
+            Style::default().fg(rel_color).add_modifier(Modifier::BOLD),
         ));
         lines.push(Line::from(line2_compact));
         lines.push(Line::from(line3_spans));
@@ -361,7 +472,7 @@ fn render_metrics_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect
     f.render_widget(p, inner);
 }
 
-fn render_alert_banner(f: &mut Frame, alert: &Alert, theme: &ThemePalette, area: Rect) {
+fn render_alert_banner(f: &mut Frame, app: &App, alert: &Alert, theme: &ThemePalette, area: Rect) {
     let (border_color, icon) = match alert.level {
         AlertLevel::Error => (theme.red, " 🚨 CRITICAL ALERT: "),
         AlertLevel::Warning => (theme.yellow, " ⚠️ WARNING: "),
@@ -382,7 +493,7 @@ fn render_alert_banner(f: &mut Frame, alert: &Alert, theme: &ThemePalette, area:
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(app.border_type())
                 .border_style(Style::default().fg(border_color))
                 .style(Style::default().bg(theme.card_bg)),
         );
@@ -397,10 +508,11 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
         &app.live.transfer.elapsed
     };
 
+    let bg = app.border_glyphs();
     let title_line = Line::from(vec![
-        Span::styled("┐", Style::default().fg(theme.accent)),
+        Span::styled(bg.top_left, Style::default().fg(theme.accent)),
         Span::styled("synchronization in progress", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-        Span::styled("┌", Style::default().fg(theme.accent)),
+        Span::styled(bg.top_right, Style::default().fg(theme.accent)),
     ]);
 
     let right_title = Line::from(vec![
@@ -410,7 +522,7 @@ fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette, ar
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(theme.accent))
         .style(Style::default().bg(theme.card_bg))
         .title(title_line)
@@ -609,29 +721,30 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         (theme.text_bright, theme.red)
     };
 
+    let bg = app.border_glyphs();
     let left_bottom = Line::from(vec![
-        Span::styled("┘", Style::default().fg(border_color)),
+        Span::styled(bg.bot_left, Style::default().fg(border_color)),
         Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" select ", Style::default().fg(Color::White)),
         Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-        Span::styled("└┘", Style::default().fg(border_color)),
+        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
         Span::styled("details ", Style::default().fg(det_col)),
         Span::styled("↵", Style::default().fg(key_col).add_modifier(Modifier::BOLD)),
-        Span::styled("└", Style::default().fg(border_color)),
+        Span::styled(bg.bot_right, Style::default().fg(border_color)),
     ]);
     let right_bottom = Line::from(vec![
-        Span::styled(format!("─ {}/{} ─", cur_run, total_runs), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_run, total_runs, bg.horizontal), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┐", Style::default().fg(border_color)),
+            Span::styled(bg.top_left, Style::default().fg(border_color)),
             Span::styled("history", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
-            Span::styled("┌", Style::default().fg(border_color)),
+            Span::styled(bg.top_right, Style::default().fg(border_color)),
         ]))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
@@ -667,6 +780,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         chunks[0].width as usize,
         chunks[0].height as usize,
         past_selected,
+        app.config.graph_style,
     );
     let bar_p = Paragraph::new(lines);
     f.render_widget(bar_p, chunks[0]);
@@ -888,21 +1002,22 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         (theme.red, theme.red)
     };
 
+    let bg = app.border_glyphs();
     let left_bottom = Line::from(vec![
-        Span::styled("┘", Style::default().fg(border_color)),
+        Span::styled(bg.bot_left, Style::default().fg(border_color)),
         Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" scroll ", Style::default().fg(Color::White)),
         Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-        Span::styled("└", Style::default().fg(border_color)),
+        Span::styled(bg.bot_right, Style::default().fg(border_color)),
     ]);
     let right_bottom = Line::from(vec![
-        Span::styled(format!("─ {}/{} ─", cur_line, total_lines), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_line, total_lines, bg.horizontal), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
 
     let mut title_spans: Vec<Span> = Vec::new();
-    title_spans.push(Span::styled("┐", Style::default().fg(border_color)));
+    title_spans.push(Span::styled(bg.top_left, Style::default().fg(border_color)));
     title_spans.push(Span::styled("logs", Style::default().fg(border_color).add_modifier(Modifier::BOLD)));
-    title_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
+    title_spans.push(Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)));
 
     // area.x + 1 is start of block title inside border.
     // "┐" (1) + "logs" (4) + "┌┐" (2) = 7 chars, so selector starts at area.x + 1 + 7 = area.x + 8
@@ -952,7 +1067,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     title_spans.push(Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     cur_hit_x += 1;
 
-    title_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
+    title_spans.push(Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)));
     cur_hit_x += 2;
 
     let auto_text = if app.auto_scroll { "pause " } else { "auto " };
@@ -966,7 +1081,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         status_text,
         Style::default().fg(if app.auto_scroll { theme.green } else { theme.yellow }).add_modifier(Modifier::BOLD),
     ));
-    title_spans.push(Span::styled("┌", Style::default().fg(border_color)));
+    title_spans.push(Span::styled(bg.top_right, Style::default().fg(border_color)));
 
     hitboxes.push(Hitbox {
         rect: Rect {
@@ -980,7 +1095,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(title_spans))
@@ -1156,26 +1271,27 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         (theme.text_bright, theme.red)
     };
 
+    let bg = app.border_glyphs();
     let bottom_spans = vec![
-        Span::styled("┘", Style::default().fg(border_color)),
+        Span::styled(bg.bot_left, Style::default().fg(border_color)),
         Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" select ", Style::default().fg(ratatui::style::Color::White)),
         Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
-        Span::styled("└┘", Style::default().fg(border_color)),
+        Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
         Span::styled("open ", Style::default().fg(opn_col)),
         Span::styled("↵", Style::default().fg(key_col).add_modifier(Modifier::BOLD)),
-        Span::styled("└", Style::default().fg(border_color)),
+        Span::styled(bg.bot_right, Style::default().fg(border_color)),
     ];
 
     let left_bottom = Line::from(bottom_spans);
     let right_bottom = Line::from(vec![
-        Span::styled(format!("─ {}/{} ─", cur_file, total_files), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} {}/{} {}", bg.horizontal, cur_file, total_files, bg.horizontal), Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
     ]);
 
     let mut top_spans = vec![
-        Span::styled("┐", Style::default().fg(border_color)),
+        Span::styled(bg.top_left, Style::default().fg(border_color)),
         Span::styled("recent files", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
-        Span::styled("┌┐", Style::default().fg(border_color)),
+        Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)),
     ];
     let filter_start_x = area.x + 14;
     let filter_w = if app.is_filtering_recent {
@@ -1196,7 +1312,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         8
     };
 
-    top_spans.push(Span::styled("┌┐", Style::default().fg(border_color)));
+    top_spans.push(Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)));
     top_spans.push(Span::styled("Ctrl+X", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     let (dossier_text, dossier_color) = if app.ctrl_mode {
         (" folder [ON]", theme.yellow)
@@ -1204,11 +1320,11 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
         (" folder", theme.text_bright)
     };
     top_spans.push(Span::styled(dossier_text, Style::default().fg(dossier_color).add_modifier(Modifier::BOLD)));
-    top_spans.push(Span::styled("┌", Style::default().fg(border_color)));
+    top_spans.push(Span::styled(bg.top_right, Style::default().fg(border_color)));
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(top_spans))
@@ -1454,4 +1570,51 @@ pub fn normalize_display_path(p: &str) -> String {
         s = format!("from {}", &s[5..]);
     }
     s.replace("/From ", "/from ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ContainerLayout, MidPanelOrder};
+
+    #[tokio::test]
+    async fn test_compute_dashboard_layout_permutations() {
+        let mut app = App::new();
+        app.service_info.state = crate::systemd::ServiceState::Idle;
+        app.live.is_syncing = false;
+
+        let total_area = Rect { x: 0, y: 0, width: 120, height: 40 };
+
+        // 1. Default layout: Cadrans -> Mid -> Recent
+        app.config.container_layout = ContainerLayout::Default;
+        app.config.mid_panel_order = MidPanelOrder::HistoryLogs;
+        let layout = compute_dashboard_layout(total_area, &app);
+        assert!(layout.cadrans_area.y < layout.history_area.y);
+        assert!(layout.history_area.y < layout.recent_area.y);
+        assert_eq!(layout.history_area.y, layout.logs_area.y);
+        assert!(layout.history_area.x < layout.logs_area.x);
+
+        // 2. RecentFirst layout: Cadrans -> Recent -> Mid
+        app.config.container_layout = ContainerLayout::RecentFirst;
+        let layout = compute_dashboard_layout(total_area, &app);
+        assert!(layout.cadrans_area.y < layout.recent_area.y);
+        assert!(layout.recent_area.y < layout.history_area.y);
+
+        // 3. LogsTop layout: Mid -> Cadrans -> Recent
+        app.config.container_layout = ContainerLayout::LogsTop;
+        let layout = compute_dashboard_layout(total_area, &app);
+        assert!(layout.history_area.y < layout.cadrans_area.y);
+        assert!(layout.cadrans_area.y < layout.recent_area.y);
+
+        // 4. Inverted layout: Recent -> Mid -> Cadrans
+        app.config.container_layout = ContainerLayout::Inverted;
+        let layout = compute_dashboard_layout(total_area, &app);
+        assert!(layout.recent_area.y < layout.history_area.y);
+        assert!(layout.history_area.y < layout.cadrans_area.y);
+
+        // 5. Mid panel swap: LogsHistory -> logs on the left, history on the right
+        app.config.mid_panel_order = MidPanelOrder::LogsHistory;
+        let layout = compute_dashboard_layout(total_area, &app);
+        assert!(layout.logs_area.x < layout.history_area.x);
+    }
 }

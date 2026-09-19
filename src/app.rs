@@ -1,12 +1,12 @@
 use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
+use ratatui::widgets::BorderType;
 
 use crate::config::{self, AppConfig};
 use crate::fs_tree::{self, FileEntry};
 use crate::monitor::{fetch_past_runs, spawn_log_streamer, PastRun, RunStatus, SharedStreamer, StreamerState};
 use crate::systemd::{self, get_service_info, ServiceInfo, ServiceState};
-use crate::ui::settings::SETTINGS_ITEMS_COUNT;
 use crate::ui::theme::ThemeChoice;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,6 +179,7 @@ pub enum HitAction {
     RecentFilesArea,
     SettingOption(usize),
     SettingCycle(usize, bool),
+    SettingsTab(usize),
     SaveSettings,
     CloseModal,
     MenuOption(usize),
@@ -195,6 +196,11 @@ pub enum HitAction {
     ButtonCopy,
     FilterArea,
     FilterRow(usize),
+    FilterCycleType(usize),
+    FilterStartEdit,
+    FilterAdd,
+    FilterDelete(usize),
+    FilterOpenEditor,
     ScrollbarArrowUp(ScrollbarTarget),
     ScrollbarArrowDown(ScrollbarTarget),
     ScrollbarTrack {
@@ -270,9 +276,15 @@ pub struct App {
     pub logs_total_wrapped: usize,
 
     // Paramètres
+    pub settings_tab: usize,
     pub settings_selected_idx: usize,
     pub is_editing_setting: bool,
     pub setting_edit_buffer: String,
+
+    // Filtres d'exclusion (inline editing)
+    pub is_editing_filter: bool,
+    pub filter_edit_buffer: String,
+    pub is_adding_filter: bool,
 
     // Simulation Dry-Run
     pub dry_run_running: bool,
@@ -362,9 +374,14 @@ impl App {
             logs_viewport_height: 10,
             logs_total_wrapped: 0,
 
+            settings_tab: 0,
             settings_selected_idx: 0,
             is_editing_setting: false,
             setting_edit_buffer: String::new(),
+
+            is_editing_filter: false,
+            filter_edit_buffer: String::new(),
+            is_adding_filter: false,
 
             dry_run_running: false,
             dry_run_logs: Vec::new(),
@@ -377,7 +394,11 @@ impl App {
 
             hitboxes: Vec::with_capacity(64),
 
-            cloud_quota: None,
+            cloud_quota: config::load_quota_cache().map(|c| CloudQuota {
+                total_bytes: c.total_bytes,
+                used_bytes: c.used_bytes,
+                free_bytes: c.free_bytes,
+            }),
             tracked_files_count: 0,
             quota_rx: None,
             file_count_rx: None,
@@ -395,6 +416,18 @@ impl App {
     #[allow(dead_code)]
     pub fn clear_hitboxes(&mut self) {
         self.hitboxes.clear();
+    }
+
+    pub fn border_type(&self) -> BorderType {
+        self.config.border_style.to_border_type()
+    }
+
+    pub fn border_glyphs(&self) -> crate::config::BorderGlyphs {
+        self.config.border_style.glyphs()
+    }
+
+    pub fn settings_items_count(&self) -> usize {
+        if self.settings_tab == 0 { 7 } else { 6 }
     }
 
     #[allow(dead_code)]
@@ -440,6 +473,11 @@ impl App {
 
         if let Some(rx) = &self.quota_rx {
             if let Ok(q) = rx.try_recv() {
+                let _ = config::save_quota_cache(&config::CloudQuotaCache {
+                    total_bytes: q.total_bytes,
+                    used_bytes: q.used_bytes,
+                    free_bytes: q.free_bytes,
+                });
                 self.cloud_quota = Some(q);
             }
         }
@@ -1085,7 +1123,7 @@ impl App {
             return;
         }
         let trimmed = self.setting_edit_buffer.trim().to_string();
-        if self.settings_selected_idx == 5 {
+        if self.settings_tab == 0 && self.settings_selected_idx == 3 {
             if !trimmed.is_empty() {
                 if self.config.local_dir != trimmed {
                     self.config.local_dir = trimmed;
@@ -1098,7 +1136,7 @@ impl App {
             } else {
                 self.set_toast("ℹ Empty value: keeping previous directory");
             }
-        } else if self.settings_selected_idx == 6 {
+        } else if self.settings_tab == 0 && self.settings_selected_idx == 4 {
             if !trimmed.is_empty() {
                 if self.config.remote != trimmed {
                     self.config.remote = trimmed;
@@ -1621,23 +1659,35 @@ impl App {
                                 self.is_filtering_recent = true;
                                 return Action::None;
                             }
+                            HitAction::SettingsTab(tab_idx) => {
+                                if self.is_editing_setting {
+                                    self.commit_setting_edit();
+                                }
+                                self.settings_tab = tab_idx;
+                                self.settings_selected_idx = 0;
+                                return Action::None;
+                            }
                             HitAction::SettingOption(idx) => {
                                 if self.is_editing_setting && idx != self.settings_selected_idx {
                                     self.commit_setting_edit();
                                 }
                                 self.settings_selected_idx = idx;
-                                if idx == 8 {
-                                    return Action::OpenFullLogs;
-                                } else if idx == 7 {
-                                    self.modal = Modal::ConfirmResync;
-                                } else if idx == 5 || idx == 6 {
-                                    if !self.is_editing_setting || self.settings_selected_idx != idx {
-                                        self.is_editing_setting = true;
-                                        self.setting_edit_buffer = if idx == 5 {
-                                            self.config.local_dir.clone()
-                                        } else {
-                                            self.config.remote.clone()
-                                        };
+                                if self.settings_tab == 0 {
+                                    if idx == 6 {
+                                        return Action::OpenFullLogs;
+                                    } else if idx == 5 {
+                                        self.modal = Modal::ConfirmResync;
+                                    } else if idx == 3 || idx == 4 {
+                                        if !self.is_editing_setting || self.settings_selected_idx != idx {
+                                            self.is_editing_setting = true;
+                                            self.setting_edit_buffer = if idx == 3 {
+                                                self.config.local_dir.clone()
+                                            } else {
+                                                self.config.remote.clone()
+                                            };
+                                        }
+                                    } else {
+                                        self.cycle_setting(true);
                                     }
                                 } else {
                                     self.cycle_setting(true);
@@ -1649,18 +1699,22 @@ impl App {
                                     self.commit_setting_edit();
                                 }
                                 self.settings_selected_idx = idx;
-                                if idx == 8 {
-                                    return Action::OpenFullLogs;
-                                } else if idx == 7 {
-                                    self.modal = Modal::ConfirmResync;
-                                } else if idx == 5 || idx == 6 {
-                                    if !self.is_editing_setting || self.settings_selected_idx != idx {
-                                        self.is_editing_setting = true;
-                                        self.setting_edit_buffer = if idx == 5 {
-                                            self.config.local_dir.clone()
-                                        } else {
-                                            self.config.remote.clone()
-                                        };
+                                if self.settings_tab == 0 {
+                                    if idx == 6 {
+                                        return Action::OpenFullLogs;
+                                    } else if idx == 5 {
+                                        self.modal = Modal::ConfirmResync;
+                                    } else if idx == 3 || idx == 4 {
+                                        if !self.is_editing_setting || self.settings_selected_idx != idx {
+                                            self.is_editing_setting = true;
+                                            self.setting_edit_buffer = if idx == 3 {
+                                                self.config.local_dir.clone()
+                                            } else {
+                                                self.config.remote.clone()
+                                            };
+                                        }
+                                    } else {
+                                        self.cycle_setting(forward);
                                     }
                                 } else {
                                     self.cycle_setting(forward);
@@ -1699,11 +1753,38 @@ impl App {
                             }
                             HitAction::FilterRow(idx) => {
                                 if idx < self.filters.len() {
+                                    if self.is_editing_filter && self.selected_filter_idx != idx {
+                                        self.commit_filter_edit();
+                                    }
                                     self.selected_filter_idx = idx;
                                     let vp = self.filter_viewport_height;
                                     self.ensure_filter_visible(vp);
                                 }
                                 return Action::None;
+                            }
+                            HitAction::FilterCycleType(idx) => {
+                                if !self.is_editing_filter {
+                                    self.cycle_filter_type(idx);
+                                }
+                                return Action::None;
+                            }
+                            HitAction::FilterStartEdit => {
+                                self.start_editing_filter();
+                                return Action::None;
+                            }
+                            HitAction::FilterAdd => {
+                                self.start_adding_filter();
+                                return Action::None;
+                            }
+                            HitAction::FilterDelete(idx) => {
+                                if idx < self.filters.len() {
+                                    self.selected_filter_idx = idx;
+                                    self.delete_selected_filter();
+                                }
+                                return Action::None;
+                            }
+                            HitAction::FilterOpenEditor => {
+                                return Action::OpenEditor;
                             }
                             HitAction::FilterArea => {
                                 return Action::None;
@@ -1843,53 +1924,186 @@ impl App {
         }
     }
 
-    pub fn cycle_setting(&mut self, forward: bool) {
-        match self.settings_selected_idx {
-            0 => {
-                self.current_theme = if forward {
-                    self.current_theme.next()
-                } else {
-                    self.current_theme.prev()
-                };
-                self.config.theme = Some(self.current_theme);
-                self.set_toast(format!("Active theme: {}", self.current_theme.name()));
-            }
-            1 => {
-                let options = ["10min", "15min", "30min", "1h"];
-                let pos = options.iter().position(|&o| o == self.config.timer_interval).unwrap_or(0);
-                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                self.config.timer_interval = options[next].to_string();
-            }
-            2 => {
-                let options = ["60", "120", "240", "360", "720", "1440", "never"];
-                let pos = options.iter().position(|&o| o == self.config.full_sync_interval).unwrap_or(0);
-                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                self.config.full_sync_interval = options[next].to_string();
-            }
-            3 => {
-                let options = ["Disabled", "5M", "10M", "20M", "50M"];
-                let cur = self.config.bwlimit.as_deref().unwrap_or("Disabled");
-                let cur = if cur == "Désactivé" { "Disabled" } else { cur };
-                let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
-                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                self.config.bwlimit = if options[next] == "Disabled" { None } else { Some(options[next].to_string()) };
-            }
-            4 => {
-                let options = TICK_RATE_STEPS;
-                let cur = self.config.tick_rate_ms.unwrap_or(250);
-                let pos = options.iter().position(|&o| o == cur).unwrap_or(2);
-                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                self.config.tick_rate_ms = Some(options[next]);
-                self.tick_rate_ms_live = options[next];
-                self.tick_rate_changed = true;
-            }
-            7 => {
-                self.modal = Modal::ConfirmResync;
-            }
-            _ => {}
+    pub fn cycle_filter_type(&mut self, idx: usize) {
+        if idx < self.filters.len() {
+            self.selected_filter_idx = idx;
+            let rule = &self.filters[idx];
+            let trimmed = rule.trim();
+            let new_rule = if trimmed.starts_with('+') {
+                format!("- {}", trimmed.trim_start_matches('+').trim())
+            } else if trimmed.starts_with('-') {
+                format!("# {}", trimmed.trim_start_matches('-').trim())
+            } else if trimmed.starts_with('#') {
+                trimmed.trim_start_matches('#').trim().to_string()
+            } else {
+                format!("+ {}", trimmed)
+            };
+            self.filters[idx] = new_rule;
+            let _ = config::save_filters(&self.filters);
+            self.set_toast("✔ Filter rule type changed");
+        }
+    }
+
+    pub fn start_editing_filter(&mut self) {
+        if self.filters.is_empty() {
+            self.start_adding_filter();
+            return;
+        }
+        if self.selected_filter_idx < self.filters.len() {
+            self.is_editing_filter = true;
+            self.is_adding_filter = false;
+            self.filter_edit_buffer = self.filters[self.selected_filter_idx].clone();
+        }
+    }
+
+    pub fn start_adding_filter(&mut self) {
+        self.is_editing_filter = true;
+        self.is_adding_filter = true;
+        self.filter_edit_buffer = "- ".to_string();
+        self.selected_filter_idx = self.filters.len();
+        let vp = self.filter_viewport_height;
+        self.ensure_filter_visible(vp);
+    }
+
+    pub fn commit_filter_edit(&mut self) {
+        if !self.is_editing_filter {
+            return;
+        }
+        let trimmed = self.filter_edit_buffer.trim();
+        if trimmed.is_empty() {
+            self.cancel_filter_edit();
+            return;
         }
 
-        if self.settings_selected_idx <= 4 {
+        if self.is_adding_filter {
+            self.filters.push(self.filter_edit_buffer.trim().to_string());
+            self.selected_filter_idx = self.filters.len().saturating_sub(1);
+            let _ = config::save_filters(&self.filters);
+            self.set_toast("✔ Filter rule added");
+        } else if self.selected_filter_idx < self.filters.len() {
+            self.filters[self.selected_filter_idx] = self.filter_edit_buffer.trim().to_string();
+            let _ = config::save_filters(&self.filters);
+            self.set_toast("✔ Filter rule updated");
+        }
+        self.is_editing_filter = false;
+        self.is_adding_filter = false;
+        self.filter_edit_buffer.clear();
+        let vp = self.filter_viewport_height;
+        self.ensure_filter_visible(vp);
+    }
+
+    pub fn cancel_filter_edit(&mut self) {
+        self.is_editing_filter = false;
+        self.is_adding_filter = false;
+        self.filter_edit_buffer.clear();
+        if self.selected_filter_idx >= self.filters.len() && !self.filters.is_empty() {
+            self.selected_filter_idx = self.filters.len() - 1;
+        }
+    }
+
+    pub fn delete_selected_filter(&mut self) {
+        if self.filters.is_empty() {
+            return;
+        }
+        if self.selected_filter_idx < self.filters.len() {
+            self.filters.remove(self.selected_filter_idx);
+            if self.selected_filter_idx >= self.filters.len() && !self.filters.is_empty() {
+                self.selected_filter_idx = self.filters.len() - 1;
+            }
+            let _ = config::save_filters(&self.filters);
+            self.set_toast("✔ Filter rule deleted");
+            let vp = self.filter_viewport_height;
+            self.ensure_filter_visible(vp);
+        }
+    }
+
+    pub fn cycle_setting(&mut self, forward: bool) {
+        if self.settings_tab == 0 {
+            // Rclone settings
+            match self.settings_selected_idx {
+                0 => {
+                    let options = ["10min", "15min", "30min", "1h"];
+                    let pos = options.iter().position(|&o| o == self.config.timer_interval).unwrap_or(0);
+                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                    self.config.timer_interval = options[next].to_string();
+                }
+                1 => {
+                    let options = ["60", "120", "240", "360", "720", "1440", "never"];
+                    let pos = options.iter().position(|&o| o == self.config.full_sync_interval).unwrap_or(0);
+                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                    self.config.full_sync_interval = options[next].to_string();
+                }
+                2 => {
+                    let options = ["Disabled", "5M", "10M", "20M", "50M"];
+                    let cur = self.config.bwlimit.as_deref().unwrap_or("Disabled");
+                    let cur = if cur == "Désactivé" { "Disabled" } else { cur };
+                    let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
+                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                    self.config.bwlimit = if options[next] == "Disabled" { None } else { Some(options[next].to_string()) };
+                }
+                5 => {
+                    self.modal = Modal::ConfirmResync;
+                }
+                _ => {}
+            }
+            if self.settings_selected_idx <= 2 {
+                self.save_current_settings();
+            }
+        } else {
+            // UI settings
+            match self.settings_selected_idx {
+                0 => {
+                    self.current_theme = if forward {
+                        self.current_theme.next()
+                    } else {
+                        self.current_theme.prev()
+                    };
+                    self.config.theme = Some(self.current_theme);
+                    self.set_toast(format!("Active theme: {}", self.current_theme.name()));
+                }
+                1 => {
+                    self.config.container_layout = if forward {
+                        self.config.container_layout.next()
+                    } else {
+                        self.config.container_layout.prev()
+                    };
+                    self.set_toast(format!("Container layout: {}", self.config.container_layout.name()));
+                }
+                2 => {
+                    self.config.mid_panel_order = if forward {
+                        self.config.mid_panel_order.next()
+                    } else {
+                        self.config.mid_panel_order.prev()
+                    };
+                    self.set_toast(format!("Mid-panel order: {}", self.config.mid_panel_order.name()));
+                }
+                3 => {
+                    self.config.border_style = if forward {
+                        self.config.border_style.next()
+                    } else {
+                        self.config.border_style.prev()
+                    };
+                    self.set_toast(format!("Border style: {}", self.config.border_style.name()));
+                }
+                4 => {
+                    self.config.graph_style = if forward {
+                        self.config.graph_style.next()
+                    } else {
+                        self.config.graph_style.prev()
+                    };
+                    self.set_toast(format!("Graph style: {}", self.config.graph_style.name()));
+                }
+                5 => {
+                    let options = TICK_RATE_STEPS;
+                    let cur = self.config.tick_rate_ms.unwrap_or(250);
+                    let pos = options.iter().position(|&o| o == cur).unwrap_or(2);
+                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                    self.config.tick_rate_ms = Some(options[next]);
+                    self.tick_rate_ms_live = options[next];
+                    self.tick_rate_changed = true;
+                }
+                _ => {}
+            }
             self.save_current_settings();
         }
     }
@@ -1947,7 +2161,7 @@ impl App {
         // 1. Modales prioritaires
         if self.modal != Modal::None {
             // Touche universelle 'q' pour fermer n'importe quelle modale (sauf Menu où 'q' quitte l'application)
-            if key.code == KeyCode::Char('q') && self.modal != Modal::Menu && !self.is_editing_setting {
+            if key.code == KeyCode::Char('q') && self.modal != Modal::Menu && !self.is_editing_setting && !self.is_editing_filter {
                 self.modal = Modal::None;
                 return Action::None;
             }
@@ -2069,50 +2283,57 @@ impl App {
                         KeyCode::Esc => {
                             self.modal = Modal::None;
                         }
+                        KeyCode::Tab | KeyCode::BackTab => {
+                            self.settings_tab = if self.settings_tab == 0 { 1 } else { 0 };
+                            self.settings_selected_idx = 0;
+                        }
+                        KeyCode::Char('1') => {
+                            if self.settings_tab != 0 {
+                                self.settings_tab = 0;
+                                self.settings_selected_idx = 0;
+                            }
+                        }
+                        KeyCode::Char('2') => {
+                            if self.settings_tab != 1 {
+                                self.settings_tab = 1;
+                                self.settings_selected_idx = 0;
+                            }
+                        }
                         KeyCode::Up | KeyCode::Char('k') => {
                             if self.settings_selected_idx > 0 {
                                 self.settings_selected_idx -= 1;
                             }
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
-                            if self.settings_selected_idx < SETTINGS_ITEMS_COUNT - 1 {
+                            let max_count = self.settings_items_count();
+                            if self.settings_selected_idx < max_count.saturating_sub(1) {
                                 self.settings_selected_idx += 1;
                             }
                         }
                         KeyCode::Enter => {
-                            if self.settings_selected_idx == 8 {
-                                return Action::OpenFullLogs;
-                            } else if self.settings_selected_idx == 7 {
-                                self.modal = Modal::ConfirmResync;
-                            } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
-                                self.is_editing_setting = true;
-                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
-                                    self.config.local_dir.clone()
+                            if self.settings_tab == 0 {
+                                if self.settings_selected_idx == 6 {
+                                    return Action::OpenFullLogs;
+                                } else if self.settings_selected_idx == 5 {
+                                    self.modal = Modal::ConfirmResync;
+                                } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
+                                    self.is_editing_setting = true;
+                                    self.setting_edit_buffer = if self.settings_selected_idx == 3 {
+                                        self.config.local_dir.clone()
+                                    } else {
+                                        self.config.remote.clone()
+                                    };
                                 } else {
-                                    self.config.remote.clone()
-                                };
+                                    self.cycle_setting(true);
+                                }
                             } else {
-                                self.save_current_settings();
+                                self.cycle_setting(true);
                             }
                         }
-                        KeyCode::Char('e') => {
-                            if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
+                        KeyCode::Char('e') | KeyCode::Char(' ') => {
+                            if self.settings_tab == 0 && (self.settings_selected_idx == 3 || self.settings_selected_idx == 4) {
                                 self.is_editing_setting = true;
-                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
-                                    self.config.local_dir.clone()
-                                } else {
-                                    self.config.remote.clone()
-                                };
-                            }
-                        }
-                        KeyCode::Right | KeyCode::Char('l') => {
-                            if self.settings_selected_idx == 8 {
-                                return Action::OpenFullLogs;
-                            } else if self.settings_selected_idx == 7 {
-                                self.modal = Modal::ConfirmResync;
-                            } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
-                                self.is_editing_setting = true;
-                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
+                                self.setting_edit_buffer = if self.settings_selected_idx == 3 {
                                     self.config.local_dir.clone()
                                 } else {
                                     self.config.remote.clone()
@@ -2121,18 +2342,42 @@ impl App {
                                 self.cycle_setting(true);
                             }
                         }
-                        KeyCode::Left | KeyCode::Char('h') => {
-                            if self.settings_selected_idx == 8 {
-                                return Action::OpenFullLogs;
-                            } else if self.settings_selected_idx == 7 {
-                                self.modal = Modal::ConfirmResync;
-                            } else if self.settings_selected_idx == 5 || self.settings_selected_idx == 6 {
-                                self.is_editing_setting = true;
-                                self.setting_edit_buffer = if self.settings_selected_idx == 5 {
-                                    self.config.local_dir.clone()
+                        KeyCode::Right | KeyCode::Char('l') => {
+                            if self.settings_tab == 0 {
+                                if self.settings_selected_idx == 6 {
+                                    return Action::OpenFullLogs;
+                                } else if self.settings_selected_idx == 5 {
+                                    self.modal = Modal::ConfirmResync;
+                                } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
+                                    self.is_editing_setting = true;
+                                    self.setting_edit_buffer = if self.settings_selected_idx == 3 {
+                                        self.config.local_dir.clone()
+                                    } else {
+                                        self.config.remote.clone()
+                                    };
                                 } else {
-                                    self.config.remote.clone()
-                                };
+                                    self.cycle_setting(true);
+                                }
+                            } else {
+                                self.cycle_setting(true);
+                            }
+                        }
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            if self.settings_tab == 0 {
+                                if self.settings_selected_idx == 6 {
+                                    return Action::OpenFullLogs;
+                                } else if self.settings_selected_idx == 5 {
+                                    self.modal = Modal::ConfirmResync;
+                                } else if self.settings_selected_idx == 3 || self.settings_selected_idx == 4 {
+                                    self.is_editing_setting = true;
+                                    self.setting_edit_buffer = if self.settings_selected_idx == 3 {
+                                        self.config.local_dir.clone()
+                                    } else {
+                                        self.config.remote.clone()
+                                    };
+                                } else {
+                                    self.cycle_setting(false);
+                                }
                             } else {
                                 self.cycle_setting(false);
                             }
@@ -2235,12 +2480,45 @@ impl App {
                     _ => {}
                 },
                 Modal::Filters => {
+                    if self.is_editing_filter {
+                        match key.code {
+                            KeyCode::Enter => {
+                                self.commit_filter_edit();
+                            }
+                            KeyCode::Esc => {
+                                self.cancel_filter_edit();
+                            }
+                            KeyCode::Backspace => {
+                                self.filter_edit_buffer.pop();
+                            }
+                            KeyCode::Char(c) => {
+                                self.filter_edit_buffer.push(c);
+                            }
+                            _ => {}
+                        }
+                        return Action::None;
+                    }
+
                     let vp = self.filter_viewport_height;
                     match key.code {
                         KeyCode::Esc | KeyCode::Char('q') => {
                             self.modal = Modal::None;
                         }
-                        KeyCode::Char('e') => {
+                        KeyCode::Enter | KeyCode::Char('e') => {
+                            self.start_editing_filter();
+                        }
+                        KeyCode::Char('a') | KeyCode::Char('+') => {
+                            self.start_adding_filter();
+                        }
+                        KeyCode::Char('d') | KeyCode::Delete => {
+                            self.delete_selected_filter();
+                        }
+                        KeyCode::Char('t') | KeyCode::Char(' ') => {
+                            if !self.filters.is_empty() && self.selected_filter_idx < self.filters.len() {
+                                self.cycle_filter_type(self.selected_filter_idx);
+                            }
+                        }
+                        KeyCode::Char('E') => {
                             return Action::OpenEditor;
                         }
                         KeyCode::Up | KeyCode::Char('k') => {
@@ -2963,7 +3241,8 @@ mod tests {
     #[tokio::test]
     async fn test_settings_never_cycle() {
         let mut app = App::new();
-        app.settings_selected_idx = 2; // full_sync_interval
+        app.settings_tab = 0;
+        app.settings_selected_idx = 1; // full_sync_interval
         app.config.full_sync_interval = "1440".to_string();
 
         // Cycling forward from 1440 must reach "never"
@@ -3122,7 +3401,8 @@ mod tests {
         assert_eq!(app.tick_rate_ms_live, 1000);
 
         // Cycle via settings
-        app.settings_selected_idx = 4; // Taux de rafraîchissement
+        app.settings_tab = 1;
+        app.settings_selected_idx = 5; // Taux de rafraîchissement UI
         app.cycle_setting(true);
         assert_eq!(app.tick_rate_ms_live, 1500);
         assert_eq!(app.config.tick_rate_ms, Some(1500));
@@ -3369,7 +3649,8 @@ mod tests {
     async fn test_settings_resync_modal_trigger() {
         let mut app = App::new();
         app.modal = Modal::Settings;
-        app.settings_selected_idx = 7; // Resynchronisation complète
+        app.settings_tab = 0;
+        app.settings_selected_idx = 5; // Resynchronisation complète
 
         // Appuyer sur Entrée doit ouvrir ConfirmResync
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -3381,7 +3662,8 @@ mod tests {
 
         // Rouvrir et tester avec Flèche Droite
         app.modal = Modal::Settings;
-        app.settings_selected_idx = 7;
+        app.settings_tab = 0;
+        app.settings_selected_idx = 5;
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::ConfirmResync);
     }
@@ -3490,7 +3772,8 @@ mod tests {
     async fn test_settings_interactive_string_edit() {
         let mut app = App::new();
         app.modal = Modal::Settings;
-        app.settings_selected_idx = 5; // Local directory
+        app.settings_tab = 0;
+        app.settings_selected_idx = 3; // Local directory
         app.config.local_dir = "/home/user/drive".to_string();
 
         // Appui sur Entrée pour entrer en mode édition
@@ -3521,8 +3804,9 @@ mod tests {
         assert!(!app.is_editing_setting);
         assert_eq!(app.config.local_dir, "/home/new/path");
 
-        // Test sur le remote (option 6) : par exemple "GoogleDrive:"
-        app.settings_selected_idx = 6;
+        // Test sur le remote (option 4) : par exemple "GoogleDrive:"
+        app.settings_tab = 0;
+        app.settings_selected_idx = 4;
         app.config.remote = "GoogleDrive:".to_string();
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)); // Flèche droite active l'édition
         assert!(app.is_editing_setting);
@@ -4004,14 +4288,238 @@ mod tests {
         });
         assert_eq!(app.log_filter, LogFilter::Problems);
 
-        // Setting 8 opens full logs
+        // Setting 6 opens full logs
         app.modal = Modal::Settings;
-        app.settings_selected_idx = 8;
+        app.settings_tab = 0;
+        app.settings_selected_idx = 6;
         let action = app.handle_key(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
         ));
         assert_eq!(action, Action::OpenFullLogs);
     }
+
+    #[tokio::test]
+    async fn test_new_appearance_and_layout_settings_cycle() {
+        let mut app = App::new();
+        app.settings_tab = 1;
+        app.config.container_layout = crate::config::ContainerLayout::Default;
+        app.config.mid_panel_order = crate::config::MidPanelOrder::HistoryLogs;
+        app.config.border_style = crate::config::BorderStyleChoice::Rounded;
+        app.config.graph_style = crate::config::GraphStyleChoice::Blocks;
+
+        // 1. ContainerLayout (idx 1)
+        app.settings_selected_idx = 1;
+        assert_eq!(app.config.container_layout, crate::config::ContainerLayout::Default);
+        app.cycle_setting(true);
+        assert_eq!(app.config.container_layout, crate::config::ContainerLayout::RecentFirst);
+        app.cycle_setting(false);
+        assert_eq!(app.config.container_layout, crate::config::ContainerLayout::Default);
+
+        // 2. MidPanelOrder (idx 2)
+        app.settings_selected_idx = 2;
+        assert_eq!(app.config.mid_panel_order, crate::config::MidPanelOrder::HistoryLogs);
+        app.cycle_setting(true);
+        assert_eq!(app.config.mid_panel_order, crate::config::MidPanelOrder::LogsHistory);
+        app.cycle_setting(true);
+        assert_eq!(app.config.mid_panel_order, crate::config::MidPanelOrder::HistoryLogs);
+
+        // 3. BorderStyle (idx 3)
+        app.settings_selected_idx = 3;
+        assert_eq!(app.config.border_style, crate::config::BorderStyleChoice::Rounded);
+        assert_eq!(app.border_type(), BorderType::Rounded);
+        app.cycle_setting(true);
+        assert_eq!(app.config.border_style, crate::config::BorderStyleChoice::Sharp);
+        assert_eq!(app.border_type(), BorderType::Plain);
+
+        // 4. GraphStyle (idx 4)
+        app.settings_selected_idx = 4;
+        assert_eq!(app.config.graph_style, crate::config::GraphStyleChoice::Blocks);
+        app.cycle_setting(true);
+        assert_eq!(app.config.graph_style, crate::config::GraphStyleChoice::Braille);
+        app.cycle_setting(true);
+        assert_eq!(app.config.graph_style, crate::config::GraphStyleChoice::Blocks);
+    }
+
+    #[tokio::test]
+    async fn test_settings_tab_switching() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        assert_eq!(app.settings_tab, 0);
+        assert_eq!(app.settings_selected_idx, 0);
+
+        // Press Tab to switch to Tab 1 (UI)
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.settings_tab, 1);
+        assert_eq!(app.settings_selected_idx, 0);
+
+        // Press Tab again to switch back to Tab 0 (Rclone)
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.settings_tab, 0);
+
+        // Direct switch with key '2'
+        app.handle_key(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
+        assert_eq!(app.settings_tab, 1);
+
+        // Direct switch with key '1'
+        app.handle_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert_eq!(app.settings_tab, 0);
+    }
+
+    #[tokio::test]
+    async fn test_filter_type_cycling() {
+        let mut app = App::new();
+        app.modal = Modal::Filters;
+        app.filters = vec![
+            "- /my_folder/**".to_string(),
+            "+ *.pdf".to_string(),
+            "# ignored comment".to_string(),
+        ];
+        app.selected_filter_idx = 0;
+
+        // '-' cycles to '#'
+        app.cycle_filter_type(0);
+        assert_eq!(app.filters[0], "# /my_folder/**");
+
+        // '#' cycles to raw rule
+        app.cycle_filter_type(0);
+        assert_eq!(app.filters[0], "/my_folder/**");
+
+        // raw rule cycles to '+'
+        app.cycle_filter_type(0);
+        assert_eq!(app.filters[0], "+ /my_folder/**");
+
+        // '+' cycles back to '-'
+        app.cycle_filter_type(0);
+        assert_eq!(app.filters[0], "- /my_folder/**");
+
+        // Test via key 't'
+        app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE));
+        assert_eq!(app.filters[0], "# /my_folder/**");
+
+        // Test via key ' ' (Space)
+        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert_eq!(app.filters[0], "/my_folder/**");
+    }
+
+    #[tokio::test]
+    async fn test_filter_inline_editing() {
+        let mut app = App::new();
+        app.modal = Modal::Filters;
+        app.filters = vec![
+            "- /test/**".to_string(),
+            "+ *.txt".to_string(),
+        ];
+        app.selected_filter_idx = 0;
+
+        // Press 'e' or Enter to start editing
+        app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+        assert!(app.is_editing_filter);
+        assert!(!app.is_adding_filter);
+        assert_eq!(app.filter_edit_buffer, "- /test/**");
+
+        // Type additional characters
+        app.handle_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert_eq!(app.filter_edit_buffer, "- /test/**1");
+
+        // Backspace
+        app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.filter_edit_buffer, "- /test/**");
+
+        // Commit with Enter
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!app.is_editing_filter);
+        assert_eq!(app.filters[0], "- /test/**");
+
+        // Start editing and cancel with Esc
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.is_editing_filter);
+        app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert_eq!(app.filter_edit_buffer, "- /test/**x");
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!app.is_editing_filter);
+        assert_eq!(app.filters[0], "- /test/**"); // Reverted!
+    }
+
+    #[tokio::test]
+    async fn test_filter_adding_and_deleting() {
+        let mut app = App::new();
+        app.modal = Modal::Filters;
+        app.filters = vec![
+            "- /old/**".to_string(),
+        ];
+        app.selected_filter_idx = 0;
+
+        // Press 'a' to add a new filter
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert!(app.is_editing_filter);
+        assert!(app.is_adding_filter);
+        assert_eq!(app.filter_edit_buffer, "- ");
+
+        // Type rule content
+        for c in "custom/**".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+        }
+        assert_eq!(app.filter_edit_buffer, "- custom/**");
+
+        // Commit with Enter
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!app.is_editing_filter);
+        assert_eq!(app.filters.len(), 2);
+        assert_eq!(app.filters[1], "- custom/**");
+        assert_eq!(app.selected_filter_idx, 1);
+
+        // Delete with 'd'
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(app.filters.len(), 1);
+        assert_eq!(app.filters[0], "- /old/**");
+        assert_eq!(app.selected_filter_idx, 0);
+    }
+
+    #[tokio::test]
+    async fn test_filter_mouse_actions() {
+        let mut app = App::new();
+        app.modal = Modal::Filters;
+        app.filters = vec![
+            "- /row0/**".to_string(),
+            "+ /row1/**".to_string(),
+        ];
+        app.selected_filter_idx = 0;
+
+        // HitAction::FilterAdd
+        app.hitboxes = vec![
+            Hitbox {
+                rect: ratatui::layout::Rect { x: 50, y: 10, width: 10, height: 1 },
+                action: HitAction::FilterAdd,
+            },
+        ];
+        app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 52,
+            row: 10,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        assert!(app.is_editing_filter);
+        assert!(app.is_adding_filter);
+
+        app.cancel_filter_edit();
+
+        // HitAction::FilterDelete
+        app.hitboxes = vec![
+            Hitbox {
+                rect: ratatui::layout::Rect { x: 50, y: 12, width: 10, height: 1 },
+                action: HitAction::FilterDelete(1),
+            },
+        ];
+        app.handle_mouse(crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 52,
+            row: 12,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        });
+        assert_eq!(app.filters.len(), 1);
+        assert_eq!(app.filters[0], "- /row0/**");
+    }
 }
+
 

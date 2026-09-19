@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -77,7 +77,7 @@ fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(app.border_type())
                 .border_style(Style::default().fg(theme.border))
                 .style(Style::default().bg(theme.card_bg))
                 .title(Span::styled(" Synchronization History ", Style::default().fg(theme.accent))),
@@ -111,7 +111,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
+                    .border_type(app.border_type())
                     .border_style(Style::default().fg(theme.border))
                     .style(Style::default().bg(theme.card_bg))
                     .title(" Run Details "),
@@ -238,19 +238,30 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = app.history_details_scroll.min(max_scroll);
 
+    let bg = app.border_glyphs();
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(theme.border_history))
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
-            Span::styled("┌🔍 run details", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(": #{} ({} {})┐", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
-            Span::styled("┌close: Esc, q┐", Style::default().fg(theme.text_muted)),
+            Span::styled(bg.top_left, Style::default().fg(theme.blue)),
+            Span::styled("run details", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(": #{} ({} {})", run.id, run.date, run.time), Style::default().fg(theme.text_muted)),
+            Span::styled(bg.top_right, Style::default().fg(theme.blue)),
         ]))
+        .title(
+            Line::from(vec![
+                Span::styled(bg.top_left, Style::default().fg(theme.blue)),
+                Span::styled("Esc, q", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+                Span::styled(" close", Style::default().fg(theme.text_bright)),
+                Span::styled(bg.top_right, Style::default().fg(theme.blue)),
+            ])
+            .alignment(Alignment::Right),
+        )
         .title_bottom(
             Line::from(vec![
-                Span::styled(format!("─ {}/{} ─", scroll + 1, total_lines.max(1)), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("{} {}/{} {}", bg.horizontal, scroll + 1, total_lines.max(1), bg.horizontal), Style::default().fg(theme.border_history).add_modifier(Modifier::BOLD)),
             ])
             .alignment(Alignment::Right),
         );

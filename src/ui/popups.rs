@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
 
@@ -57,7 +57,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
+                        .border_type(app.border_type())
                         .border_style(Style::default().fg(theme.accent))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Span::styled(" Synchronization ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
@@ -86,7 +86,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
+                        .border_type(app.border_type())
                         .border_style(Style::default().fg(theme.yellow))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Span::styled(" Dry-Run Simulation ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
@@ -117,7 +117,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
+                        .border_type(app.border_type())
                         .border_style(Style::default().fg(theme.yellow))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Span::styled(" Confirmation required ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
@@ -145,7 +145,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
+                        .border_type(app.border_type())
                         .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Span::styled(" Force Stop ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
@@ -173,7 +173,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
+                        .border_type(app.border_type())
                         .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Span::styled(" Deletion ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))),
@@ -256,25 +256,26 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             lines.push(Line::from(Span::styled("   For bug reporting and project updates, visit:", Style::default().fg(theme.text_muted))));
             lines.push(Line::from(Span::styled("   https://github.com/lucas-martinati/rcloneDash", Style::default().fg(theme.cyan).add_modifier(Modifier::UNDERLINED))));
 
+            let bg = app.border_glyphs();
             let p = Paragraph::new(lines)
                 .alignment(Alignment::Left)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
+                        .border_type(app.border_type())
                         .border_style(Style::default().fg(theme.red))
                         .style(Style::default().bg(theme.card_bg))
                         .title(Line::from(vec![
-                            Span::styled("┐", Style::default().fg(theme.red)),
+                            Span::styled(bg.top_left, Style::default().fg(theme.red)),
                             Span::styled("help", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                            Span::styled("┌", Style::default().fg(theme.red)),
+                            Span::styled(bg.top_right, Style::default().fg(theme.red)),
                         ]))
                         .title(
                             Line::from(vec![
-                                Span::styled("┐", Style::default().fg(theme.red)),
+                                Span::styled(bg.top_left, Style::default().fg(theme.red)),
                                 Span::styled("Esc, q", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                                 Span::styled(" close", Style::default().fg(theme.text_bright)),
-                                Span::styled("┌", Style::default().fg(theme.red)),
+                                Span::styled(bg.top_right, Style::default().fg(theme.red)),
                             ])
                             .alignment(Alignment::Right),
                         ),
@@ -313,7 +314,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
+                .border_type(app.border_type())
                 .border_style(Style::default().fg(theme.accent))
                 .style(Style::default().bg(theme.card_bg)),
         );
@@ -370,7 +371,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(app.border_type())
         .border_style(Style::default().fg(theme.cyan))
         .style(Style::default().bg(theme.card_bg))
         .title(Span::styled(format!(" 🛡 Dry-Run Simulation │ {} ", status_str), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));

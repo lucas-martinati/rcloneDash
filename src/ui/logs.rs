@@ -4,7 +4,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 
@@ -40,7 +40,7 @@ pub fn render_logs(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
     let p = Paragraph::new(lines).block(
         Block::default()
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
+            .border_type(app.border_type())
             .border_style(Style::default().fg(theme.border))
             .style(Style::default().bg(theme.card_bg))
             .title(Line::from(vec![

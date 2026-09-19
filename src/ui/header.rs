@@ -26,16 +26,17 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let mut line1_spans: Vec<Span> = Vec::new();
     let mut cur_x = area.x;
 
+    let bg = app.border_glyphs();
     // 1. Cadran Système sys (sans préfixe, pas de raccourci)
-    let sys_tab = if is_wide { "┌sys┐" } else { "┌s┐" };
-    line1_spans.push(Span::styled("┌", Style::default().fg(theme.border_sys)));
+    let sys_tab = if is_wide { " sys " } else { " s " };
+    line1_spans.push(Span::styled(bg.top_left, Style::default().fg(theme.border_sys)));
     if is_wide {
         line1_spans.push(Span::styled("sys", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)));
     } else {
         line1_spans.push(Span::styled("s", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)));
     }
-    line1_spans.push(Span::styled("┐", Style::default().fg(theme.border_sys)));
-    cur_x += sys_tab.chars().count() as u16;
+    line1_spans.push(Span::styled(bg.top_right, Style::default().fg(theme.border_sys)));
+    cur_x += sys_tab.chars().count() as u16 + 2;
 
     // Horloge digitale centrale & Stepper tick rate à droite
     let clock_str = chrono::Local::now().format("%H:%M:%S").to_string();
@@ -44,7 +45,6 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     let tick_ms = app.tick_rate_ms_live;
     let tick_str = format!("{}ms", tick_ms);
-    // Format: ┌- 2000ms +┐
     let tick_widget_len = (tick_str.chars().count() + 6) as u16;
 
     let right_start_x = area.x + area.width.saturating_sub(tick_widget_len);
@@ -54,14 +54,14 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         let left_pad = (total_gap.saturating_sub(clock_len)) / 2;
         let right_pad = total_gap.saturating_sub(clock_len).saturating_sub(left_pad);
 
-        line1_spans.push(Span::styled("─".repeat(left_pad as usize), Style::default().fg(theme.border)));
-        line1_spans.push(Span::styled(format!("─ {} ─", clock_str), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
-        line1_spans.push(Span::styled("─".repeat(right_pad as usize), Style::default().fg(theme.border)));
+        line1_spans.push(Span::styled(bg.horizontal.repeat(left_pad as usize), Style::default().fg(theme.border)));
+        line1_spans.push(Span::styled(format!("{} {} {}", bg.horizontal, clock_str, bg.horizontal), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+        line1_spans.push(Span::styled(bg.horizontal.repeat(right_pad as usize), Style::default().fg(theme.border)));
     } else if right_start_x > cur_x {
-        line1_spans.push(Span::styled("─".repeat((right_start_x - cur_x) as usize), Style::default().fg(theme.border)));
+        line1_spans.push(Span::styled(bg.horizontal.repeat((right_start_x - cur_x) as usize), Style::default().fg(theme.border)));
     }
 
-    // Tick rate widget: ┌- 250ms +┐
+    // Tick rate widget stepper
     hitboxes.push(Hitbox {
         rect: Rect { x: right_start_x, y: area.y, width: 3, height: 1 },
         action: HitAction::TickRateDec,
@@ -71,13 +71,13 @@ pub fn render_header(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         action: HitAction::TickRateInc,
     });
 
-    line1_spans.push(Span::styled("┌", Style::default().fg(theme.border)));
+    line1_spans.push(Span::styled(bg.top_left, Style::default().fg(theme.border)));
     line1_spans.push(Span::styled("-", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     line1_spans.push(Span::styled(" ", Style::default().fg(theme.border)));
     line1_spans.push(Span::styled(tick_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
     line1_spans.push(Span::styled(" ", Style::default().fg(theme.border)));
     line1_spans.push(Span::styled("+", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
-    line1_spans.push(Span::styled("┐", Style::default().fg(theme.border)));
+    line1_spans.push(Span::styled(bg.top_right, Style::default().fg(theme.border)));
 
     let line1_p = Paragraph::new(Line::from(line1_spans));
     f.render_widget(line1_p, Rect { x: area.x, y: area.y, width: area.width, height: 1 });

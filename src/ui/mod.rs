@@ -58,38 +58,16 @@ pub fn render(f: &mut Frame, app: &mut App) {
     app.filter_viewport_height = filter_vh.max(3);
 
     let dash_area = chunks[0];
-    let show_alert = !app.active_alerts().is_empty();
-    let show_active_sync = app.is_syncing();
+    let dash_layout = dashboard::compute_dashboard_layout(dash_area, app);
 
-    let mut dash_constraints = Vec::new();
-    dash_constraints.push(Constraint::Length(6)); // Stockage & Métriques
-    if show_alert {
-        dash_constraints.push(Constraint::Length(3));
-    }
-    if show_active_sync {
-        dash_constraints.push(Constraint::Length(7)); // Synchronisation en cours
-    }
-    dash_constraints.push(Constraint::Percentage(55)); // Historique + Logs
-    dash_constraints.push(Constraint::Min(6)); // Fichiers récents
-
-    let dash_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(dash_constraints)
-        .split(dash_area);
-
-    let mid_idx = dash_chunks.len() - 2;
-    let bot_idx = dash_chunks.len() - 1;
-    let mid_area = dash_chunks[mid_idx];
-    let bot_area = dash_chunks[bot_idx];
-
-    let graph_height = if mid_area.height >= 20 { 4 } else if mid_area.height >= 16 { 3 } else { 2 };
-    let hist_table_height = (mid_area.height.saturating_sub(2 + graph_height)).saturating_sub(2) as usize;
+    let graph_height = if dash_layout.history_area.height >= 20 { 4 } else if dash_layout.history_area.height >= 16 { 3 } else { 2 };
+    let hist_table_height = (dash_layout.history_area.height.saturating_sub(2 + graph_height)).saturating_sub(2) as usize;
     app.history_viewport_height = hist_table_height.max(2);
-    app.logs_viewport_height = mid_area.height.saturating_sub(2) as usize;
-    let logs_width = ((mid_area.width / 2).saturating_sub(3) as usize).max(20);
+    app.logs_viewport_height = dash_layout.logs_area.height.saturating_sub(2) as usize;
+    let logs_width = (dash_layout.logs_area.width.saturating_sub(3) as usize).max(20);
     app.logs_total_wrapped = dashboard::count_wrapped_log_lines(&app.live.log_lines, app.log_filter, logs_width);
 
-    let recent_table_height = bot_area.height.saturating_sub(3) as usize;
+    let recent_table_height = dash_layout.recent_area.height.saturating_sub(3) as usize;
     app.recent_viewport_height = recent_table_height.max(1);
 
     // 1. Dashboard centralisé (KPIs, Metrics, Historique + Graphe, Logs live, Fichiers récents)
