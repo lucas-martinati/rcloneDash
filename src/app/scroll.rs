@@ -33,7 +33,7 @@ impl App {
         let vp = viewport_height.max(1);
         let max_offset = total.saturating_sub(vp);
 
-        // Ajuste la sélection si elle était hors du champ visible
+        // Adjust selection if it was outside the visible viewport
         if *selected_idx < *scroll_offset {
             *selected_idx = *scroll_offset;
         } else if *selected_idx >= *scroll_offset + vp {
@@ -439,10 +439,10 @@ impl App {
 
         let click_offset = (row.saturating_sub(top_y) as usize).min((track_height.saturating_sub(1)) as usize);
         if click_offset >= geom.thumb_start && click_offset < geom.thumb_start + geom.thumb_size {
-            // Clic directement sur le curseur : on préserve l'offset exact de la prise sous la souris
+            // Click directly on thumb: preserve exact grab offset under cursor
             (click_offset - geom.thumb_start) as u16
         } else {
-            // Clic sur la piste : on centre le curseur sur le point cliqué
+            // Click on track: center thumb on clicked position
             (geom.thumb_size / 2) as u16
         }
     }

@@ -28,31 +28,31 @@ use footer::render_footer;
 use popups::render_popups;
 
 pub fn render(f: &mut Frame, app: &mut App) {
-    // Réinitialiser les hitboxes pour cette frame
+    // Reset hitboxes for this frame
     let mut hitboxes = std::mem::take(&mut app.hit_mgr.dashboard);
     hitboxes.clear();
 
     let theme = app.current_theme.palette();
 
-    // Quand le menu, les réglages ou l'aide sont ouverts, tout le dashboard d'arrière-plan devient noir et blanc / monochrome
+    // When menu, settings, or help modal is open, the background dashboard becomes grayscale / monochrome
     let dashboard_theme = if matches!(app.modal, crate::app::Modal::Menu | crate::app::Modal::Settings | crate::app::Modal::Help) {
         theme.to_grayscale()
     } else {
         theme.clone()
     };
 
-    // Fond global sombre
+    // Dark global background
     f.render_widget(Block::default().style(Style::default().bg(dashboard_theme.bg_main)), f.area());
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(14),   // 1. Tableau de bord centralisé Tout-en-Un
-            Constraint::Length(1), // 2. Pied de page raccourcis
+            Constraint::Min(14),   // 1. All-in-One centralized dashboard
+            Constraint::Length(1), // 2. Shortcuts footer
         ])
         .split(f.area());
 
-    // Calcul dynamique précis des hauteurs de viewport pour navigation et scroll fluide
+    // Accurate dynamic calculation of viewport heights for smooth navigation and scrolling
     let total_h = f.area().height as usize;
     let file_vh = ((total_h * 75) / 100).saturating_sub(5);
     app.file_viewport_height = file_vh.max(3);
@@ -73,13 +73,13 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let recent_table_height = dash_layout.recent_area.height.saturating_sub(3) as usize;
     app.recent_viewport_height = recent_table_height.max(1);
 
-    // 1. Dashboard centralisé (KPIs, Metrics, Historique + Graphe, Logs live, Fichiers récents)
+    // 1. Centralized dashboard (KPIs, Metrics, History + Graph, Live Logs, Recent Files)
     render_dashboard(f, app, &dashboard_theme, chunks[0], &mut hitboxes);
 
-    // 2. Pied de page
+    // 2. Footer
     render_footer(f, app, &dashboard_theme, chunks[1], &mut hitboxes);
 
-    // 4. Modales overlay (Settings, Fichiers, Filtres, Confirmations)
+    // 4. Modal overlays (Settings, Files, Filters, Confirmations)
     let mut modal_hitboxes = Vec::with_capacity(32);
     render_popups(f, app, &theme, &mut modal_hitboxes);
 
@@ -88,7 +88,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     app.hit_mgr.dashboard = hitboxes;
 }
 
-/// Rendu d'une scrollbar personnalisée avec coordonnées explicites de colonne et de bornes verticales
+/// Custom scrollbar rendering with explicit column coordinates and vertical bounds
 pub fn render_scrollbar_custom(
     f: &mut Frame,
     scroll_x: u16,
@@ -107,14 +107,14 @@ pub fn render_scrollbar_custom(
     let track_height = (bot_y - top_y - 1) as usize;
     let buf = f.buffer_mut();
 
-    // Flèche haut
+    // Up arrow
     buf.set_string(scroll_x, top_y, "↑", Style::default().fg(theme.text_muted));
     hitboxes.push(crate::app::Hitbox {
         rect: Rect { x: scroll_x, y: top_y, width: 1, height: 1 },
         action: crate::app::HitAction::ScrollbarArrowUp(target),
     });
 
-    // Flèche bas
+    // Down arrow
     buf.set_string(scroll_x, bot_y, "↓", Style::default().fg(theme.text_muted));
     hitboxes.push(crate::app::Hitbox {
         rect: Rect { x: scroll_x, y: bot_y, width: 1, height: 1 },
@@ -125,12 +125,12 @@ pub fn render_scrollbar_custom(
         return;
     }
 
-    // Effacer la colonne de piste entre les flèches
+    // Clear the track column between arrows
     for y in (top_y + 1)..bot_y {
         buf.set_string(scroll_x, y, " ", Style::default());
     }
 
-    // Hitbox pour toute la piste (clic ou drag)
+    // Hitbox for the entire track (click or drag)
     hitboxes.push(crate::app::Hitbox {
         rect: Rect {
             x: scroll_x,
@@ -147,7 +147,7 @@ pub fn render_scrollbar_custom(
         },
     });
 
-    // Calcul unifié de la géométrie du curseur
+    // Unified thumb geometry calculation
     let geom = scrollbar::ScrollbarGeometry::compute(total, visible, track_height, pos);
 
     let thumb_style = Style::default().fg(ratatui::style::Color::Rgb(200, 205, 215));
@@ -159,8 +159,8 @@ pub fn render_scrollbar_custom(
     }
 }
 
-/// Scrollbar intégrée dans les conteneurs avec bordure standard
-/// Dessinée directement dans la colonne droite intérieure (x = area.x + area.width - 2)
+/// Scrollbar integrated into standard bordered containers
+/// Drawn directly in the inner right column (x = area.x + area.width - 2)
 pub fn render_scrollbar(
     f: &mut Frame,
     area: ratatui::layout::Rect,
@@ -180,8 +180,8 @@ pub fn render_scrollbar(
     render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
 }
 
-/// Scrollbar intégrée dans un sous-panneau intérieur (sans bordure propre, e.g. volet gauche de filtres ou explorer)
-/// Dessinée à l'extrême droite du panneau (x = pane.x + pane.width - 1) sur toute sa hauteur (top_y = pane.y, bot_y = pane.y + pane.height - 1)
+/// Scrollbar integrated into an inner pane (without own border, e.g. left pane in filters or explorer)
+/// Drawn at the far right of the pane (x = pane.x + pane.width - 1) across its full height (top_y = pane.y, bot_y = pane.y + pane.height - 1)
 pub fn render_scrollbar_pane(
     f: &mut Frame,
     pane: ratatui::layout::Rect,

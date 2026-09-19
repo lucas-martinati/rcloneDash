@@ -14,7 +14,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let screen = f.area();
     let is_wide = screen.width >= 88;
     let logo_h: u16 = if is_wide { 6 } else { 5 };
-    // Le logo n'est affiché que si la hauteur d'écran permet de conserver la modale complète
+    // Logo is only displayed if screen height allows the full modal to fit
     let show_logo = screen.height >= 35;
     let box_w = if screen.width >= 96 {
         88.min(screen.width.saturating_sub(4))
@@ -24,13 +24,13 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         76.min(screen.width.saturating_sub(2))
     };
 
-    // Calcul automatique et dynamique de la hauteur pour garantir que rien ne déborde
+    // Dynamic height calculation to prevent any overflow
     let max_avail_h = if show_logo {
         screen.height.saturating_sub(logo_h + 3)
     } else {
         screen.height.saturating_sub(2)
     };
-    // 26 lignes nécessaires et suffisantes pour afficher toutes les options et descriptions sans coupure
+    // 26 lines necessary and sufficient to display all options and descriptions without cutoff
     let box_h = 26u16.min(max_avail_h).max(18);
 
     let total_h = if show_logo { logo_h + 1 + box_h } else { box_h };
@@ -141,7 +141,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         hitboxes,
     );
 
-    // Hitbox for "Tab ⇆" (après "settings ┐┌" -> area.x + 12)
+    // Hitbox for "Tab ⇆" (after "settings ┐┌" -> area.x + 12)
     hitboxes.push(Hitbox {
         rect: Rect {
             x: area.x + 12,
@@ -176,7 +176,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         return;
     }
 
-    // Découpage horizontal direct pour les deux colonnes
+    // Direct horizontal split for the two columns
     let left_col_w = 30u16.min(inner.width.saturating_sub(20));
     let cols = Layout::default()
         .direction(Direction::Horizontal)
@@ -191,7 +191,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let sep_area = cols[1];
     let right_area = cols[2];
 
-    // Séparateur vertical
+    // Vertical separator
     let sep_lines: Vec<Line> = (0..inner.height)
         .map(|_| Line::from(Span::styled("│", Style::default().fg(theme.border))))
         .collect();
@@ -199,7 +199,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     use crate::config::SettingId;
 
-    // Données des réglages selon l'onglet actif
+    // Settings data based on active tab
     let full_sync_display = config::full_sync_label(&app.config.full_sync_interval).to_string();
 
     let settings: Vec<(&str, String)> = if app.settings_tab == 0 {
@@ -223,9 +223,9 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         ]
     };
 
-    // Rendu de la colonne gauche avec défilement fluide
+    // Render left column with smooth scrolling
     let mut left_lines = Vec::new();
-    let row_height: u16 = 2; // 1 ligne label + 1 ligne valeur
+    let row_height: u16 = 2; // 1 label line + 1 value line
     let visible_count = (left_area.height as usize / row_height as usize).max(1);
     let scroll_offset = if app.settings_selected_idx >= visible_count {
         app.settings_selected_idx - visible_count + 1
@@ -238,7 +238,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         let is_selected = i == app.settings_selected_idx;
         let item_y = left_area.y + (visible_pos as u16 * row_height);
 
-        // Hitbox de sélection de la ligne entière
+        // Hitbox for selecting the entire row
         hitboxes.push(Hitbox {
             rect: Rect {
                 x: left_area.x,
@@ -249,7 +249,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             action: HitAction::SettingOption(i),
         });
 
-        // Hitboxes pour les flèches ← et →
+        // Hitboxes for ← and → arrows
         let arrow_y = item_y + 1;
         hitboxes.push(Hitbox {
             rect: Rect { x: left_area.x, y: arrow_y, width: 4, height: 1 },
@@ -263,7 +263,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         let w = left_area.width as usize;
 
         if is_selected {
-            // Bandeau de fond coloré (brun/rouge profond #5A2222)
+            // Highlight background banner (deep red/brown #5A2222)
             let highlight_bg = Color::Rgb(90, 32, 32);
 
             let line1 = Line::from(vec![
@@ -318,7 +318,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let left_p = Paragraph::new(left_lines);
     f.render_widget(left_p, left_area);
 
-    // Rendu de la colonne droite : Panneau de description
+    // Render right column: Description panel
     use crate::ui::keys::{KeyAction, KeybindingRegistry};
     let k_files = KeybindingRegistry::get_key_str(KeyAction::Files);
     let k_dec = KeybindingRegistry::get_key_str(KeyAction::DecTickRate);
@@ -327,7 +327,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let k_esc = KeybindingRegistry::get_key_str(KeyAction::CancelEdit);
 
     let (desc_title, desc_body): (&str, String) = match SettingId::from_tab_and_idx(app.settings_tab, app.settings_selected_idx) {
-        // --- Catégorie 0 : Rclone ---
+        // --- Category 0: Rclone ---
         Some(SettingId::TimerInterval) => {
             let choices = SettingId::TimerInterval.choices().unwrap();
             (
@@ -396,7 +396,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             ),
         ),
 
-        // --- Catégorie 1 : UI & Apparence ---
+        // --- Category 1: UI & Appearance ---
         Some(SettingId::ColorTheme) => {
             let choices = SettingId::ColorTheme.choices().unwrap();
             let current = app.current_theme.name();
@@ -513,7 +513,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         }
     }
 
-    // Défilement automatique intelligent si la hauteur d'affichage est très restreinte
+    // Smart auto-scroll if display height is heavily constrained
     let scroll_y = if desc_lines.len() > desc_inner.height as usize {
         let active_line_idx = desc_lines.iter().position(|l| {
             l.spans.iter().any(|s| s.content.contains('▶') || s.content.contains("(active)"))
@@ -533,7 +533,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     f.render_widget(right_p, desc_inner);
 }
 
-/// Parse et stylise une ligne d'options (1 ou plusieurs colonnes) avec préservation des alignements et couleurs
+/// Parses and styles an options line (1 or multiple columns) preserving alignment and colors.
 fn parse_option_line(line: &str, theme: &ThemePalette) -> Line<'static> {
     let mut spans = Vec::new();
     let mut rem = line;
@@ -555,7 +555,7 @@ fn parse_option_line(line: &str, theme: &ThemePalette) -> Line<'static> {
 
             rem = &rem[pos + bullet_len..];
 
-            // Fin de cet élément au prochain indicateur de puce ou fin de chaîne
+            // End of this item at next bullet indicator or end of string
             let next_bullet = rem.find(|c| c == '▶' || c == '•').unwrap_or(rem.len());
             let item_part = &rem[..next_bullet];
             rem = &rem[next_bullet..];

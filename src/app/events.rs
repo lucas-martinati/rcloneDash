@@ -14,7 +14,7 @@ impl App {
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Action {
         match mouse.kind {
             MouseEventKind::ScrollDown => {
-                // 1. Si une modale est active : le scroll est confiné à celle-ci et aligné
+                // 1. If a modal is active: scroll is confined to it and aligned
                 if self.modal != Modal::None {
                     match self.modal {
                         Modal::Filters => {
@@ -46,7 +46,7 @@ impl App {
                     return Action::None;
                 }
 
-                // 2. Mode dashboard : scroll sur le conteneur sous la souris
+                // 2. Dashboard mode: scroll on container under cursor
                 let col = mouse.column;
                 let row = mouse.row;
                 let mut handled = false;
@@ -89,7 +89,7 @@ impl App {
                 }
             }
             MouseEventKind::ScrollUp => {
-                // 1. Si une modale est active : le scroll est confiné à celle-ci et aligné
+                // 1. If a modal is active: scroll is confined to it and aligned
                 if self.modal != Modal::None {
                     match self.modal {
                         Modal::Filters => {
@@ -116,7 +116,7 @@ impl App {
                     return Action::None;
                 }
 
-                // 2. Mode dashboard : scroll sur le conteneur sous la souris
+                // 2. Dashboard mode: scroll on container under cursor
                 let col = mouse.column;
                 let row = mouse.row;
                 let mut handled = false;
@@ -166,7 +166,7 @@ impl App {
                 let row = mouse.row;
                 let is_ctrl = self.ctrl_mode || mouse.modifiers.contains(KeyModifiers::CONTROL);
 
-                // 1. Si une modale est ouverte : gestion unifiée du clic extérieur (click-outside)
+                // 1. If a modal is open: unified click-outside handling
                 if self.modal != Modal::None {
                     if let Some(modal_rect) = self.hit_mgr.active_modal_area {
                         let inside = col >= modal_rect.x
@@ -175,7 +175,7 @@ impl App {
                             && row < modal_rect.y + modal_rect.height;
 
                         if !inside {
-                            // Clic en dehors du panel actif : fermer la modale
+                            // Click outside active panel: close modal
                             self.dismiss_active_modal();
                             return Action::None;
                         }
@@ -189,11 +189,11 @@ impl App {
                             return self.execute_hit_action(hb.action, is_ctrl, row);
                         }
                     }
-                    // Clic à l'intérieur mais sans hitbox : absorber sans fuite
+                    // Click inside modal but not on a hitbox: absorb without leaking
                     return Action::None;
                 }
 
-                // 2. Mode dashboard standard (aucune modale active)
+                // 2. Standard dashboard mode (no active modal)
                 for hb in self.hit_mgr.dashboard.iter().rev() {
                     if hb.rect.x <= col && col < hb.rect.x + hb.rect.width
                         && hb.rect.y <= row && row < hb.rect.y + hb.rect.height
@@ -493,7 +493,7 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> Action {
-        // Raccourci universel Ctrl+X pour basculer le mode dossier parent
+        // Universal shortcut Ctrl+X to toggle parent directory mode
         if is_ctrl_x(&key) {
             self.ctrl_mode = !self.ctrl_mode;
             if self.ctrl_mode {
@@ -504,7 +504,7 @@ impl App {
             return Action::None;
         }
 
-        // Saisie en cours pour le filtre des fichiers récents
+        // Text input active for recent files filter
         if self.is_filtering_recent && self.modal == Modal::None {
             match key.code {
                 KeyCode::Esc => {
@@ -534,9 +534,9 @@ impl App {
             }
         }
 
-        // 1. Modales prioritaires
+        // 1. Priority modals
         if self.modal != Modal::None {
-            // Touche universelle 'q' pour fermer n'importe quelle modale (sauf Menu où 'q' quitte l'application)
+            // Universal 'q' key to close any modal (except Menu where 'q' quits the application)
             if key.code == KeyCode::Char('q') && self.modal != Modal::Menu && self.edit_state == EditState::Idle {
                 self.modal = Modal::None;
                 return Action::None;
@@ -1022,10 +1022,10 @@ impl App {
             return Action::None;
         }
 
-        // 2. Raccourcis globaux du Dashboard
+        // 2. Global Dashboard shortcuts
         match key.code {
-            // Entrée sur l'historique : ouvrir les détails du run sélectionné
-            // Entrée sur les fichiers récents : ouvrir le fichier ou le dossier (avec Ctrl)
+            // Enter on history: open selected run details
+            // Enter on recent files: open file or folder (with Ctrl)
             KeyCode::Enter => {
                 match self.focused_panel {
                     FocusedPanel::History => {
@@ -1057,7 +1057,7 @@ impl App {
                     _ => {}
                 }
             }
-            // Esc ou m ouvre le menu principal quand aucune modale n'est ouverte
+            // Esc or m opens main menu when no modal is open
             KeyCode::Esc | KeyCode::Char('m') => {
                 self.menu_selected_idx = 0;
                 self.modal = Modal::Menu;
@@ -1172,7 +1172,7 @@ impl App {
                 }
                 return Action::None;
             }
-            // Tab / Shift+Tab : changer de panel actif
+            // Tab / Shift+Tab: cycle active panel
             KeyCode::Tab => {
                 self.focused_panel = if key.modifiers.contains(KeyModifiers::SHIFT) {
                     self.focused_panel.prev()
@@ -1185,16 +1185,16 @@ impl App {
                 self.focused_panel = self.focused_panel.prev();
                 return Action::None;
             }
-            // +/- : tick rate dynamique (- accélère, + ralentit)
+            // +/- : dynamic tick rate (- speeds up, + slows down)
             KeyCode::Char('+') | KeyCode::Char('=') => {
-                self.step_tick_rate(false); // ralentit
+                self.step_tick_rate(false); // slows down
                 return Action::None;
             }
             KeyCode::Char('-') | KeyCode::Char('_') => {
-                self.step_tick_rate(true); // accélère
+                self.step_tick_rate(true); // speeds up
                 return Action::None;
             }
-            // Navigation dirigée par le panel actif
+            // Navigation directed by the active panel
             KeyCode::Up | KeyCode::Char('k') => {
                 match self.focused_panel {
                     FocusedPanel::History => {

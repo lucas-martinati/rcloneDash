@@ -24,7 +24,7 @@ impl Default for ServiceInfo {
     fn default() -> Self {
         Self {
             state: ServiceState::Unknown,
-            active_substate: "inconnu".to_string(),
+            active_substate: "unknown".to_string(),
             timer_next: "--".to_string(),
             timer_left: "--".to_string(),
             cloud_safety_net: "--".to_string(),
@@ -35,7 +35,7 @@ impl Default for ServiceInfo {
 pub fn get_service_info() -> ServiceInfo {
     let mut info = ServiceInfo::default();
 
-    // 1. Statut du service
+    // 1. Service status
     let output = Command::new("systemctl")
         .args(["--user", "is-active", "rclone-bisync.service"])
         .output();
@@ -62,7 +62,7 @@ pub fn get_service_info() -> ServiceInfo {
         }
     }
 
-    // 2. Statut du timer
+    // 2. Timer status
     let timer_out = Command::new("systemctl")
         .args(["--user", "list-timers", "--no-legend", "-l", "rclone-bisync.timer"])
         .output();
@@ -82,8 +82,8 @@ pub fn get_service_info() -> ServiceInfo {
             };
 
             if parts.is_empty() || parts[0] == "-" || parts[0] == "n/a" {
-                // Le timer est inactif ou en attente d'inactivité du service
-                // On cherche l'heure de la dernière exécution dans la ligne (ex: "Fri 2026-09-18 08:08:58 CEST")
+                // Timer is inactive or waiting for service inactivity
+                // Look for last execution time in the output line (e.g. "Fri 2026-09-18 08:08:58 CEST")
                 let last_time_opt = parts.iter().find(|p| p.contains(':') && p.len() >= 5);
                 if let Some(lt) = last_time_opt {
                     if let Ok(last_chrono) = chrono::NaiveTime::parse_from_str(lt, "%H:%M:%S") {
@@ -111,7 +111,7 @@ pub fn get_service_info() -> ServiceInfo {
                     info.timer_left = format!("in ~{}", cfg_interval);
                 }
             } else {
-                // Date/Heure programmée présente dans parts
+                // Scheduled date/time present in parts
                 // Format: Day Date Time Timezone ...
                 let next_time = if parts.len() >= 3 && parts[2].contains(':') {
                     parts[2]
@@ -122,7 +122,7 @@ pub fn get_service_info() -> ServiceInfo {
                 };
                 info.timer_next = next_time.to_string();
 
-                // Recherche du décompte (ex: "9min left" ou "374ms")
+                // Search for countdown (e.g. "9min left" or "374ms")
                 if let Some(left_idx) = parts.iter().position(|&w| w == "left") {
                     if left_idx > 0 {
                         info.timer_left = parts[left_idx - 1].to_string();
@@ -139,7 +139,7 @@ pub fn get_service_info() -> ServiceInfo {
         }
     }
 
-    // 3. Filet de sécurité Cloud (sync complet périodique)
+    // 3. Cloud safety net (periodic full sync)
     let cfg = config::load_config();
     if cfg.full_sync_interval == "never" {
         info.cloud_safety_net = "Disabled".to_string();

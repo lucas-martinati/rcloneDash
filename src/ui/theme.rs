@@ -240,13 +240,13 @@ pub struct ThemePalette {
 }
 
 impl ThemePalette {
-    /// Convertit l'ensemble des couleurs en nuances de gris (monochrome)
+    /// Converts all palette colors to grayscale (monochrome).
     pub fn to_grayscale(&self) -> ThemePalette {
         let to_gray = |c: Color| -> Color {
             match c {
                 Color::Rgb(r, g, b) => {
                     let lum = ((r as u32 * 299 + g as u32 * 587 + b as u32 * 114) / 1000) as u8;
-                    // Léger assombrissement (85%) pour faire ressortir les modales et le menu coloré
+                    // Slight dimming (85%) to make colored modals and menus stand out
                     let dim = ((lum as u32 * 85) / 100) as u8;
                     Color::Rgb(dim, dim, dim)
                 }

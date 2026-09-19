@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
-/// Exécute l'ouverture d'un chemin de fichier ou dossier via l'explorateur du système (xdg-open / gio)
+/// Opens a file or folder path using the system desktop opener (xdg-open / gio).
 pub fn open_path(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("Path does not exist: {:?}", path));
@@ -17,7 +17,7 @@ pub fn open_path(path: &Path) -> Result<(), String> {
     match res {
         Ok(_) => Ok(()),
         Err(_) => {
-            // Repli vers gio open si xdg-open échoue
+            // Fallback to gio open if xdg-open fails
             Command::new("gio")
                 .args(["open", path.to_str().unwrap_or("")])
                 .stdin(std::process::Stdio::null())
@@ -30,13 +30,13 @@ pub fn open_path(path: &Path) -> Result<(), String> {
     }
 }
 
-/// Ouvre un fichier dans l'éditeur configuré ($EDITOR ou nano)
+/// Opens a file in the configured system editor ($EDITOR or nano).
 pub fn open_in_editor(file_path: &Path) -> std::io::Result<std::process::ExitStatus> {
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
     Command::new(&editor).arg(file_path).status()
 }
 
-/// Affiche un fichier de log dans le visualiseur de logs ($PAGER ou less)
+/// Displays a log file in the configured pager viewer ($PAGER or less).
 pub fn open_in_pager(log_path: &Path) -> std::io::Result<std::process::ExitStatus> {
     let pager = std::env::var("PAGER")
         .or_else(|_| std::env::var("EDITOR"))

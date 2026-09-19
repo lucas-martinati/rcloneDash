@@ -29,7 +29,7 @@ use app::App;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Gestion des options de ligne de commande (avant d'initialiser le mode TUI / terminal brut)
+    // Handle command-line arguments (before initializing TUI / raw mode)
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
         match args[1].as_str() {
@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // 1. Hook de panic pour restaurer le terminal et la souris en cas d'erreur
+    // 1. Panic hook to cleanly restore terminal and mouse capture on crash
     let default_panic_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
         let _ = disable_raw_mode();
@@ -108,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         default_panic_hook(panic_info);
     }));
 
-    // 2. Initialisation du terminal avec capture souris et clavier enrichi
+    // 2. Initialize terminal with mouse capture and enhanced keyboard protocol
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     let _ = execute!(
@@ -124,19 +124,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    // 3. Initialisation de l'application
+    // 3. Initialize application state
     let mut app = App::new();
 
-    // 4. Flux d'événements asynchrones
+    // 4. Async event streams and intervals
     let mut reader = EventStream::new();
     let tick_ms = app.config.tick_rate_ms.unwrap_or(250);
     let mut data_interval = interval(Duration::from_millis(tick_ms));
     let mut ui_interval = interval(Duration::from_millis(50));
 
-    // Premier rendu immédiat
+    // Initial immediate render
     terminal.draw(|f| ui::render(f, &mut app))?;
 
-    // 5. Boucle d'événements (clavier + souris + ticks)
+    // 5. Main event loop (keyboard + mouse + timer ticks)
     while app.running {
         tokio::select! {
             _ = data_interval.tick() => {
@@ -152,8 +152,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(Ok(event)) = maybe_event {
                     let mut needs_draw = handle_single_event(event, &mut app, &mut terminal)?;
 
-                    // Évite l'engorgement lors de défilements rapides (molette souris / trackpad)
-                    // Draine tous les événements déjà disponibles dans le tampon sans écraser le waker Tokio
+                    // Prevent backlog during fast mouse wheel / trackpad scrolling
+                    // Drain all immediately available events in the buffer without overwriting the Tokio waker
                     while let Ok(Some(Ok(buffered_event))) = tokio::time::timeout(Duration::ZERO, reader.next()).await {
                         if handle_single_event(buffered_event, &mut app, &mut terminal)? {
                             needs_draw = true;
@@ -172,7 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // 6. Restauration propre et silencieuse du terminal
+    // 6. Clean and silent terminal restoration
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -194,7 +194,7 @@ fn open_full_logs(
     terminal.show_cursor()?;
 
     let log_path = "/tmp/rclone-bisync-full.log";
-    // Récupérer les logs complets via journalctl si possible
+    // Retrieve complete logs via journalctl if possible
     let output = std::process::Command::new("journalctl")
         .args(["--user", "-u", "rclone-bisync", "--no-pager", "-n", "10000"])
         .output();

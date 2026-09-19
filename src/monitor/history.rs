@@ -77,7 +77,7 @@ pub fn parse_journal_history(journal_text: &str, limit: usize) -> Vec<PastRun> {
     for line in lines {
         let ll = line.to_lowercase();
 
-        // Début d'une nouvelle exécution
+        // Start of a new execution
         let is_systemd_start = ll.contains("systemd")
             && (ll.contains("starting") || ll.contains("started"))
             && ll.contains("rclone-bisync");
@@ -101,7 +101,7 @@ pub fn parse_journal_history(journal_text: &str, limit: usize) -> Vec<PastRun> {
         if in_run {
             current_lines.push(line);
 
-            // Fin d'exécution
+            // End of execution
             let is_finish = (ll.contains("systemd") && (ll.contains("finished") || ll.contains("deactivated")) && ll.contains("rclone-bisync"))
                 || ll.contains("bisync successful")
                 || (ll.contains("rclone-bisync-guard") && (ll.contains("aucun changement") || ll.contains("sync ignoré")));
@@ -126,7 +126,7 @@ pub fn parse_journal_history(journal_text: &str, limit: usize) -> Vec<PastRun> {
         }
     }
 
-    // Plus récents en premier
+    // Most recent first
     runs.reverse();
     if runs.len() > limit {
         runs.truncate(limit);
@@ -144,7 +144,7 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
     let mut date = "--".to_string();
     let mut time = "--".to_string();
 
-    // Extraction date/heure (ISO timestamp en début de ligne: 2026-09-17T21:45:00+0200)
+    // Extract date/time (ISO timestamp at start of line: 2026-09-17T21:45:00+0200)
     let parts: Vec<&str> = first_line.split_whitespace().collect();
     if let Some(ts) = parts.first() {
         if let Some((d, t)) = ts.split_once('T') {
@@ -224,9 +224,9 @@ mod tests {
 "#;
 
         let runs = parse_journal_history(sample_journal, 10);
-        assert_eq!(runs.len(), 1, "Les syncs ignorées / réveils à vide doivent être filtrés de l'historique");
+        assert_eq!(runs.len(), 1, "Ignored syncs / empty wakeups must be filtered from history");
 
-        // Seul le vrai run (Success avec 1 fichier nouveau copié) est conservé
+        // Only actual runs (Success with 1 newly copied file) are preserved
         assert_eq!(runs[0].status, RunStatus::Success);
         assert_eq!(runs[0].files_copied.len(), 1);
         assert_eq!(runs[0].files_copied[0], "Documents/notes.txt");

@@ -9,7 +9,7 @@ use ratatui::{
 use crate::app::{App, HitAction, Hitbox};
 use crate::ui::theme::ThemePalette;
 
-// Logo standard ANSI Shadow pour RCLONEDASH
+// Standard ANSI Shadow logo for RCLONEDASH
 pub const LOGO_RCLONEDASH: [(Color, &str); 6] = [
     (Color::Rgb(230, 37, 37), "██████╗  ██████╗██╗      ██████╗ ███╗   ██╗███████╗██████╗  █████╗ ███████╗██╗  ██╗"),
     (Color::Rgb(205, 33, 33), "██╔══██╗██╔════╝██║     ██╔═══██╗████╗  ██║██╔════╝██╔══██╗██╔══██╗██╔════╝██║  ██║"),
@@ -19,7 +19,7 @@ pub const LOGO_RCLONEDASH: [(Color, &str); 6] = [
     (Color::Rgb(80, 15, 15),  "╚═╝  ╚═╝ ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝"),
 ];
 
-// Boutons du menu btop++ en état normal (simple trait fin)
+// Menu buttons in normal state (single thin stroke)
 const MENU_NORMAL: [[&str; 3]; 3] = [
     [
         "┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐",
@@ -38,7 +38,7 @@ const MENU_NORMAL: [[&str; 3]; 3] = [
     ],
 ];
 
-// Boutons du menu btop++ en état sélectionné (double trait 3D)
+// Menu buttons in selected state (double 3D stroke)
 const MENU_SELECTED: [[&str; 3]; 3] = [
     [
         "╔═╗╔═╗╔╦╗╦╔═╗╔╗╔╔═╗",
@@ -74,7 +74,7 @@ const COLORS_NORMAL: [Color; 3] = [
 pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let screen = f.area();
 
-    // Largeur dynamique : 85 si grand écran, sinon 66
+    // Dynamic width: 85 on wide screens, otherwise 66
     let is_wide = screen.width >= 86;
     let logo_height: u16 = if is_wide { 6 } else { 5 };
     let width = if is_wide { 85 } else { 66.min(screen.width) };
@@ -82,26 +82,26 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
 
     let area = centered_fixed_rect(width, height, screen);
 
-    // Découpage vertical sans conteneur noir : flotte librement au-dessus du dashboard grisé
+    // Vertical layout without black container: floats freely above dimmed dashboard
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(logo_height), // 1. Grand titre RCLONEDASH 3D
+            Constraint::Length(logo_height), // 1. Large 3D RCLONEDASH title
             Constraint::Length(1),           // 2. Version
-            Constraint::Length(1),           // Espace
-            Constraint::Length(3),           // 3. OPTIONS (3 lignes)
-            Constraint::Length(1),           // Espace
-            Constraint::Length(3),           // 4. HELP (3 lignes)
-            Constraint::Length(1),           // Espace
-            Constraint::Length(3),           // 5. QUIT (3 lignes)
+            Constraint::Length(1),           // Space
+            Constraint::Length(3),           // 3. OPTIONS (3 lines)
+            Constraint::Length(1),           // Space
+            Constraint::Length(3),           // 4. HELP (3 lines)
+            Constraint::Length(1),           // Space
+            Constraint::Length(3),           // 5. QUIT (3 lines)
             Constraint::Min(0),
         ])
         .split(area);
 
-    // 1. Rendu du logo sans fond noir
+    // 1. Render logo without black background
     render_logo(f, chunks[0]);
 
-    // 2. Version alignée
+    // 2. Centered version line
     let mut ver_spans = vec![
         Span::styled(format!("v{}", crate::config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
     ];
@@ -116,7 +116,7 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
     let ver_p = Paragraph::new(ver_line).alignment(Alignment::Center);
     f.render_widget(ver_p, chunks[1]);
 
-    // 3. Les 3 boutons ASCII — dimensionnés exactement à leur largeur pour supprimer les barres noires
+    // 3. The 3 ASCII buttons - sized exactly to width to eliminate black bars
     let items = [
         (0, chunks[3]),
         (1, chunks[5]),

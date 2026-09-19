@@ -44,7 +44,7 @@ impl<'a> Default for ModalContainerConfig<'a> {
     }
 }
 
-/// Helper pour centrer une boîte modale en pourcentages
+/// Helper to center a modal box using percentages.
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -65,7 +65,7 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-/// Helper pour centrer une boîte modale avec largeur et hauteur fixes
+/// Helper to center a modal box with fixed width and height.
 pub fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
     let x = r.x + r.width.saturating_sub(width) / 2;
     let y = r.y + r.height.saturating_sub(height) / 2;
@@ -77,7 +77,7 @@ pub fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
     }
 }
 
-/// Calcule la zone écran totale occupée par une modale active (pour gestion du click-outside et scroll).
+/// Computes the total screen area occupied by an active modal (for click-outside and scroll handling).
 pub fn compute_active_modal_area(modal: &Modal, screen: Rect) -> Option<Rect> {
     match modal {
         Modal::None => None,
@@ -125,7 +125,7 @@ pub fn compute_active_modal_area(modal: &Modal, screen: Rect) -> Option<Rect> {
     }
 }
 
-/// Helper pour générer un titre incrusté dans une bordure avec les bons caractères de jonction
+/// Helper to generate an embedded border title with proper junction glyphs.
 pub fn format_border_title<'a>(
     glyphs: crate::config::BorderGlyphs,
     border_color: Color,
@@ -145,7 +145,7 @@ pub fn format_border_title<'a>(
     Line::from(spans)
 }
 
-/// Rendu du conteneur/wrapper de base standardisé pour tous les panels et modales
+/// Standardized base container/wrapper rendering for all panels and modals.
 pub fn render_modal_container<'a>(
     f: &mut Frame,
     app: &App,
@@ -154,13 +154,13 @@ pub fn render_modal_container<'a>(
     cfg: ModalContainerConfig<'a>,
     hitboxes: &mut Vec<Hitbox>,
 ) -> Rect {
-    // 1. Isoler le fond
+    // 1. Clear background
     f.render_widget(Clear, area);
 
     let bg = app.border_glyphs();
     let border_col = cfg.border_color;
 
-    // 2. Titre gauche standardisé
+    // 2. Standardized left title
     let title_line = format_border_title(bg, border_col, cfg.title_prefix, cfg.title_color, cfg.title_extra);
 
     let mut outer_block = Block::default()
@@ -170,7 +170,7 @@ pub fn render_modal_container<'a>(
         .style(Style::default().bg(theme.card_bg))
         .title(title_line);
 
-    // 3. Bouton de fermeture uniforme en haut à droite
+    // 3. Standardized close button in top right
     if cfg.show_close_button {
         let mut close_spans = vec![Span::styled(bg.top_left, Style::default().fg(border_col))];
         close_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("Esc, q", "close", theme.red, theme.text_bright));
@@ -178,7 +178,7 @@ pub fn render_modal_container<'a>(
         let close_title = Line::from(close_spans).alignment(Alignment::Right);
         outer_block = outer_block.title(close_title);
 
-        // Enregistrer la hitbox de fermeture standardisée
+        // Register standardized close hitbox
         hitboxes.push(Hitbox {
             rect: Rect {
                 x: area.x + area.width.saturating_sub(14),
@@ -190,7 +190,7 @@ pub fn render_modal_container<'a>(
         });
     }
 
-    // 4. Titre bas : raccourcis à gauche
+    // 4. Bottom title: shortcuts on the left
     let bottom_shortcuts = if let Some(bottom_shortcuts) = cfg.bottom_shortcuts {
         Some(bottom_shortcuts)
     } else if cfg.nav_arrows.is_some() || cfg.action_shortcuts.is_some() {
@@ -231,7 +231,7 @@ pub fn render_modal_container<'a>(
         outer_block = outer_block.title_bottom(line.alignment(Alignment::Left));
     }
 
-    // 5. Titre bas : compteur pagination à droite
+    // 5. Bottom title: pagination counter on the right
     if let Some((cur, total)) = cfg.counter {
         outer_block = outer_block.title_bottom(
             Line::from(vec![
@@ -246,7 +246,7 @@ pub fn render_modal_container<'a>(
 
     f.render_widget(outer_block, area);
 
-    // Retourne la zone intérieure utilisable
+    // Return the usable inner area
     Rect {
         x: area.x + 1,
         y: area.y + 1,

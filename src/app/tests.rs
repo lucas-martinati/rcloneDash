@@ -592,7 +592,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.settings_tab = 0;
         app.settings_selected_idx = 5; // Resynchronisation complète
 
-        // Appuyer sur Entrée doit ouvrir ConfirmResync
+        // Pressing Enter must open ConfirmResync
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::ConfirmResync);
 
@@ -716,7 +716,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.settings_selected_idx = 3; // Local directory
         app.config.local_dir = "/home/user/drive".to_string();
 
-        // Appui sur Entrée pour entrer en mode édition
+        // Press Enter to enter editing mode
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(app.is_editing_setting());
         assert_eq!(app.edit_buffer(), "/home/user/drive");
@@ -731,12 +731,12 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
         assert_eq!(app.edit_buffer(), "/home/user/drive/su");
 
-        // Sortie avec Échap : ce qui est écrit dans le champ est sauvegardé (selon demande utilisateur)
+        // Exit with Esc: what is in the buffer is preserved
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(!app.is_editing_setting());
         assert_eq!(app.config.local_dir, "/home/user/drive/su");
 
-        // Entrée en édition avec 'e', modification et validation avec Entrée
+        // Enter editing with 'e', modify and validate with Enter
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
         assert!(app.is_editing_setting());
         app.edit_state = EditState::Setting { tab: 0, index: 3, buffer: "/home/new/path".to_string() };
@@ -816,8 +816,8 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Files), "b");
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::DecTickRate), "-");
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::IncTickRate), "+");
-        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Validate), "Entrée");
-        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::CancelEdit), "Échap");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Validate), "Enter");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::CancelEdit), "Esc");
 
         let theme = ThemeChoice::TokyoNight.palette();
         let badge = KeybindingRegistry::format_key_badge("Ctrl+X", &theme);

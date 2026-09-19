@@ -45,9 +45,9 @@ impl FocusedPanel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogFilter {
-    All,       // Tout
-    Files,     // Fichiers (opérations réussies sur des fichiers)
-    Problems,  // Problèmes (erreurs, warnings)
+    All,
+    Files,     // Successfully transferred files
+    Problems,  // Issues (errors, warnings)
 }
 
 impl LogFilter {
@@ -217,9 +217,9 @@ pub struct Hitbox {
     pub action: HitAction,
 }
 
-/// Gestionnaire spatial à double couche pour les zones cliquables.
-/// La couche `dashboard` est active quand aucune modale n'est ouverte ;
-/// la couche `modal` prend le relais quand une modale est visible.
+/// Dual-layer spatial manager for clickable areas.
+/// The `dashboard` layer is active when no modal is open;
+/// the `modal` layer takes precedence when a modal is visible.
 pub struct HitboxManager {
     pub dashboard: Vec<Hitbox>,
     pub modal: Vec<Hitbox>,
@@ -262,7 +262,7 @@ pub struct App {
     pub log_filter: LogFilter,
     pub toast: Option<(String, Instant)>,
 
-    // Panel actif et tick rate dynamique
+    // Active panel and dynamic tick rate
     pub focused_panel: FocusedPanel,
     pub tick_rate_ms_live: u64,
     pub tick_rate_changed: bool,
@@ -271,14 +271,14 @@ pub struct App {
     pub recent_filter: String,
     pub is_filtering_recent: bool,
 
-    // Explorateur de fichiers
+    // File explorer
     pub file_current_rel: String,
     pub file_entries: Vec<FileEntry>,
     pub file_selected_idx: usize,
     pub file_scroll_offset: usize,
     pub file_viewport_height: usize,
 
-    // Scroll offsets et hauteurs de viewport pour historique, filtres, logs et récents
+    // Scroll offsets and viewport heights for history, filters, logs, and recent files
     pub history_scroll_offset: usize,
     pub history_details_scroll: usize,
     pub history_viewport_height: usize,
@@ -289,25 +289,25 @@ pub struct App {
     pub logs_viewport_height: usize,
     pub logs_total_wrapped: usize,
 
-    // Paramètres
+    // Settings
     pub settings_tab: usize,
     pub settings_selected_idx: usize,
 
-    // État d'édition unifié (settings + filters)
+    // Unified editing state (settings + filters)
     pub edit_state: EditState,
 
-    // Simulation Dry-Run
+    // Dry-Run simulation
     pub dry_run_running: bool,
     pub dry_run_logs: Vec<String>,
     pub dry_run_scroll: usize,
     pub dry_run_rx: Option<std::sync::mpsc::Receiver<Vec<String>>>,
 
-    // Sélection d'éléments interactifs
+    // Interactive item selection
     pub history_selected_file_idx: usize,
     pub recent_selected_idx: Option<usize>,
     pub active_scrollbar_drag: Option<(ScrollbarTarget, u16, u16, usize, usize, u16)>,
 
-    // Gestionnaire de hitboxes à double couche (dashboard / modal)
+    // Dual-layer hitbox manager (dashboard / modal)
     pub hit_mgr: HitboxManager,
 
     pub cloud_quota: Option<CloudQuota>,
@@ -722,11 +722,11 @@ impl App {
 
     pub fn get_all_recent_files(&self) -> Vec<(String, String, String, String)> {
         let mut list = Vec::new();
-        // 1. Fichiers du live stream
+        // 1. Live stream synced files
         for sf in self.live.synced_files.iter().rev() {
             list.push((sf.action.clone(), sf.path.clone(), String::new(), sf.time.clone()));
         }
-        // 2. Fichiers de l'historique complet (jusqu'à 100 fichiers, parité web)
+        // 2. Full history synced files (up to 100 files, web parity)
         for run in &self.past_runs {
             if !run.synced_files.is_empty() {
                 for (act, path, time) in run.synced_files.iter().rev() {

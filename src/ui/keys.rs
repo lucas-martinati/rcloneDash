@@ -14,18 +14,18 @@ pub enum KeyAction {
 pub struct KeybindingRegistry;
 
 impl KeybindingRegistry {
-    /// Retourne la représentation textuelle de la touche associée à l'action
+    /// Returns the text representation of the key associated with the action
     pub fn get_key_str(action: KeyAction) -> &'static str {
         match action {
             KeyAction::Files => "b",
             KeyAction::DecTickRate => "-",
             KeyAction::IncTickRate => "+",
-            KeyAction::Validate => "Entrée",
-            KeyAction::CancelEdit => "Échap",
+            KeyAction::Validate => "Enter",
+            KeyAction::CancelEdit => "Esc",
         }
     }
 
-    /// Génère un badge visuel stylisé pour une touche physique (style bloc de code / touche clavier)
+    /// Generates a styled visual badge for a physical key (code block / keycap style)
     pub fn format_key_badge(key_str: &str, theme: &ThemePalette) -> Vec<Span<'static>> {
         let key_owned = key_str.to_string();
         vec![
@@ -41,11 +41,11 @@ impl KeybindingRegistry {
         ]
     }
 
-    /// Formate un libellé d'action avec mise en valeur de la touche :
-    /// - Si `key` est un caractère présent dans `word` (ex: 'e' dans "edit", 'a' dans "add", 'd' dans "del", 't' dans "type", 'E' dans "Editor"),
-    ///   ce caractère est mis en valeur avec `key_fg` et `BOLD` directement au sein du mot.
-    /// - Si `key` n'est pas présent dans `word` ou s'il s'agit d'une touche spéciale (ex: "↵", "Esc", "Tab", "↑"),
-    ///   la touche est affichée en préfixe suivie d'un espace et du mot.
+    /// Formats an action label with key highlighting:
+    /// - If `key` is a single character present in `word` (e.g. 'e' in "edit", 'a' in "add", 'd' in "del", 't' in "type", 'E' in "Editor"),
+    ///   this character is highlighted inline with `key_fg` and `BOLD`.
+    /// - If `key` is not in `word` or is a special key (e.g. "↵", "Esc", "Tab", "↑"),
+    ///   the key is displayed as a prefix followed by a space and the word.
     pub fn format_shortcut_label(key: &str, word: &str, key_fg: Color, text_fg: Color) -> Vec<Span<'static>> {
         if key.chars().count() == 1 {
             let key_char = key.chars().next().unwrap();
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_format_shortcut_label() {
-        // Lettre contenue dans le mot -> mise en valeur inline
+        // Letter in word -> inline highlight
         let spans_edit = KeybindingRegistry::format_shortcut_label("e", "edit", Color::Yellow, Color::White);
         assert_eq!(spans_edit.len(), 2);
         assert_eq!(spans_edit[0].content, "e");
@@ -89,7 +89,7 @@ mod tests {
         assert_eq!(spans_edit[1].content, "dit");
         assert_eq!(spans_edit[1].style.fg, Some(Color::White));
 
-        // Touche non contenue dans le mot -> préfixe
+        // Key not in word -> prefix
         let spans_save = KeybindingRegistry::format_shortcut_label("↵", "save", Color::Green, Color::White);
         assert_eq!(spans_save.len(), 2);
         assert_eq!(spans_save[0].content, "↵");
@@ -97,7 +97,7 @@ mod tests {
         assert_eq!(spans_save[1].content, " save");
         assert_eq!(spans_save[1].style.fg, Some(Color::White));
 
-        // Touche multi-caractères (ex: "Esc") -> préfixe
+        // Multi-character key (e.g. "Esc") -> prefix
         let spans_esc = KeybindingRegistry::format_shortcut_label("Esc", "cancel", Color::Red, Color::White);
         assert_eq!(spans_esc.len(), 2);
         assert_eq!(spans_esc[0].content, "Esc");
