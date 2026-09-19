@@ -9,7 +9,7 @@ use ratatui::{
 use crate::app::{App, HitAction, Hitbox};
 use crate::ui::theme::ThemePalette;
 
-// Logo standard ANSI Shadow pour RCLONEDASH (style exact btop)
+// Logo standard ANSI Shadow pour RCLONEDASH
 pub const LOGO_RCLONEDASH: [(Color, &str); 6] = [
     (Color::Rgb(230, 37, 37), "██████╗  ██████╗██╗      ██████╗ ███╗   ██╗███████╗██████╗  █████╗ ███████╗██╗  ██╗"),
     (Color::Rgb(205, 33, 33), "██╔══██╗██╔════╝██║     ██╔═══██╗████╗  ██║██╔════╝██╔══██╗██╔══██╗██╔════╝██║  ██║"),
@@ -17,15 +17,6 @@ pub const LOGO_RCLONEDASH: [(Color, &str); 6] = [
     (Color::Rgb(154, 25, 25), "██╔══██╗██║     ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║  ██║██╔══██║╚════██║██╔══██║"),
     (Color::Rgb(128, 20, 20), "██║  ██║╚██████╗███████╗╚██████╔╝██║ ╚████║███████╗██████╔╝██║  ██║███████║██║  ██║"),
     (Color::Rgb(80, 15, 15),  "╚═╝  ╚═╝ ╚═════╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝"),
-];
-
-// Version compacte standard (Slant, 64 colonnes) pour les terminaux < 85 colonnes
-pub const LOGO_RCLONEDASH_COMPACT: [(Color, &str); 5] = [
-    (Color::Rgb(230, 37, 37), "    ____  ________    ____  _   ____________  ___   _____ __  __"),
-    (Color::Rgb(205, 33, 33), "   / __ \\/ ____/ /   / __ \\/ | / / ____/ __ \\/   | / ___// / / /"),
-    (Color::Rgb(179, 29, 29), "  / /_/ / /   / /   / / / /  |/ / __/ / / / / /| | \\__ \\/ /_/ / "),
-    (Color::Rgb(154, 25, 25), " / _, _/ /___/ /___/ /_/ / /|  / /___/ /_/ / ___ |___/ / __  /  "),
-    (Color::Rgb(128, 20, 20), "/_/ |_|\\____/_____/\\____/_/ |_/_____/_____/_/  |_/____/_/ /_/   "),
 ];
 
 // Boutons du menu btop++ en état normal (simple trait fin)
@@ -108,12 +99,20 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
         .split(area);
 
     // 1. Rendu du logo sans fond noir
-    render_btop_logo(f, chunks[0]);
+    render_logo(f, chunks[0]);
 
     // 2. Version alignée
-    let ver_line = Line::from(vec![
+    let mut ver_spans = vec![
         Span::styled(format!("v{}", crate::config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
-    ]);
+    ];
+    if let Some(newer) = &app.available_update {
+        ver_spans.push(Span::raw("  "));
+        ver_spans.push(Span::styled(
+            format!("(🚀 v{} available! Run: rclonedash --update)", newer),
+            Style::default().fg(Color::Rgb(250, 200, 50)).add_modifier(Modifier::BOLD),
+        ));
+    }
+    let ver_line = Line::from(ver_spans);
     let ver_p = Paragraph::new(ver_line).alignment(Alignment::Center);
     f.render_widget(ver_p, chunks[1]);
 
@@ -144,44 +143,25 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
     }
 }
 
-pub fn render_btop_logo(f: &mut Frame, area: Rect) {
-    let is_wide = area.width >= 85;
-
-    if is_wide {
-        let mut header_lines = Vec::new();
-        for (z, (fg, line_str)) in LOGO_RCLONEDASH.iter().enumerate() {
-            let bg_val = (120u32).saturating_sub((z as u32) * 12) as u8;
-            let bg_color = Color::Rgb(bg_val, bg_val, bg_val);
-            let mut spans = Vec::new();
-            for ch in line_str.chars() {
-                if ch == '█' {
-                    spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).add_modifier(Modifier::BOLD)));
-                } else if ch != ' ' {
-                    spans.push(Span::styled(ch.to_string(), Style::default().fg(bg_color)));
-                } else {
-                    spans.push(Span::raw(" "));
-                }
+pub fn render_logo(f: &mut Frame, area: Rect) {
+    let mut header_lines = Vec::new();
+    for (z, (fg, line_str)) in LOGO_RCLONEDASH.iter().enumerate() {
+        let bg_val = (120u32).saturating_sub((z as u32) * 12) as u8;
+        let bg_color = Color::Rgb(bg_val, bg_val, bg_val);
+        let mut spans = Vec::new();
+        for ch in line_str.chars() {
+            if ch == '█' {
+                spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).add_modifier(Modifier::BOLD)));
+            } else if ch != ' ' {
+                spans.push(Span::styled(ch.to_string(), Style::default().fg(bg_color)));
+            } else {
+                spans.push(Span::raw(" "));
             }
-            header_lines.push(Line::from(spans));
         }
-        let header_p = Paragraph::new(header_lines).alignment(Alignment::Center);
-        f.render_widget(header_p, area);
-    } else {
-        let mut header_lines = Vec::new();
-        for (_z, (fg, line_str)) in LOGO_RCLONEDASH_COMPACT.iter().enumerate() {
-            let mut spans = Vec::new();
-            for ch in line_str.chars() {
-                if ch != ' ' {
-                    spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).add_modifier(Modifier::BOLD)));
-                } else {
-                    spans.push(Span::raw(" "));
-                }
-            }
-            header_lines.push(Line::from(spans));
-        }
-        let header_p = Paragraph::new(header_lines).alignment(Alignment::Center);
-        f.render_widget(header_p, area);
+        header_lines.push(Line::from(spans));
     }
+    let header_p = Paragraph::new(header_lines).alignment(Alignment::Center);
+    f.render_widget(header_p, area);
 }
 
 fn render_ascii_button(

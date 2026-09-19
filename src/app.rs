@@ -264,6 +264,8 @@ pub struct App {
 
     pub cloud_quota: Option<CloudQuota>,
     pub tracked_files_count: usize,
+    pub available_update: Option<String>,
+    update_rx: Option<std::sync::mpsc::Receiver<String>>,
     quota_rx: Option<std::sync::mpsc::Receiver<CloudQuota>>,
     file_count_rx: Option<std::sync::mpsc::Receiver<usize>>,
     service_info_rx: Option<std::sync::mpsc::Receiver<ServiceInfo>>,
@@ -365,6 +367,8 @@ impl App {
                 free_bytes: c.free_bytes,
             }),
             tracked_files_count: 0,
+            available_update: None,
+            update_rx: None,
             quota_rx: None,
             file_count_rx: None,
             service_info_rx: None,
@@ -375,6 +379,17 @@ impl App {
             last_quota_check: Instant::now().checked_sub(std::time::Duration::from_secs(350)).unwrap_or_else(Instant::now),
             last_file_count_check: Instant::now().checked_sub(std::time::Duration::from_secs(70)).unwrap_or_else(Instant::now),
         };
+
+        #[cfg(not(test))]
+        {
+            let (tx, rx) = std::sync::mpsc::channel();
+            app.update_rx = Some(rx);
+            tokio::spawn(async move {
+                if let Ok(Some(info)) = crate::updater::check_for_updates().await {
+                    let _ = tx.send(info.latest_version);
+                }
+            });
+        }
 
         app.reload_files();
         app
@@ -423,6 +438,13 @@ impl App {
             if let Ok(runs) = rx.try_recv() {
                 self.past_runs = runs;
                 self.past_runs_rx = None;
+            }
+        }
+
+        if let Some(rx) = &self.update_rx {
+            if let Ok(latest_ver) = rx.try_recv() {
+                self.available_update = Some(latest_ver);
+                self.update_rx = None;
             }
         }
 

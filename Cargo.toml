@@ -30,7 +30,7 @@ maintainer = "Lucas Martinati <lucasm54800@gmail.com>"
 copyright = "2026 Lucas Martinati"
 license-file = []
 extended-description = """\
-Interactive, blazing fast TUI and monitoring dashboard for rclone bisync with btop-inspired UI."""
+Interactive, blazing fast TUI and monitoring dashboard for rclone bisync."""
 depends = "$auto"
 section = "utils"
 priority = "optional"

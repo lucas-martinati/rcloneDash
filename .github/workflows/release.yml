@@ -104,6 +104,10 @@ jobs:
           tar -czvf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
           sha256sum "${PACKAGE_NAME}.tar.gz" > "${PACKAGE_NAME}.tar.gz.sha256"
 
+          # Standalone binary for direct self-update
+          cp target/release/rclonedash "rclonedash-linux-x86_64"
+          sha256sum "rclonedash-linux-x86_64" > "rclonedash-linux-x86_64.sha256"
+
           echo "archive=${PACKAGE_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
           echo "checksum=${PACKAGE_NAME}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
@@ -119,6 +123,8 @@ jobs:
           files: |
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.checksum }}
+            rclonedash-linux-x86_64
+            rclonedash-linux-x86_64.sha256
             ${{ steps.deb_package.outputs.deb }}
             ${{ steps.deb_package.outputs.checksum }}
         env:

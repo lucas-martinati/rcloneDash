@@ -234,7 +234,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let p = Paragraph::new(display_lines);
     f.render_widget(p, inner);
 
-    crate::ui::render_btop_scrollbar(
+    crate::ui::render_scrollbar(
         f,
         area,
         total_lines,

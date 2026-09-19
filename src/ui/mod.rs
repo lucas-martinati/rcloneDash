@@ -86,7 +86,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
 }
 
 /// Rendu d'une scrollbar btop++ personnalisée avec coordonnées explicites de colonne et de bornes verticales
-pub fn render_btop_scrollbar_custom(
+pub fn render_scrollbar_custom(
     f: &mut Frame,
     scroll_x: u16,
     top_y: u16,
@@ -165,7 +165,7 @@ pub fn render_btop_scrollbar_custom(
 
 /// Scrollbar intégrée dans les conteneurs avec bordure standard (style btop++)
 /// Dessinée directement dans la colonne droite intérieure (x = area.x + area.width - 2)
-pub fn render_btop_scrollbar(
+pub fn render_scrollbar(
     f: &mut Frame,
     area: ratatui::layout::Rect,
     total: usize,
@@ -181,12 +181,12 @@ pub fn render_btop_scrollbar(
     let scroll_x = area.x + area.width.saturating_sub(2);
     let top_y = area.y + 1;
     let bot_y = area.y + area.height.saturating_sub(2);
-    render_btop_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
+    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
 }
 
 /// Scrollbar intégrée dans un sous-panneau intérieur (sans bordure propre, e.g. volet gauche de filtres ou explorer)
 /// Dessinée à l'extrême droite du panneau (x = pane.x + pane.width - 1) sur toute sa hauteur (top_y = pane.y, bot_y = pane.y + pane.height - 1)
-pub fn render_btop_scrollbar_pane(
+pub fn render_scrollbar_pane(
     f: &mut Frame,
     pane: ratatui::layout::Rect,
     total: usize,
@@ -202,5 +202,5 @@ pub fn render_btop_scrollbar_pane(
     let scroll_x = pane.x + pane.width.saturating_sub(1);
     let top_y = pane.y;
     let bot_y = pane.y + pane.height.saturating_sub(1);
-    render_btop_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
+    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
 }

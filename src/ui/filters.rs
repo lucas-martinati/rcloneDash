@@ -282,7 +282,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let list = List::new(items).block(Block::default().borders(Borders::NONE));
     f.render_widget(list, area);
 
-    crate::ui::render_btop_scrollbar_pane(
+    crate::ui::render_scrollbar_pane(
         f,
         area,
         total_count,

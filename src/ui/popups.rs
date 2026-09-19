@@ -216,12 +216,20 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .split(container_area);
 
             // 1. Logo 3D RCLONEDASH au-dessus de la boîte d'aide
-            crate::ui::menu::render_btop_logo(f, v_chunks[0]);
+            crate::ui::menu::render_logo(f, v_chunks[0]);
 
             // Version
-            let ver_line = Line::from(vec![
+            let mut ver_spans = vec![
                 Span::styled(format!("v{}", crate::config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
-            ]);
+            ];
+            if let Some(newer) = &app.available_update {
+                ver_spans.push(Span::raw("  "));
+                ver_spans.push(Span::styled(
+                    format!("(🚀 v{} available)", newer),
+                    Style::default().fg(Color::Rgb(250, 200, 50)).add_modifier(Modifier::BOLD),
+                ));
+            }
+            let ver_line = Line::from(ver_spans);
             f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
 
             // 2. Boîte d'aide style btop++
@@ -374,7 +382,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
     let p = Paragraph::new(lines);
     f.render_widget(p, inner);
 
-    crate::ui::render_btop_scrollbar(
+    crate::ui::render_scrollbar(
         f,
         inner,
         total_lines,

@@ -5,6 +5,7 @@ mod fs_tree;
 mod monitor;
 mod systemd;
 mod ui;
+pub mod updater;
 
 use std::io;
 use std::panic;
@@ -27,6 +28,72 @@ use app::App;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Gestion des options de ligne de commande (avant d'initialiser le mode TUI / terminal brut)
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "--help" | "-h" => {
+                println!("rcloneDash - Terminal Dashboard for Rclone\n");
+                println!("Usage: rclonedash [OPTIONS]\n");
+                println!("Options:");
+                println!("  -h, --help            Print help information");
+                println!("  -v, -V, --version     Print version information");
+                println!("  --check-update        Check if a newer version is available");
+                println!("  -u, --update          Update rcloneDash to the latest release");
+                return Ok(());
+            }
+            "--version" | "-v" | "-V" => {
+                println!("rcloneDash v{}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
+            "--check-update" => {
+                println!("Checking for updates...");
+                match updater::check_for_updates().await {
+                    Ok(Some(info)) => {
+                        println!("🎉 A new version of rcloneDash is available: v{} (current: v{})", info.latest_version, info.current_version);
+                        println!("Run `rclonedash --update` or `sudo rclonedash --update` to install it.");
+                    }
+                    Ok(None) => {
+                        println!("✅ rcloneDash is up to date (v{}).", env!("CARGO_PKG_VERSION"));
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️  Could not check for updates: {}", e);
+                    }
+                }
+                return Ok(());
+            }
+            "--update" | "-u" => {
+                println!("Checking for latest release...");
+                match updater::check_for_updates().await {
+                    Ok(Some(info)) => {
+                        println!("Downloading and installing rcloneDash v{}...", info.latest_version);
+                        match updater::download_and_install_update(&info).await {
+                            Ok(()) => {
+                                println!("✨ Successfully updated to v{}!", info.latest_version);
+                            }
+                            Err(e) => {
+                                eprintln!("❌ Update failed: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        println!("✅ rcloneDash is already on the latest version (v{}).", env!("CARGO_PKG_VERSION"));
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Update check failed: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+                return Ok(());
+            }
+            unknown => {
+                eprintln!("Unknown argument: {}\nRun `rclonedash --help` for usage.", unknown);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // 1. Hook de panic pour restaurer le terminal et la souris en cas d'erreur
     let default_panic_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {

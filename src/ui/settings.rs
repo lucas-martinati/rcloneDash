@@ -45,10 +45,18 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 Constraint::Length(box_h),
             ])
             .split(container_area);
-        crate::ui::menu::render_btop_logo(f, v_chunks[0]);
-        let ver_line = Line::from(vec![
+        crate::ui::menu::render_logo(f, v_chunks[0]);
+        let mut ver_spans = vec![
             Span::styled(format!("v{}", config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
-        ]);
+        ];
+        if let Some(newer) = &app.available_update {
+            ver_spans.push(Span::raw("  "));
+            ver_spans.push(Span::styled(
+                format!("(🚀 v{} available)", newer),
+                Style::default().fg(Color::Rgb(250, 200, 50)).add_modifier(Modifier::BOLD),
+            ));
+        }
+        let ver_line = Line::from(ver_spans);
         f.render_widget(Paragraph::new(ver_line).alignment(Alignment::Center), v_chunks[1]);
         v_chunks[2]
     } else {

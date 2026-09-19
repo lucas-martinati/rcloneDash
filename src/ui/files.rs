@@ -191,7 +191,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 
     f.render_widget(table, area);
 
-    crate::ui::render_btop_scrollbar_pane(
+    crate::ui::render_scrollbar_pane(
         f,
         area,
         app.file_entries.len(),

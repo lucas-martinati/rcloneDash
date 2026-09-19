@@ -939,7 +939,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
 
     f.render_widget(table, chunks[1]);
 
-    crate::ui::render_btop_scrollbar(
+    crate::ui::render_scrollbar(
         f,
         area,
         total_runs,
@@ -1122,7 +1122,7 @@ fn render_logs_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     } else {
         max_scroll.saturating_sub(effective_scroll)
     };
-    crate::ui::render_btop_scrollbar(
+    crate::ui::render_scrollbar(
         f,
         area,
         total_lines,
@@ -1365,7 +1365,7 @@ fn render_recent_files_panel(f: &mut Frame, app: &App, theme: &ThemePalette, are
 
     f.render_widget(table, area);
 
-    crate::ui::render_btop_scrollbar(
+    crate::ui::render_scrollbar(
         f,
         area,
         files_to_display.len(),
