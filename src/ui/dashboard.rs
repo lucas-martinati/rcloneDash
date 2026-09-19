@@ -944,7 +944,7 @@ fn render_history_panel(f: &mut Frame, app: &App, theme: &ThemePalette, area: Re
         f,
         area,
         total_runs,
-        app.selected_run_idx.unwrap_or(0),
+        offset,
         visible_rows,
         theme,
         hitboxes,

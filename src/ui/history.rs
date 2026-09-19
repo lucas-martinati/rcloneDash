@@ -92,7 +92,7 @@ fn render_run_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
         f,
         area,
         app.past_runs.len(),
-        app.selected_run_idx.unwrap_or(0),
+        app.history_scroll_offset,
         visible_height,
         theme,
         &mut dummy_hitboxes,
