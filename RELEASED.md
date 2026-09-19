@@ -1,5 +1,36 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.1] - Auto-Update, Centralisation des Paramètres & Optimisations UI
+
+Cette version de maintenance et d'évolution apporte l'auto-updater intégré pour rcloneDash afin de simplifier toutes les futures mises à jour, ainsi que des améliorations significatives sur la gestion des paramètres, le défilement et la propreté du code.
+
+---
+
+### 🌟 Nouveautés et Améliorations
+
+#### 1. 🚀 Auto-Update & Nouvelles Commandes CLI
+- **Mise à jour en une commande** : `rclonedash --update` (ou `-u`) télécharge automatiquement la dernière version officielle, ajuste les permissions et remplace l'exécutable de manière atomique.
+- **Vérification rapide en ligne de commande** : `rclonedash --check-update` interroge GitHub pour vérifier l'existence d'une nouvelle version.
+- **Nouvelles options CLI standard** : `rclonedash --version` (`-v`, `-V`) et `rclonedash --help` (`-h`) sans ouvrir l'interface terminal.
+- **Notification visuelle dans le TUI** : une tâche asynchrone non-bloquante vérifie au démarrage la disponibilité d'une mise à jour et affiche un badge discret `(🚀 vX.Y.Z available! Run: rclonedash --update)` dans le menu d'accueil, le panneau des paramètres et la fenêtre d'aide.
+- **Binaire autonome publié dans les Releases GitHub** : l'artefact direct `rclonedash-linux-x86_64` est désormais fourni aux côtés des archives `.tar.gz` et des paquets `.deb`.
+
+#### 2. ⚙️ Centralisation & Homogénéisation des Paramètres
+- **Source unique de vérité (`SettingId`)** : la liste des choix affichée dans la description détaillée correspond désormais strictement et exactement aux options sélectionnables dans l'application (notamment pour les fréquences de synchronisation et les intervalles de timer).
+- **Affichage en colonnes propre et équilibré** : les paramètres à choix multiples nombreux s'organisent désormais en colonnes claires pour une lisibilité optimale.
+- **Gestion dynamique de la hauteur des fenêtres** : la hauteur des modales s'ajuste automatiquement selon le nombre de paramètres affichés pour éliminer tout débordement en bas d'écran.
+
+#### 3. 🖱️ Précision des Scrollbars & Navigation
+- **Glisser-déposer fluide** : calibrage précis du curseur de scrollbar sur le volet des filtres d'exclusion, des logs, de l'historique et de l'explorateur de fichiers.
+- **Gestion unifiée des raccourcis** : centralisation des labels et touches actives avec `KeybindingRegistry`.
+
+#### 4. 🧹 Nettoyage Intégral & Zéro Code Mort
+- **Suppression complète de tous les `#[allow(dead_code)]`** : zéro avertissement au compilateur, zéro fonction ou variant inutilisé dans le projet.
+- **Unification du logo officiel** : suppression de la variante compacte pour conserver partout le grand logo 3D texturé `LOGO_RCLONEDASH`.
+- **Suite de tests étendue** : 66 tests unitaires validés avec 100% de réussite.
+
+---
+
 ## [v1.0.0] - Version Majeure & Réécriture Rust TUI
 
 Bienvenue dans la première version officielle majeure de **RcloneDash** !  
