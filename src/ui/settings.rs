@@ -18,7 +18,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let screen = f.area();
     let is_wide = screen.width >= 88;
     let logo_h: u16 = if is_wide { 6 } else { 5 };
-    let show_logo = screen.height >= 32;
+    // Le logo n'est affiché que si la hauteur d'écran permet de conserver la modale complète
+    let show_logo = screen.height >= 35;
     let box_w = if screen.width >= 96 {
         88.min(screen.width.saturating_sub(4))
     } else if screen.width >= 86 {
@@ -26,11 +27,15 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     } else {
         76.min(screen.width.saturating_sub(2))
     };
-    let box_h = if show_logo {
-        23.min(screen.height.saturating_sub(logo_h + 3))
+
+    // Calcul automatique et dynamique de la hauteur pour garantir que rien ne déborde
+    let max_avail_h = if show_logo {
+        screen.height.saturating_sub(logo_h + 3)
     } else {
-        23.min(screen.height.saturating_sub(2))
+        screen.height.saturating_sub(2)
     };
+    // 26 lignes nécessaires et suffisantes pour afficher toutes les options et descriptions sans coupure
+    let box_h = 26u16.min(max_avail_h).max(18);
 
     let total_h = if show_logo { logo_h + 1 + box_h } else { box_h };
     let container_area = centered_fixed_rect(box_w, total_h, screen);
@@ -188,27 +193,29 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         .collect();
     f.render_widget(Paragraph::new(sep_lines), sep_area);
 
+    use crate::config::SettingId;
+
     // Données des réglages selon l'onglet actif
     let full_sync_display = config::full_sync_label(&app.config.full_sync_interval).to_string();
 
     let settings: Vec<(&str, String)> = if app.settings_tab == 0 {
         vec![
-            ("Bisync timer interval", app.config.timer_interval.clone()),
-            ("Cloud safety net", full_sync_display),
-            ("Bandwidth limit", app.config.bwlimit.as_deref().unwrap_or("Disabled").to_string()),
-            ("Local directory", app.config.local_dir.clone()),
-            ("Remote storage", app.config.remote.clone()),
-            ("Full resynchronization", "Run (--resync)".to_string()),
-            ("Full rclone log journal", "Open logs (↵)".to_string()),
+            (SettingId::TimerInterval.label(), app.config.timer_interval.clone()),
+            (SettingId::CloudSafetyNet.label(), full_sync_display),
+            (SettingId::BandwidthLimit.label(), app.config.bwlimit.as_deref().unwrap_or("Disabled").to_string()),
+            (SettingId::LocalDirectory.label(), app.config.local_dir.clone()),
+            (SettingId::RemoteStorage.label(), app.config.remote.clone()),
+            (SettingId::ResyncAction.label(), "Run (--resync)".to_string()),
+            (SettingId::LogJournalAction.label(), "Open logs (↵)".to_string()),
         ]
     } else {
         vec![
-            ("Color theme", app.current_theme.name().to_string()),
-            ("Container layout", app.config.container_layout.name().to_string()),
-            ("Mid-panel order", app.config.mid_panel_order.name().to_string()),
-            ("Border style", app.config.border_style.name().to_string()),
-            ("Graph style", app.config.graph_style.name().to_string()),
-            ("UI Loop frequency", format!("{} ms", app.tick_rate_ms_live)),
+            (SettingId::ColorTheme.label(), app.current_theme.name().to_string()),
+            (SettingId::ContainerLayout.label(), app.config.container_layout.name().to_string()),
+            (SettingId::MidPanelOrder.label(), app.config.mid_panel_order.name().to_string()),
+            (SettingId::BorderStyle.label(), app.config.border_style.name().to_string()),
+            (SettingId::GraphStyle.label(), app.config.graph_style.name().to_string()),
+            (SettingId::TickRate.label(), format!("{}ms", app.tick_rate_ms_live)),
         ]
     };
 
@@ -315,138 +322,151 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let k_enter = KeybindingRegistry::get_key_str(KeyAction::Validate);
     let k_esc = KeybindingRegistry::get_key_str(KeyAction::CancelEdit);
 
-    let (desc_title, desc_body): (&str, String) = match (app.settings_tab, app.settings_selected_idx) {
+    let (desc_title, desc_body): (&str, String) = match SettingId::from_tab_and_idx(app.settings_tab, app.settings_selected_idx) {
         // --- Catégorie 0 : Rclone ---
-        (0, 0) => {
-            let choices = config::TIMER_INTERVAL_OPTIONS;
+        Some(SettingId::TimerInterval) => {
+            let choices = SettingId::TimerInterval.choices().unwrap();
             (
-                "Bisync timer interval.",
+                SettingId::TimerInterval.desc_title(),
                 format!(
-                    "Frequency of automatic checks and synchronization managed by systemd.\n\nConfigures how often rclone-bisync.timer wakes up to inspect changes.\nRecommended: 15min for an ideal balance between responsiveness and CPU usage.\n\nAvailable options:\n{}",
-                    config::format_setting_options_list(choices, &app.config.timer_interval)
+                    "{}\n\nAvailable options:\n{}",
+                    SettingId::TimerInterval.desc_intro(),
+                    config::format_setting_options_list(&choices, &app.config.timer_interval)
                 ),
             )
         }
-        (0, 1) => {
-            let choices: Vec<&str> = config::FULL_SYNC_OPTIONS.iter().map(|o| o.label).collect();
+        Some(SettingId::CloudSafetyNet) => {
+            let choices = SettingId::CloudSafetyNet.choices().unwrap();
             let current = config::full_sync_label(&app.config.full_sync_interval);
             (
-                "Cloud safety net.",
+                SettingId::CloudSafetyNet.desc_title(),
                 format!(
-                    "Maximum time elapsed before running a full bidirectional sync.\n\nEnsures files created or updated remotely from another computer or the web interface are retrieved, even if no local changes were detected.\n'Never' triggers sync only upon local changes.\n\nAvailable options:\n{}",
+                    "{}\n\nAvailable options:\n{}",
+                    SettingId::CloudSafetyNet.desc_intro(),
                     config::format_setting_options_list(&choices, current)
                 ),
             )
         }
-        (0, 2) => {
-            let choices = config::BWLIMIT_OPTIONS;
+        Some(SettingId::BandwidthLimit) => {
+            let choices = SettingId::BandwidthLimit.choices().unwrap();
             let current = app.config.bwlimit.as_deref().unwrap_or("Disabled");
             (
-                "Bandwidth limit (bwlimit).",
+                SettingId::BandwidthLimit.desc_title(),
                 format!(
-                    "Maximum allowed transfer speed for rclone.\n\nPreserves your internet connection by limiting network bandwidth used by rclone.\nStored in bwlimit.env and injected into the systemd service.\nValue 'Disabled' uses 100% of available bandwidth.\n\nAvailable presets:\n{}",
-                    config::format_setting_options_list(choices, current)
+                    "{}\n\nAvailable presets:\n{}",
+                    SettingId::BandwidthLimit.desc_intro(),
+                    config::format_setting_options_list(&choices, current)
                 ),
             )
         }
-        (0, 3) => (
-            "Monitored local directory.",
+        Some(SettingId::LocalDirectory) => (
+            SettingId::LocalDirectory.desc_title(),
             format!(
-                "Path to the root local directory synchronized with cloud storage.\n\nContains your local data replicated by bisync.\nOpen the file explorer ([{}]) to inspect its tree structure.\n\nPress [{}] to edit the path, then [{}] to confirm or [{}] to cancel.\n\nCurrent path:\n  ▶ {} (active)",
+                "{}\nOpen the file explorer ([{}]) to inspect its tree structure.\n\nPress [{}] to edit the path, then [{}] to confirm or [{}] to cancel.\n\nCurrent path:\n  ▶ {} (active)",
+                SettingId::LocalDirectory.desc_intro(),
                 k_files, k_enter, k_enter, k_esc, app.config.local_dir
             ),
         ),
-        (0, 4) => (
-            "Remote cloud storage.",
+        Some(SettingId::RemoteStorage) => (
+            SettingId::RemoteStorage.desc_title(),
             format!(
-                "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nUsed for cloud quota inquiries, remote listings, and bidirectional synchronization.\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.\n\nCurrent remote:\n  ▶ {} (active)",
+                "{}\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.\n\nCurrent remote:\n  ▶ {} (active)",
+                SettingId::RemoteStorage.desc_intro(),
                 k_enter, k_enter, k_esc, app.config.remote
             ),
         ),
-        (0, 5) => (
-            "Full resynchronization (--resync).",
+        Some(SettingId::ResyncAction) => (
+            SettingId::ResyncAction.desc_title(),
             format!(
-                "In case of critical bisync errors or corrupted sync listings, this action rebuilds listing databases by comparing the local directory and Google Drive (keeping the newest files: --resync-mode newer).\n\nPress [{}] to open the confirmation dialog.",
+                "{}\n\nPress [{}] to open the confirmation dialog.",
+                SettingId::ResyncAction.desc_intro(),
                 k_enter
             ),
         ),
-        (0, 6) => (
-            "Full rclone log journal (rclone-bisync).",
+        Some(SettingId::LogJournalAction) => (
+            SettingId::LogJournalAction.desc_title(),
             format!(
-                "Opens the complete rclone-bisync systemd journal log in your external viewer (less or configured editor).\n\nAllows navigating the full history, searching text, and inspecting detailed file transfers.\n\nPress [{}] to open the log file.",
+                "{}\n\nPress [{}] to open the log file.",
+                SettingId::LogJournalAction.desc_intro(),
                 k_enter
             ),
         ),
 
         // --- Catégorie 1 : UI & Apparence ---
-        (1, 0) => {
-            let choices: Vec<&str> = crate::ui::theme::ThemeChoice::all().iter().map(|t| t.name()).collect();
+        Some(SettingId::ColorTheme) => {
+            let choices = SettingId::ColorTheme.choices().unwrap();
             let current = app.current_theme.name();
             (
-                "Color theme.",
+                SettingId::ColorTheme.desc_title(),
                 format!(
-                    "Sets the color theme applied across the entire dashboard.\n\nEach theme dynamically adapts borders, text, and btop++ gradient charts.\n\nAvailable options:\n{}",
+                    "{}\n\nAvailable options:\n{}",
+                    SettingId::ColorTheme.desc_intro(),
                     config::format_setting_options_list(&choices, current)
                 ),
             )
         }
-        (1, 1) => {
-            let choices: Vec<&str> = config::ContainerLayout::all().iter().map(|l| l.name()).collect();
+        Some(SettingId::ContainerLayout) => {
+            let choices = SettingId::ContainerLayout.choices().unwrap();
             let current = app.config.container_layout.name();
             (
-                "Container layout.",
+                SettingId::ContainerLayout.desc_title(),
                 format!(
-                    "Reorder the main dashboard containers to match your preferred workflow.\n\nApplies instantly across the entire dashboard.\n\nAvailable options:\n{}",
+                    "{}\n\nAvailable options:\n{}",
+                    SettingId::ContainerLayout.desc_intro(),
                     config::format_setting_options_list(&choices, current)
                 ),
             )
         }
-        (1, 2) => {
-            let choices: Vec<&str> = config::MidPanelOrder::all().iter().map(|m| m.name()).collect();
+        Some(SettingId::MidPanelOrder) => {
+            let choices = SettingId::MidPanelOrder.choices().unwrap();
             let current = app.config.mid_panel_order.name();
             (
-                "Mid-panel order.",
+                SettingId::MidPanelOrder.desc_title(),
                 format!(
-                    "Horizontal placement of the middle section containers.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.\n\nAvailable options:\n{}",
+                    "{}\n\nAvailable options:\n{}",
+                    SettingId::MidPanelOrder.desc_intro(),
                     config::format_setting_options_list(&choices, current)
                 ),
             )
         }
-        (1, 3) => {
-            let choices: Vec<&str> = config::BorderStyleChoice::all().iter().map(|b| b.name()).collect();
+        Some(SettingId::BorderStyle) => {
+            let choices = SettingId::BorderStyle.choices().unwrap();
             let current = app.config.border_style.name();
             (
-                "Border style.",
+                SettingId::BorderStyle.desc_title(),
                 format!(
-                    "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nPersisted across sessions in dash-config.json.\n\nAvailable options:\n{}",
+                    "{}\n\nAvailable options:\n{}",
+                    SettingId::BorderStyle.desc_intro(),
                     config::format_setting_options_list(&choices, current)
                 ),
             )
         }
-        (1, 4) => {
-            let choices: Vec<&str> = config::GraphStyleChoice::all().iter().map(|g| g.name()).collect();
+        Some(SettingId::GraphStyle) => {
+            let choices = SettingId::GraphStyle.choices().unwrap();
             let current = app.config.graph_style.name();
             (
-                "Graph style.",
+                SettingId::GraphStyle.desc_title(),
                 format!(
-                    "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nPersisted across sessions in dash-config.json.\n\nAvailable options:\n{}",
+                    "{}\n\nAvailable options:\n{}",
+                    SettingId::GraphStyle.desc_intro(),
                     config::format_setting_options_list(&choices, current)
                 ),
             )
         }
-        (1, 5) => {
+        Some(SettingId::TickRate) => {
             let current_str = format!("{}ms", app.tick_rate_ms_live);
-            let choices = &["100ms", "250ms", "500ms", "1000ms", "2000ms", "5000ms", "10000ms"];
+            let choices = SettingId::TickRate.choices().unwrap();
             (
-                "UI Loop frequency (tick rate).",
+                SettingId::TickRate.desc_title(),
                 format!(
-                    "Refresh rate of the TUI display engine in milliseconds.\n\nControls smoothness of log scrolling, metrics calculation, and micro-animations.\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.\n\nAvailable options:\n{}",
+                    "{}\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.\n\nAvailable options:\n{}",
+                    SettingId::TickRate.desc_intro(),
                     k_dec, k_inc,
-                    config::format_setting_options_list(choices, &current_str)
+                    config::format_setting_options_list(&choices, &current_str)
                 ),
             )
         }
-        _ => ("Description.", "Select a setting to view its detailed documentation.".to_string()),
+        None => ("Description.", "Select a setting to view its detailed documentation.".to_string()),
     };
 
     let desc_inner = Rect {
@@ -464,23 +484,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     for para in desc_body.split('\n') {
         if para.is_empty() {
             desc_lines.push(Line::from(""));
-        } else if let Some(rest) = para.strip_prefix("  ▶ ") {
-            let mut spans = vec![
-                Span::styled("  ▶ ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            ];
-            if let Some((opt_name, _)) = rest.split_once(" (active)") {
-                spans.push(Span::styled(opt_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
-                spans.push(Span::styled(" (active)", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
-            } else {
-                spans.push(Span::styled(rest, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
-            }
-            desc_lines.push(Line::from(spans));
-        } else if let Some(rest) = para.strip_prefix("  • ") {
-            let spans = vec![
-                Span::styled("  • ", Style::default().fg(theme.text_muted)),
-                Span::styled(rest, Style::default().fg(Color::Rgb(185, 190, 205))),
-            ];
-            desc_lines.push(Line::from(spans));
+        } else if para.starts_with("  ▶ ") || para.starts_with("  • ") {
+            desc_lines.push(parse_option_line(para, theme));
         } else {
             let mut spans = Vec::new();
             let mut rem = para;
@@ -504,6 +509,81 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         }
     }
 
-    let right_p = Paragraph::new(desc_lines).wrap(Wrap { trim: true });
+    // Défilement automatique intelligent si la hauteur d'affichage est très restreinte
+    let scroll_y = if desc_lines.len() > desc_inner.height as usize {
+        let active_line_idx = desc_lines.iter().position(|l| {
+            l.spans.iter().any(|s| s.content.contains('▶') || s.content.contains("(active)"))
+        }).unwrap_or(0);
+
+        let max_scroll = (desc_lines.len() - desc_inner.height as usize) as u16;
+        if active_line_idx as u16 >= desc_inner.height {
+            (active_line_idx as u16 - desc_inner.height + 1).min(max_scroll)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    let right_p = Paragraph::new(desc_lines).wrap(Wrap { trim: true }).scroll((scroll_y, 0));
     f.render_widget(right_p, desc_inner);
+}
+
+/// Parse et stylise une ligne d'options (1 ou plusieurs colonnes) avec préservation des alignements et couleurs
+fn parse_option_line(line: &str, theme: &ThemePalette) -> Line<'static> {
+    let mut spans = Vec::new();
+    let mut rem = line;
+
+    while !rem.is_empty() {
+        if let Some(pos) = rem.find(|c| c == '▶' || c == '•') {
+            if pos > 0 {
+                spans.push(Span::raw(rem[..pos].to_string()));
+            }
+            let is_active = rem[pos..].starts_with('▶');
+            let bullet = if is_active { "▶ " } else { "• " };
+            let bullet_len = bullet.len();
+            let bullet_style = if is_active {
+                Style::default().fg(theme.green).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.text_muted)
+            };
+            spans.push(Span::styled(bullet.to_string(), bullet_style));
+
+            rem = &rem[pos + bullet_len..];
+
+            // Fin de cet élément au prochain indicateur de puce ou fin de chaîne
+            let next_bullet = rem.find(|c| c == '▶' || c == '•').unwrap_or(rem.len());
+            let item_part = &rem[..next_bullet];
+            rem = &rem[next_bullet..];
+
+            if is_active {
+                if let Some((name, after)) = item_part.split_once(" (active)") {
+                    spans.push(Span::styled(name.to_string(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
+                    spans.push(Span::styled(" (active)".to_string(), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+                    if !after.is_empty() {
+                        spans.push(Span::raw(after.to_string()));
+                    }
+                } else {
+                    let trimmed = item_part.trim_end();
+                    let spaces = &item_part[trimmed.len()..];
+                    spans.push(Span::styled(trimmed.to_string(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
+                    if !spaces.is_empty() {
+                        spans.push(Span::raw(spaces.to_string()));
+                    }
+                }
+            } else {
+                let trimmed = item_part.trim_end();
+                let spaces = &item_part[trimmed.len()..];
+                spans.push(Span::styled(trimmed.to_string(), Style::default().fg(Color::Rgb(185, 190, 205))));
+                if !spaces.is_empty() {
+                    spans.push(Span::raw(spaces.to_string()));
+                }
+            }
+        } else {
+            spans.push(Span::raw(rem.to_string()));
+            break;
+        }
+    }
+
+    Line::from(spans)
 }

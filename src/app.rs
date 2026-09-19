@@ -430,7 +430,7 @@ impl App {
     }
 
     pub fn settings_items_count(&self) -> usize {
-        if self.settings_tab == 0 { 7 } else { 6 }
+        config::SettingId::tab_count(self.settings_tab)
     }
 
     #[allow(dead_code)]
@@ -1576,6 +1576,7 @@ impl App {
         self.apply_scrollbar_ratio(target, ratio, total, visible);
     }
 
+    #[allow(dead_code)]
     pub fn apply_scrollbar_jump(
         &mut self,
         target: ScrollbarTarget,
@@ -5076,6 +5077,40 @@ mod tests {
         app.scroll_filter_view_up(10);
         assert_eq!(app.filter_scroll_offset, 5);
         assert_eq!(app.selected_filter_idx, 7);
+    }
+
+    #[tokio::test]
+    async fn test_settings_modal_height_adaptation_and_no_overflow() {
+        let mut app = App::new();
+        app.modal = Modal::Settings;
+        app.settings_tab = 1;
+        app.settings_selected_idx = 5; // UI loop frequency (22 choices)
+
+        // 1. Écran de taille moyenne (100x30) : logo masqué pour laisser 25 lignes à la modale
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| crate::ui::render(f, &mut app)).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let rendered: String = (0..buffer.area.height)
+            .map(|y| (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Le premier et le dernier élément (10000ms) doivent impérativement être visibles dans le rendu
+        assert!(rendered.contains("100ms"), "Le premier élément 100ms doit être rendu");
+        assert!(rendered.contains("10000ms"), "Le dernier élément 10000ms doit être présent sans dépassement");
+
+        // 2. Grand écran (120x40) : logo affiché et modale complète
+        let backend_large = TestBackend::new(120, 40);
+        let mut terminal_large = Terminal::new(backend_large).unwrap();
+        terminal_large.draw(|f| crate::ui::render(f, &mut app)).unwrap();
+        let buffer_large = terminal_large.backend().buffer();
+        let rendered_large: String = (0..buffer_large.area.height)
+            .map(|y| (0..buffer_large.area.width).map(|x| buffer_large[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered_large.contains("10000ms"), "Le dernier élément 10000ms doit être présent sur grand écran");
     }
 }
 
