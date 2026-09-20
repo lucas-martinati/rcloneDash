@@ -103,39 +103,29 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             };
 
             let prefix = if is_selected { " ▶ " } else { "   " };
+            let highlight_bg = Color::Rgb(90, 32, 32);
 
-            let display_text = if app.ctrl_mode {
-                let file_path = std::path::Path::new(*path);
-                let parent = file_path.parent().and_then(|p| p.to_str()).unwrap_or("");
-                let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
-                if parent_clean.is_empty() {
-                    "📁 ./".to_string()
-                } else {
-                    format!("📁 {}/", parent_clean)
-                }
-            } else {
-                crate::ui::dashboard::normalize_display_path(path)
-            };
-
-            if is_selected {
-                let highlight_bg = Color::Rgb(90, 32, 32);
-                all_lines.push((Line::from(vec![
+            let mut line_spans = if is_selected {
+                vec![
                     Span::styled(prefix, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                     Span::styled(format!(" {:<11} ", badge_icon), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                    Span::styled(display_text, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                ]), Some(idx)));
+                ]
             } else {
-                let path_style = if app.ctrl_mode {
-                    Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.text_bright)
-                };
-                all_lines.push((Line::from(vec![
+                vec![
                     Span::styled(prefix, Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)),
                     Span::styled(format!(" {:<11} ", badge_icon), Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
-                    Span::styled(display_text, path_style),
-                ]), Some(idx)));
-            }
+                ]
+            };
+
+            line_spans.extend(crate::ui::dashboard::format_path_spans(
+                path,
+                is_selected,
+                app.ctrl_mode,
+                theme,
+                if is_selected { Some(highlight_bg) } else { None },
+            ));
+
+            all_lines.push((Line::from(line_spans), Some(idx)));
         }
     } else if run.errors.is_empty() {
         all_lines.push((Line::from(Span::styled(

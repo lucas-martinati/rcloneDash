@@ -69,29 +69,17 @@ pub fn render_recent_files_panel(
                     _ => ("● Modified", theme.yellow),
                 };
 
-                let file_path = std::path::Path::new(path);
-                let display_path = if app.ctrl_mode {
-                    let parent = file_path.parent().and_then(|p| p.to_str()).unwrap_or("");
-                    let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
-                    if parent_clean.is_empty() {
-                        "📁 ./".to_string()
-                    } else {
-                        format!("📁 {}/", parent_clean)
-                    }
-                } else {
-                    normalize_display_path(path)
-                };
+                let path_spans = format_path_spans(path, is_selected, app.ctrl_mode, theme, None);
 
                 if is_selected {
                     let cursor = Span::styled("▶ ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                     let badge = Span::styled(format!("{} ", badge_text), Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
-                    let path_span = Span::styled(display_path, Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                     let size_span = Span::styled(size, Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                     let time_span = Span::styled(time, Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
 
                     Row::new(vec![
                         Cell::from(Line::from(vec![cursor, badge])),
-                        Cell::from(path_span),
+                        Cell::from(Line::from(path_spans)),
                         Cell::from(size_span),
                         Cell::from(time_span),
                     ])
@@ -99,17 +87,12 @@ pub fn render_recent_files_panel(
                 } else {
                     let cursor = Span::styled("  ", Style::default());
                     let badge = Span::styled(format!("{} ", badge_text), Style::default().fg(badge_color).add_modifier(Modifier::BOLD));
-                    let path_span = if app.ctrl_mode {
-                        Span::styled(display_path, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
-                    } else {
-                        Span::styled(display_path, Style::default().fg(theme.text_bright))
-                    };
                     let size_span = Span::styled(size, Style::default().fg(theme.text_muted));
                     let time_span = Span::styled(time, Style::default().fg(theme.text_muted));
 
                     Row::new(vec![
                         Cell::from(Line::from(vec![cursor, badge])),
-                        Cell::from(path_span),
+                        Cell::from(Line::from(path_spans)),
                         Cell::from(size_span),
                         Cell::from(time_span),
                     ])
@@ -278,3 +261,76 @@ pub fn normalize_display_path(p: &str) -> String {
     }
     s.replace("/From ", "/from ")
 }
+
+/// Splits a path into (parent_directory, file_name).
+/// For example: "Images/Screenshots/pic.png" -> ("Images/Screenshots", "pic.png")
+/// "pic.png" -> ("", "pic.png")
+pub fn split_path(path: &str) -> (&str, &str) {
+    let clean = path.trim_matches(['/', '\\']);
+    match clean.rfind(['/', '\\']) {
+        Some(idx) => (&clean[..idx], &clean[idx + 1..]),
+        None => ("", clean),
+    }
+}
+
+/// Formats path spans for dashboard recent files and history run details.
+/// In normal mode, displays the file name prominently, followed by the directory path in muted style.
+/// In ctrl_mode, groups them together with the parent folder (📁 dir/) in yellow bold followed by the file name in muted style.
+pub fn format_path_spans(
+    path: &str,
+    is_selected: bool,
+    ctrl_mode: bool,
+    theme: &ThemePalette,
+    bg: Option<Color>,
+) -> Vec<Span<'static>> {
+    let normalized = normalize_display_path(path);
+    let (dir, name) = split_path(&normalized);
+
+    let make_style = |fg: Color, bold: bool| {
+        let mut s = Style::default().fg(fg);
+        if bold {
+            s = s.add_modifier(Modifier::BOLD);
+        }
+        if let Some(b) = bg {
+            s = s.bg(b);
+        }
+        s
+    };
+
+    if ctrl_mode {
+        let folder_prefix = if dir.is_empty() {
+            "📁 ./".to_string()
+        } else {
+            format!("📁 {}/", dir)
+        };
+        let folder_style = make_style(theme.yellow, true);
+        let name_style = if is_selected {
+            make_style(Color::Rgb(200, 180, 180), false)
+        } else {
+            make_style(theme.text_muted, false)
+        };
+        vec![
+            Span::styled(folder_prefix, folder_style),
+            Span::styled(name.to_string(), name_style),
+        ]
+    } else if is_selected {
+        let name_style = make_style(Color::White, true);
+        let mut spans = vec![Span::styled(name.to_string(), name_style)];
+        if !dir.is_empty() {
+            let dir_style = make_style(Color::Rgb(200, 180, 180), false);
+            spans.push(Span::styled(format!("  {}", dir), dir_style));
+        }
+        spans
+    } else {
+        let name_style = make_style(theme.text_bright, false);
+        let mut spans = vec![Span::styled(name.to_string(), name_style)];
+        if !dir.is_empty() {
+            let dir_style = make_style(theme.text_muted, false);
+            spans.push(Span::styled(format!("  {}", dir), dir_style));
+        }
+        spans
+    }
+}
+
+
+

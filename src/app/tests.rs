@@ -658,6 +658,32 @@ use crate::monitor::history::{PastRun, RunStatus};
         );
     }
 
+    #[test]
+    fn test_split_path() {
+        use crate::ui::dashboard::split_path;
+        assert_eq!(
+            split_path("Images/Screenshots/Screenshot.png"),
+            ("Images/Screenshots", "Screenshot.png")
+        );
+        assert_eq!(
+            split_path("Screenshot.png"),
+            ("", "Screenshot.png")
+        );
+        assert_eq!(
+            split_path("/home/user/document.pdf"),
+            ("home/user", "document.pdf")
+        );
+        assert_eq!(
+            split_path("folder/subfolder/file.txt/"),
+            ("folder/subfolder", "file.txt")
+        );
+        assert_eq!(
+            split_path(""),
+            ("", "")
+        );
+    }
+
+
     #[tokio::test]
     async fn test_universal_q_closes_modals() {
         let mut app = App::new();
