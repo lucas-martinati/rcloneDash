@@ -1,0 +1,202 @@
+use ratatui::{
+    layout::Rect,
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::Paragraph,
+    Frame,
+};
+
+use crate::app::App;
+use crate::ui::theme::ThemePalette;
+
+/// Renders the 1-line dynamic pulse bar (ligne de vie) across the dashboard.
+/// - In IDLE mode: displays countdown progress to next sync.
+/// - In SYNC mode: displays an animated roving beam (indeterminate) or live transfer progress.
+pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+    if area.width < 10 || area.height < 1 {
+        return;
+    }
+
+    let is_syncing = app.is_syncing();
+    let max_w = area.width as usize;
+
+    let mut line_spans = Vec::new();
+
+    if is_syncing {
+        let live_pct = app.live.overall_progress_pct();
+
+        // 1. Left prefix
+        let prefix_style = Style::default().fg(theme.green).add_modifier(Modifier::BOLD);
+        line_spans.push(Span::styled("⚡ Sync: ", prefix_style));
+
+        if live_pct > 0 {
+            // Live transfer with known progress percentage
+            let files_str = format!("{} files ", app.live.transfer.files_done);
+            if max_w >= 60 {
+                line_spans.push(Span::styled(files_str, Style::default().fg(theme.text_bright)));
+            }
+
+            let right_text = if max_w >= 70 && !app.live.transfer.speed.is_empty() {
+                format!(" {}% ({})", live_pct, app.live.transfer.speed)
+            } else {
+                format!(" {}%", live_pct)
+            };
+
+            let left_w = Line::from(line_spans.clone()).width();
+            let right_w = Span::raw(&right_text).width();
+            let brackets_w = 2; // '[' and ']'
+
+            if max_w > left_w + right_w + brackets_w + 3 {
+                let bar_w = max_w - left_w - right_w - brackets_w;
+                let filled = (((live_pct as f64) / 100.0 * bar_w as f64).round() as usize).min(bar_w);
+
+                line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
+                for i in 0..bar_w {
+                    if i < filled {
+                        line_spans.push(Span::styled("█", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+                    } else {
+                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                    }
+                }
+                line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
+                line_spans.push(Span::styled(right_text, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+            } else if max_w > left_w + right_w {
+                // Not enough room for bar, just show right text
+                line_spans.push(Span::styled(right_text, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+            }
+        } else {
+            // Indeterminate: listing / diffing / scanning phase
+            let status_msg = if max_w < 50 {
+                "scanning... "
+            } else {
+                "scanning & diffing... "
+            };
+            line_spans.push(Span::styled(status_msg, Style::default().fg(theme.text_bright)));
+
+            let elapsed_str = if app.live.transfer.elapsed.is_empty() {
+                "0s".to_string()
+            } else {
+                app.live.transfer.elapsed.clone()
+            };
+            let right_text = if max_w < 60 {
+                format!(" ⏱ {}", elapsed_str)
+            } else {
+                format!(" ⏱ {} elapsed", elapsed_str)
+            };
+
+            let left_w = Line::from(line_spans.clone()).width();
+            let right_w = Span::raw(&right_text).width();
+            let brackets_w = 2; // '[' and ']'
+
+            if max_w > left_w + right_w + brackets_w + 3 {
+                let bar_w = max_w - left_w - right_w - brackets_w;
+
+                // Animated roving beam across the track
+                let t = (std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() / 70) as usize;
+
+                let beam_len = (bar_w / 4).clamp(3, 10);
+                let cycle_steps = bar_w + beam_len;
+                let head = (t % cycle_steps) as isize;
+
+                line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
+                for i in 0..bar_w {
+                    let pos = i as isize;
+                    let start = head - beam_len as isize;
+                    if pos >= start && pos < head {
+                        let rel = pos - start;
+                        if rel == 0 || rel == (beam_len as isize - 1) {
+                            line_spans.push(Span::styled("▒", Style::default().fg(theme.green)));
+                        } else if rel == 1 || rel == (beam_len as isize - 2) {
+                            line_spans.push(Span::styled("▓", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+                        } else {
+                            line_spans.push(Span::styled("█", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+                        }
+                    } else {
+                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                    }
+                }
+                line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
+                line_spans.push(Span::styled(right_text, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)));
+            } else if max_w > left_w + right_w {
+                line_spans.push(Span::styled(right_text, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)));
+            }
+        }
+    } else {
+        // IDLE mode: Countdown to next scheduled sync
+        let is_disabled = app.service_info.timer_left.eq_ignore_ascii_case("disabled");
+
+        if is_disabled {
+            line_spans.push(Span::styled("⚡ Sync timer: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)));
+            line_spans.push(Span::styled("Disabled ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+            if max_w >= 50 {
+                line_spans.push(Span::styled("(manual sync only)", Style::default().fg(theme.text_muted)));
+            }
+        } else {
+            let left_str = if app.service_info.timer_left.is_empty() {
+                "—".to_string()
+            } else {
+                app.service_info.timer_left.clone()
+            };
+
+            line_spans.push(Span::styled("⚡ Next sync: ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
+            line_spans.push(Span::styled(format!("{} ", left_str), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+
+            let right_text = if max_w >= 50 {
+                format!(" (every {})", app.config.timer_interval)
+            } else {
+                format!(" ({})", app.config.timer_interval)
+            };
+
+            let left_w = Line::from(line_spans.clone()).width();
+            let right_w = Span::raw(&right_text).width();
+            let brackets_w = 2; // '[' and ']'
+
+            if max_w > left_w + right_w + brackets_w + 3 {
+                let bar_w = max_w - left_w - right_w - brackets_w;
+                let ratio = app.timer_progress().unwrap_or(0.0);
+                let filled = ((ratio * bar_w as f64).round() as usize).min(bar_w);
+                let bar_color = if ratio >= 0.85 {
+                    theme.green
+                } else {
+                    theme.accent
+                };
+
+                line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
+                for i in 0..bar_w {
+                    if i < filled {
+                        line_spans.push(Span::styled("█", Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
+                    } else {
+                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                    }
+                }
+                line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
+                line_spans.push(Span::styled(right_text, Style::default().fg(theme.text_muted)));
+            } else if max_w > left_w + brackets_w + 3 {
+                let bar_w = max_w - left_w - brackets_w;
+                let ratio = app.timer_progress().unwrap_or(0.0);
+                let filled = ((ratio * bar_w as f64).round() as usize).min(bar_w);
+                let bar_color = if ratio >= 0.85 {
+                    theme.green
+                } else {
+                    theme.accent
+                };
+
+                line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
+                for i in 0..bar_w {
+                    if i < filled {
+                        line_spans.push(Span::styled("█", Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
+                    } else {
+                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                    }
+                }
+                line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
+            }
+        }
+    }
+
+    let p = Paragraph::new(Line::from(line_spans));
+    f.render_widget(p, area);
+}

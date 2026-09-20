@@ -9,18 +9,21 @@ use crate::ui::theme::ThemePalette;
 pub mod cadrans;
 pub mod history;
 pub mod logs;
+pub mod pulse;
 pub mod recent;
 pub mod sync;
 
 pub use cadrans::*;
 pub use history::*;
 pub use logs::*;
+pub use pulse::*;
 pub use recent::*;
 pub use sync::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DashboardLayout {
     pub cadrans_area: Rect,
+    pub pulse_area: Rect,
     pub alert_area: Option<Rect>,
     pub sync_area: Option<Rect>,
     pub history_area: Rect,
@@ -34,7 +37,8 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
     let show_active_sync = app.is_syncing();
 
     let cadrans_h: u16 = if app.is_box_visible(1) || app.is_box_visible(2) { 6 } else { 0 };
-    let sys_h: u16 = cadrans_h + if show_alert { 3 } else { 0 } + if show_active_sync { 7 } else { 0 };
+    let pulse_h: u16 = if (app.is_box_visible(1) || app.is_box_visible(2)) && area.height >= 14 { 1 } else { 0 };
+    let sys_h: u16 = cadrans_h + pulse_h + if show_alert { 3 } else { 0 } + if show_active_sync { 7 } else { 0 };
 
     let show_mid = app.is_box_visible(3) || app.is_box_visible(4);
     let show_recent = app.is_box_visible(5);
@@ -105,14 +109,17 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
         }
     };
 
-    // Subdivide sys_rect into cadrans, alert, sync
+    // Subdivide sys_rect into cadrans, pulse, alert, sync
     let mut sys_constraints = Vec::new();
     if app.is_box_visible(1) || app.is_box_visible(2) {
-        if !show_alert && !show_active_sync {
+        if !show_alert && !show_active_sync && pulse_h == 0 {
             sys_constraints.push(Constraint::Min(6));
         } else {
             sys_constraints.push(Constraint::Length(6));
         }
+    }
+    if pulse_h > 0 {
+        sys_constraints.push(Constraint::Length(1));
     }
     if show_alert {
         sys_constraints.push(Constraint::Length(3));
@@ -121,8 +128,8 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
         sys_constraints.push(Constraint::Length(7));
     }
 
-    let (cadrans_area, alert_area, sync_area) = if sys_constraints.is_empty() || sys_rect.height == 0 {
-        (Rect::default(), None, None)
+    let (cadrans_area, pulse_area, alert_area, sync_area) = if sys_constraints.is_empty() || sys_rect.height == 0 {
+        (Rect::default(), Rect::default(), None, None)
     } else {
         let sys_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -131,6 +138,13 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
 
         let mut idx = 0;
         let c_area = if app.is_box_visible(1) || app.is_box_visible(2) {
+            let a = sys_chunks[idx];
+            idx += 1;
+            a
+        } else {
+            Rect::default()
+        };
+        let p_area = if pulse_h > 0 {
             let a = sys_chunks[idx];
             idx += 1;
             a
@@ -149,7 +163,7 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
         } else {
             None
         };
-        (c_area, al_area, sy_area)
+        (c_area, p_area, al_area, sy_area)
     };
 
     // Subdivide mid_rect horizontally according to mid_panel_order and visibility
@@ -177,6 +191,7 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
 
     DashboardLayout {
         cadrans_area,
+        pulse_area,
         alert_area,
         sync_area,
         history_area,
@@ -203,6 +218,11 @@ pub fn render_dashboard(
     // 1. Storage & Metrics dials
     if (app.is_box_visible(1) || app.is_box_visible(2)) && layout.cadrans_area.height >= 4 {
         render_system_cadrans(f, app, theme, layout.cadrans_area, hitboxes);
+    }
+
+    // 1b. Dynamic pulse line bar (countdown when idle, roving/progress when syncing)
+    if layout.pulse_area.height >= 1 {
+        render_pulse_line(f, app, theme, layout.pulse_area);
     }
 
     // 2. Alert banner (if any active)

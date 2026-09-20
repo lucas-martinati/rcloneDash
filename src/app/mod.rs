@@ -1165,6 +1165,92 @@ impl App {
         conflicts
     }
 
+    /// Returns the timer interval in seconds (default 600s = 10min).
+    pub fn timer_cycle_seconds(&self) -> u64 {
+        let interval = self.config.timer_interval.trim();
+        if interval.ends_with("min") {
+            interval.trim_end_matches("min").parse::<u64>().unwrap_or(10) * 60
+        } else if interval.ends_with('m') {
+            interval.trim_end_matches('m').parse::<u64>().unwrap_or(10) * 60
+        } else if interval.ends_with('h') {
+            interval.trim_end_matches('h').parse::<u64>().unwrap_or(1) * 3600
+        } else if interval.ends_with('s') {
+            interval.trim_end_matches('s').parse::<u64>().unwrap_or(600)
+        } else {
+            interval.parse::<u64>().map(|m| m * 60).unwrap_or(600)
+        }
+    }
+
+    /// Returns remaining seconds until the next sync, parsed from `service_info.timer_left`.
+    pub fn timer_remaining_seconds(&self) -> Option<u64> {
+        let left = self.service_info.timer_left.trim();
+        if left.is_empty() || left == "--" || left == "—" || left.eq_ignore_ascii_case("disabled") {
+            return None;
+        }
+        if left.eq_ignore_ascii_case("imminent") {
+            return Some(0);
+        }
+        if left.starts_with("after sync") || left.starts_with("in ~") {
+            return Some(self.timer_cycle_seconds());
+        }
+
+        // Handle formats like "4m 12s", "12min", "45s", "12s left", "9min left", "1h 10m"
+        let clean = left.trim_end_matches("left").trim();
+        let mut total_secs: u64 = 0;
+        let mut num_buf = String::new();
+        let mut has_parsed = false;
+
+        for c in clean.chars() {
+            if c.is_ascii_digit() {
+                num_buf.push(c);
+            } else if c == 'h' || c == 'H' {
+                if let Ok(v) = num_buf.parse::<u64>() {
+                    total_secs += v * 3600;
+                    has_parsed = true;
+                }
+                num_buf.clear();
+            } else if c == 'm' || c == 'M' {
+                if let Ok(v) = num_buf.parse::<u64>() {
+                    total_secs += v * 60;
+                    has_parsed = true;
+                }
+                num_buf.clear();
+            } else if c == 's' || c == 'S' {
+                if let Ok(v) = num_buf.parse::<u64>() {
+                    total_secs += v;
+                    has_parsed = true;
+                }
+                num_buf.clear();
+            }
+        }
+
+        if !num_buf.is_empty() {
+            if let Ok(v) = num_buf.parse::<u64>() {
+                if !has_parsed {
+                    total_secs = v * 60;
+                    has_parsed = true;
+                } else {
+                    total_secs += v;
+                }
+            }
+        }
+
+        if has_parsed {
+            Some(total_secs)
+        } else {
+            None
+        }
+    }
+
+    /// Computes the countdown progress ratio from 0.0 (cycle just started) to 1.0 (imminent / sync due).
+    pub fn timer_progress(&self) -> Option<f64> {
+        let cycle = self.timer_cycle_seconds() as f64;
+        if cycle <= 0.0 {
+            return None;
+        }
+        let rem = self.timer_remaining_seconds()? as f64;
+        Some((1.0 - (rem / cycle)).clamp(0.0, 1.0))
+    }
 }
 
 fn spawn_quota_fetch(remote: String, tx: std::sync::mpsc::Sender<CloudQuota>) {

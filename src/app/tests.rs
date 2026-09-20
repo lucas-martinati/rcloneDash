@@ -2113,6 +2113,162 @@ use crate::monitor::history::{PastRun, RunStatus};
         let _ = std::fs::remove_file(crate::config::config_file());
     }
 
+    #[tokio::test]
+    async fn test_timer_cycle_remaining_and_progress() {
+        let mut app = App::new();
+
+        // 1. Timer cycle seconds parsing
+        app.config.timer_interval = "10min".to_string();
+        assert_eq!(app.timer_cycle_seconds(), 600);
+        app.config.timer_interval = "15min".to_string();
+        assert_eq!(app.timer_cycle_seconds(), 900);
+        app.config.timer_interval = "30min".to_string();
+        assert_eq!(app.timer_cycle_seconds(), 1800);
+        app.config.timer_interval = "1h".to_string();
+        assert_eq!(app.timer_cycle_seconds(), 3600);
+        app.config.timer_interval = "2h".to_string();
+        assert_eq!(app.timer_cycle_seconds(), 7200);
+        app.config.timer_interval = "4h".to_string();
+        assert_eq!(app.timer_cycle_seconds(), 14400);
+
+        // 2. Timer remaining seconds parsing
+        app.config.timer_interval = "10min".to_string();
+        app.service_info.timer_left = "4m 12s".to_string();
+        assert_eq!(app.timer_remaining_seconds(), Some(252));
+
+        app.service_info.timer_left = "12s left".to_string();
+        assert_eq!(app.timer_remaining_seconds(), Some(12));
+
+        app.service_info.timer_left = "9min left".to_string();
+        assert_eq!(app.timer_remaining_seconds(), Some(540));
+
+        app.service_info.timer_left = "imminent".to_string();
+        assert_eq!(app.timer_remaining_seconds(), Some(0));
+
+        app.service_info.timer_left = "after sync (10min)".to_string();
+        assert_eq!(app.timer_remaining_seconds(), Some(600));
+
+        app.service_info.timer_left = "Disabled".to_string();
+        assert_eq!(app.timer_remaining_seconds(), None);
+
+        app.service_info.timer_left = "--".to_string();
+        assert_eq!(app.timer_remaining_seconds(), None);
+
+        // 3. Timer progress ratio
+        app.service_info.timer_left = "4m 12s".to_string(); // 252s rem / 600s cycle = 0.42 remaining -> 0.58 progress
+        let prog = app.timer_progress().unwrap();
+        assert!((prog - 0.58).abs() < 0.01);
+
+        app.service_info.timer_left = "imminent".to_string();
+        assert_eq!(app.timer_progress(), Some(1.0));
+
+        app.service_info.timer_left = "Disabled".to_string();
+        assert_eq!(app.timer_progress(), None);
+    }
+
+    #[tokio::test]
+    async fn test_pulse_area_layout_geometry() {
+        let mut app = App::new();
+        app.config.show_cadrans = true;
+        app.config.show_metrics = true;
+        app.config.show_history = true;
+        app.config.show_logs = true;
+        app.config.show_recent = true;
+        app.service_info.state = crate::systemd::ServiceState::Idle;
+        app.live.is_syncing = false;
+
+        // Normal dashboard height: pulse_area height should be 1
+        let area = Rect { x: 0, y: 0, width: 120, height: 40 };
+        let layout = crate::ui::dashboard::compute_dashboard_layout(area, &app);
+        assert_eq!(layout.pulse_area.height, 1);
+        assert_eq!(layout.pulse_area.y, layout.cadrans_area.y + layout.cadrans_area.height);
+
+        // When cadrans are hidden: pulse_area height should be 0
+        app.config.show_cadrans = false;
+        app.config.show_metrics = false;
+        let layout2 = crate::ui::dashboard::compute_dashboard_layout(area, &app);
+        assert_eq!(layout2.pulse_area.height, 0);
+
+        // When terminal is tiny (< 14 lines): pulse_area should collapse to 0
+        app.config.show_cadrans = true;
+        let tiny_area = Rect { x: 0, y: 0, width: 120, height: 12 };
+        let layout3 = crate::ui::dashboard::compute_dashboard_layout(tiny_area, &app);
+        assert_eq!(layout3.pulse_area.height, 0);
+    }
+
+    #[tokio::test]
+    async fn test_render_pulse_line_no_panic() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+        use crate::ui::dashboard::render_pulse_line;
+
+        let mut app = App::new();
+        let theme = app.current_theme.palette();
+        let backend = TestBackend::new(100, 1);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        // 1. Idle mode with countdown
+        app.service_info.timer_left = "3m 45s".to_string();
+        terminal.draw(|f| {
+            render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: 100, height: 1 });
+        }).unwrap();
+
+        // 2. Idle mode with disabled timer
+        app.service_info.timer_left = "Disabled".to_string();
+        terminal.draw(|f| {
+            render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: 100, height: 1 });
+        }).unwrap();
+
+        // 3. Syncing mode - indeterminate (scan/diff)
+        app.live.is_syncing = true;
+        app.live.transfer.files_done = 0;
+        app.live.transfer.bytes_done = String::new();
+        terminal.draw(|f| {
+            render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: 100, height: 1 });
+        }).unwrap();
+
+        // 4. Syncing mode - active transfer with percentage
+        app.live.transfer.bytes_done = "50 MB".to_string();
+        app.live.transfer.bytes_total = "100 MB".to_string();
+        app.live.transfer.files_done = 2;
+        app.live.transfer.speed = "12 MB/s".to_string();
+        terminal.draw(|f| {
+            render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: 100, height: 1 });
+        }).unwrap();
+
+        // 5. Very compact area
+        terminal.draw(|f| {
+            render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: 25, height: 1 });
+        }).unwrap();
+
+        // 6. Test various widths across idle and sync to verify no panic or overflow
+        for w in [15, 25, 35, 45, 55, 65, 80, 100, 120, 160] {
+            let b = TestBackend::new(w, 1);
+            let mut t = Terminal::new(b).unwrap();
+            // Idle
+            app.live.is_syncing = false;
+            app.service_info.timer_left = "4m 12s".to_string();
+            t.draw(|f| {
+                render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: w, height: 1 });
+            }).unwrap();
+
+            // Sync indeterminate
+            app.live.is_syncing = true;
+            app.live.transfer.files_done = 0;
+            app.live.transfer.bytes_done = String::new();
+            t.draw(|f| {
+                render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: w, height: 1 });
+            }).unwrap();
+
+            // Sync with progress
+            app.live.transfer.files_done = 3;
+            app.live.transfer.bytes_done = "40 MB".to_string();
+            t.draw(|f| {
+                render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: w, height: 1 });
+            }).unwrap();
+        }
+    }
+
     #[test]
     fn test_no_dead_code_or_unused_imports() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
