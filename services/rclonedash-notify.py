@@ -63,7 +63,8 @@ def open_rclonedash():
 
 def main():
     exit_code = sys.argv[1] if len(sys.argv) > 1 else "1"
-    msg = f"La dernière synchronisation a échoué (code {exit_code}). Cliquez pour ouvrir le tableau de bord."
+    summary = "Sync Failed"
+    body = f"Bisync exited with code {exit_code}. Click to inspect."
 
     try:
         import gi
@@ -83,14 +84,14 @@ def main():
             loop.quit()
 
         n = Notify.Notification.new(
-            "RcloneDash — Échec de synchronisation",
-            msg,
+            summary,
+            body,
             "rclonedash"
         )
         n.set_urgency(Notify.Urgency.CRITICAL)
         n.set_hint("desktop-entry", GLib.Variant("s", "rclonedash"))
-        n.add_action("default", "Ouvrir", on_action, None)
-        n.add_action("open", "Ouvrir RcloneDash", on_action, None)
+        n.add_action("default", "Open", on_action, None)
+        n.add_action("open", "View Dashboard", on_action, None)
         n.connect("closed", on_closed)
         n.show()
 
@@ -104,8 +105,8 @@ def main():
             try:
                 subprocess.run([
                     "notify-send",
-                    "RcloneDash — Échec de synchronisation",
-                    msg,
+                    summary,
+                    body,
                     "--icon=rclonedash",
                     "-u", "critical",
                     "-a", "RcloneDash"

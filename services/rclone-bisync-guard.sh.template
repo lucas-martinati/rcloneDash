@@ -143,9 +143,9 @@ notify_failure() {
             setsid python3 "$notif_script" "$rc" >/dev/null 2>&1 &
         fi
     elif command -v notify-send >/dev/null 2>&1; then
-        notify-send "RcloneDash — Échec de synchronisation" \
-            "La dernière synchronisation a échoué (code $rc)." \
-            --icon=dialog-error -u critical -a "RcloneDash" 2>/dev/null || true
+        notify-send "Sync Failed" \
+            "Bisync exited with code $rc. Click to inspect." \
+            --icon=rclonedash -u critical -a "RcloneDash" 2>/dev/null || true
     fi
 }
 
