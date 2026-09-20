@@ -183,11 +183,11 @@ pub async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
                 asset.get("browser_download_url").and_then(|v| v.as_str())
             ) {
                 let size = asset.get("size").and_then(|v| v.as_u64());
-                if name == "rclonedash-linux-x86_64" {
+                if name.ends_with("linux-x86_64.tar.gz") {
                     download_url = Some(url.to_string());
                     asset_size = size;
                     break;
-                } else if name.ends_with("linux-x86_64.tar.gz") && download_url.is_none() {
+                } else if name == "rclonedash-linux-x86_64" && download_url.is_none() {
                     download_url = Some(url.to_string());
                     asset_size = size;
                 }
@@ -288,23 +288,54 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
     println!("  │");
 
     if is_archive {
-        println!("  {}  Extracting archive to {}...", style.bold_cyan("◇"), style.bold(&exe_dir.display().to_string()));
+        let extract_dir = std::env::temp_dir().join(format!(".rclonedash-update-{}", pid));
+        let _ = tokio::fs::create_dir_all(&extract_dir).await;
+
+        println!("  {}  Extracting release package...", style.bold_cyan("◇"));
         let untar = tokio::process::Command::new("tar")
             .arg("-xzf")
             .arg(&tmp_dest)
             .arg("--strip-components=1")
             .arg("-C")
-            .arg(exe_dir)
+            .arg(&extract_dir)
             .status()
             .await;
         let _ = std::fs::remove_file(&tmp_dest);
 
         match untar {
             Ok(st) if st.success() => {
-                println!("  │  Extracted and updated files successfully");
-                Ok(())
+                let installer = extract_dir.join("install.sh");
+                if installer.is_file() {
+                    println!("  {}  Updating binary, systemd services, desktop entry, and icon...", style.bold_cyan("◇"));
+                    let inst = tokio::process::Command::new("bash")
+                        .arg(&installer)
+                        .current_dir(&extract_dir)
+                        .status()
+                        .await;
+                    let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+                    match inst {
+                        Ok(ist) if ist.success() => {
+                            println!("  │  Updated all components successfully (user configuration preserved)");
+                            Ok(())
+                        }
+                        _ => Err("Installer script failed during update".to_string()),
+                    }
+                } else {
+                    let new_bin = extract_dir.join("rclonedash");
+                    let res = if new_bin.is_file() {
+                        std::fs::rename(&new_bin, &current_exe)
+                            .map_err(|e| format!("Failed to replace binary: {}", e))
+                    } else {
+                        Err("Archive did not contain rclonedash binary".to_string())
+                    };
+                    let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+                    res
+                }
             }
-            _ => Err("Failed to extract update archive".to_string()),
+            _ => {
+                let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+                Err("Failed to extract update archive".to_string())
+            }
         }
     } else {
         println!("  {}  Installing binary to {}...", style.bold_cyan("◇"), style.bold(&current_exe.display().to_string()));
