@@ -243,7 +243,11 @@ impl App {
                 Action::None
             }
             HitAction::ButtonDryRun => {
-                self.modal = Modal::ConfirmDryRun;
+                self.modal = if self.dry_run_running {
+                    Modal::DryRun
+                } else {
+                    Modal::ConfirmDryRun
+                };
                 Action::None
             }
             HitAction::ButtonFiles => {
@@ -1415,7 +1419,9 @@ impl App {
                 self.modal = Modal::None;
             }
             KeyCode::Char('r') => {
-                self.start_dry_run();
+                if !self.dry_run_running {
+                    self.start_dry_run();
+                }
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 self.dry_run_scroll = self.dry_run_scroll.saturating_sub(1);
@@ -1589,7 +1595,11 @@ impl App {
                 return Action::None;
             }
             KeyCode::Char('d') => {
-                self.modal = Modal::ConfirmDryRun;
+                if self.dry_run_running {
+                    self.modal = Modal::DryRun;
+                } else {
+                    self.modal = Modal::ConfirmDryRun;
+                }
                 return Action::None;
             }
             KeyCode::Char('f') => {

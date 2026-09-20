@@ -2317,6 +2317,82 @@ use crate::monitor::history::{PastRun, RunStatus};
         }).unwrap();
     }
 
+    #[tokio::test]
+    async fn test_dry_run_reopening_and_enhanced_modal_rendering() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+        use crate::ui::popups::render_popups;
+        use crate::ui::theme::ThemeChoice;
+
+        let mut app = App::new();
+        let theme = ThemeChoice::TokyoNight.palette();
+        let backend = TestBackend::new(120, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        // 1. Initially, pressing 'd' opens ConfirmDryRun
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::ConfirmDryRun);
+
+        // 2. Start dry-run: modal becomes DryRun and dry_run_running is true
+        app.start_dry_run();
+        assert_eq!(app.modal, Modal::DryRun);
+        assert!(app.dry_run_running);
+
+        // 3. User closes modal to return to dashboard (Esc or q)
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::None);
+        assert!(app.dry_run_running);
+
+        // 4. On dashboard, pressing 'd' must REOPEN DryRun modal, NOT ConfirmDryRun!
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::DryRun);
+
+        // 5. Clicking DryRun button also reopens DryRun modal
+        app.modal = Modal::None;
+        app.execute_hit_action(HitAction::ButtonDryRun, false, 0);
+        assert_eq!(app.modal, Modal::DryRun);
+
+        // 6. Pressing 'r' while dry-run is running should not launch another run
+        app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::DryRun);
+
+        // 7. Render modal while running (empty / initial logs)
+        let mut hitboxes = Vec::new();
+        terminal.draw(|f| {
+            render_popups(f, &app, &theme, &mut hitboxes);
+        }).unwrap();
+
+        // 8. Populate logs with realistic dry-run output (Path1 and Path2 changes)
+        app.dry_run_running = false;
+        app.dry_run_logs = vec![
+            "2026/09/20 18:00:00 INFO  : - Path2    File is new - document.pdf".to_string(),
+            "2026/09/20 18:00:00 INFO  : - Path2    File was deleted - old.txt".to_string(),
+            "2026/09/20 18:00:00 INFO  : - Path1    File is new - remote.png".to_string(),
+            "2026/09/20 18:00:00 INFO  : - Path1    File changed - config.json".to_string(),
+            "2026/09/20 18:00:00 INFO  : Checks:                150 / 150, 100%".to_string(),
+            "2026/09/20 18:00:00 INFO  : Transferred:   1.234 MiB / 1.234 MiB, 100%".to_string(),
+            "2026/09/20 18:00:00 INFO  : Elapsed time:        2.5s".to_string(),
+            "2026/09/20 18:00:00 INFO  : Bisync successful".to_string(),
+        ];
+
+        // 9. Render modal with populated summary and logs
+        hitboxes.clear();
+        terminal.draw(|f| {
+            render_popups(f, &app, &theme, &mut hitboxes);
+        }).unwrap();
+
+        // 10. Verify scroll interaction
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.dry_run_scroll, 1);
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.dry_run_scroll, 0);
+
+        // 11. When finished, pressing 'd' from dashboard opens ConfirmDryRun for a fresh run
+        app.modal = Modal::None;
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(app.modal, Modal::ConfirmDryRun);
+    }
+
     #[test]
     fn test_no_dead_code_or_unused_imports() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");

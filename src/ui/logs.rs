@@ -10,10 +10,12 @@ pub fn colorize_log_line<'a>(line: &'a str, theme: &ThemePalette) -> Line<'a> {
 
     let (prefix_color, is_bold) = if ll.contains("error") || ll.contains("failed") || ll.contains("critical") {
         (theme.red, true)
-    } else if ll.contains("notice") || ll.contains("warning") || ll.contains("warn") {
+    } else if ll.contains("file was deleted") || ll.contains("file deleted") || ll.contains("queue delete") || ll.contains("deleted") {
+        (theme.red, false)
+    } else if ll.contains("notice") || ll.contains("warning") || ll.contains("warn") || ll.contains("file changed") {
         (theme.yellow, false)
-    } else if ll.contains("bisync successful") || ll.contains("copied (new)") {
-        (theme.green, true)
+    } else if ll.contains("bisync successful") || ll.contains("copied") || ll.contains("file is new") || ll.contains("queue copy") {
+        (theme.green, false)
     } else if ll.contains("transferred:") || ll.contains("checks:") {
         (theme.accent, false)
     } else {
