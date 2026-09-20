@@ -85,7 +85,7 @@ def main():
         n = Notify.Notification.new(
             "RcloneDash — Échec de synchronisation",
             msg,
-            "dialog-error"
+            "rclonedash"
         )
         n.set_urgency(Notify.Urgency.CRITICAL)
         n.set_hint("desktop-entry", GLib.Variant("s", "rclonedash"))
@@ -106,7 +106,7 @@ def main():
                     "notify-send",
                     "RcloneDash — Échec de synchronisation",
                     msg,
-                    "--icon=dialog-error",
+                    "--icon=rclonedash",
                     "-u", "critical",
                     "-a", "RcloneDash"
                 ], check=False)
