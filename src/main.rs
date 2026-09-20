@@ -57,41 +57,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             "--check-update" => {
-                println!("Checking for updates...");
+                let style = updater::ConsoleStyle::new();
+                println!("  ┌─ {}", style.bold_red("rcloneDash Update Check"));
+                println!("  │");
+                println!("  {}  Checking for updates...", style.bold_cyan("◇"));
                 match updater::check_for_updates().await {
                     Ok(Some(info)) => {
-                        println!("🎉 A new version of rcloneDash is available: v{} (current: v{})", info.latest_version, info.current_version);
-                        println!("Run `rclonedash --update` or `sudo rclonedash --update` to install it.");
+                        println!("  │  Current version: {}", style.gray(&format!("v{}", info.current_version)));
+                        println!("  │  Latest version:  {}", style.bold(&format!("v{}", info.latest_version)));
+                        println!("  │");
+                        println!("  └─ {}", style.bold_green(&format!("🚀 Update available: v{}! Run: rclonedash --update", info.latest_version)));
                     }
                     Ok(None) => {
-                        println!("✅ rcloneDash is up to date (v{}).", env!("CARGO_PKG_VERSION"));
+                        println!("  │  v{} is already installed", env!("CARGO_PKG_VERSION"));
+                        println!("  │");
+                        println!("  └─ {}", style.bold_green("✅ rcloneDash is up to date."));
                     }
                     Err(e) => {
-                        eprintln!("⚠️  Could not check for updates: {}", e);
+                        println!("  │");
+                        eprintln!("  └─ {}", style.bold_red(&format!("⚠️  Could not check for updates: {}", e)));
                     }
                 }
                 return Ok(());
             }
             "--update" | "-u" => {
-                println!("Checking for latest release...");
+                let style = updater::ConsoleStyle::new();
+                println!("  ┌─ {}", style.bold_red("rcloneDash Updater"));
+                println!("  │");
+                println!("  {}  Checking for latest release...", style.bold_cyan("◇"));
                 match updater::check_for_updates().await {
                     Ok(Some(info)) => {
-                        println!("Downloading and installing rcloneDash v{}...", info.latest_version);
+                        println!("  │  Found {} (current: {})", style.bold(&format!("v{}", info.latest_version)), style.gray(&format!("v{}", info.current_version)));
+                        println!("  │");
                         match updater::download_and_install_update(&info).await {
                             Ok(()) => {
-                                println!("✨ Successfully updated to v{}!", info.latest_version);
+                                println!("  │");
+                                println!("  └─ {}", style.bold_green(&format!("✨ Successfully updated to v{}!", info.latest_version)));
                             }
                             Err(e) => {
-                                eprintln!("❌ Update failed: {}", e);
+                                println!("  │");
+                                eprintln!("  └─ {}", style.bold_red(&format!("❌ Update failed: {}", e)));
                                 std::process::exit(1);
                             }
                         }
                     }
                     Ok(None) => {
-                        println!("✅ rcloneDash is already on the latest version (v{}).", env!("CARGO_PKG_VERSION"));
+                        println!("  │  v{} is already installed", env!("CARGO_PKG_VERSION"));
+                        println!("  │");
+                        println!("  └─ {}", style.bold_green("✅ rcloneDash is already on the latest version."));
                     }
                     Err(e) => {
-                        eprintln!("❌ Update check failed: {}", e);
+                        println!("  │");
+                        eprintln!("  └─ {}", style.bold_red(&format!("❌ Update check failed: {}", e)));
                         std::process::exit(1);
                     }
                 }
