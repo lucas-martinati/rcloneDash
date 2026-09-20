@@ -19,7 +19,7 @@ pub use container::compute_active_modal_area;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::Block,
+    widgets::{Block, Clear},
     Frame,
 };
 
@@ -41,6 +41,9 @@ pub fn render(f: &mut Frame, app: &mut App) {
     } else {
         theme
     };
+
+    // Centralized buffer reset: clear entire terminal area to eliminate any ghost / unrefreshed characters
+    f.render_widget(Clear, f.area());
 
     // Dark global background
     f.render_widget(Block::default().style(Style::default().bg(dashboard_theme.bg_main)), f.area());
