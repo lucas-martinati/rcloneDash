@@ -35,7 +35,7 @@ pub fn format_setting_options_list<T: AsRef<str>>(choices: &[T], current: &str) 
             .join("\n")
     } else {
         let num_cols = if choices.len() > 14 { 3 } else { 2 };
-        let num_rows = (choices.len() + num_cols - 1) / num_cols;
+        let num_rows = choices.len().div_ceil(num_cols);
         let mut lines = Vec::with_capacity(num_rows);
 
         let formatted: Vec<(String, bool)> = choices
@@ -49,36 +49,41 @@ pub fn format_setting_options_list<T: AsRef<str>>(choices: &[T], current: &str) 
 
         // Calculer la largeur de chaque colonne pour un alignement parfait
         let mut col_widths = vec![0usize; num_cols];
-        for col in 0..num_cols {
+        for (col, width) in col_widths.iter_mut().enumerate().take(num_cols) {
             for r in 0..num_rows {
                 let idx = r + col * num_rows;
                 if idx < formatted.len() {
                     let (s, active) = &formatted[idx];
+                    let s_len = s.chars().count();
                     let len = if col == 0 {
-                        if *active { format!("  ▶ {} (active)", s).chars().count() } else { format!("  • {}", s).chars().count() }
+                        if *active { s_len + 13 } else { s_len + 4 }
+                    } else if *active {
+                        s_len + 11
                     } else {
-                        if *active { format!("▶ {} (active)", s).chars().count() } else { format!("• {}", s).chars().count() }
+                        s_len + 2
                     };
-                    col_widths[col] = col_widths[col].max(len);
+                    *width = (*width).max(len);
                 }
             }
-            col_widths[col] += 2; // Marge de séparation inter-colonnes
+            *width += 2; // Marge de séparation inter-colonnes
         }
 
         for r in 0..num_rows {
             let mut line = String::new();
-            for col in 0..num_cols {
+            for (col, &width) in col_widths.iter().enumerate().take(num_cols) {
                 let idx = r + col * num_rows;
                 if idx < formatted.len() {
                     let (s, active) = &formatted[idx];
-                    let item = if col == 0 {
+                    let item: String = if col == 0 {
                         if *active { format!("  ▶ {} (active)", s) } else { format!("  • {}", s) }
+                    } else if *active {
+                        format!("▶ {} (active)", s)
                     } else {
-                        if *active { format!("▶ {} (active)", s) } else { format!("• {}", s) }
+                        format!("• {}", s)
                     };
 
                     if col + 1 < num_cols && (r + (col + 1) * num_rows) < formatted.len() {
-                        let pad = col_widths[col].saturating_sub(item.chars().count());
+                        let pad = width.saturating_sub(item.chars().count());
                         line.push_str(&format!("{}{:pad$}", item, "", pad = pad));
                     } else {
                         line.push_str(&item);
@@ -207,7 +212,7 @@ impl BorderStyleChoice {
         }
     }
 
-    pub fn to_border_type(&self) -> ratatui::widgets::BorderType {
+    pub fn to_border_type(self) -> ratatui::widgets::BorderType {
         match self {
             BorderStyleChoice::Rounded => ratatui::widgets::BorderType::Rounded,
             BorderStyleChoice::Sharp => ratatui::widgets::BorderType::Plain,
@@ -376,7 +381,7 @@ pub const FULL_SYNC_OPTIONS: &[FullSyncOption] = &[
     FullSyncOption { value: "720", label: "12h" },
     FullSyncOption { value: "1440", label: "24h (1 day)" },
     FullSyncOption { value: "never", label: "Never (Local)" },
-];
+] as &[FullSyncOption];
 
 pub fn full_sync_label(val: &str) -> &'static str {
     for opt in FULL_SYNC_OPTIONS {
@@ -643,7 +648,7 @@ pub fn config_dir() -> PathBuf {
     }
     #[cfg(test)]
     {
-        return std::env::temp_dir().join("rclonedash_test_config");
+        std::env::temp_dir().join("rclonedash_test_config")
     }
     #[cfg(not(test))]
     expand_tilde("~/.config/rclone")
@@ -1040,11 +1045,13 @@ mod tests {
 
     #[test]
     fn test_config_roundtrip_with_new_appearance_fields() {
-        let mut config = AppConfig::default();
-        config.container_layout = ContainerLayout::LogsTop;
-        config.mid_panel_order = MidPanelOrder::LogsHistory;
-        config.border_style = BorderStyleChoice::Double;
-        config.graph_style = GraphStyleChoice::Braille;
+        let config = AppConfig {
+            container_layout: ContainerLayout::LogsTop,
+            mid_panel_order: MidPanelOrder::LogsHistory,
+            border_style: BorderStyleChoice::Double,
+            graph_style: GraphStyleChoice::Braille,
+            ..Default::default()
+        };
 
         let json = serde_json::to_string(&config).expect("Must serialize");
         let deserialized: AppConfig = serde_json::from_str(&json).expect("Must deserialize");

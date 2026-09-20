@@ -39,7 +39,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let dashboard_theme = if matches!(app.modal, crate::app::Modal::Menu | crate::app::Modal::Settings | crate::app::Modal::Help) {
         theme.to_grayscale()
     } else {
-        theme.clone()
+        theme
     };
 
     // Dark global background
@@ -90,6 +90,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
 }
 
 /// Custom scrollbar rendering with explicit column coordinates and vertical bounds
+#[allow(clippy::too_many_arguments)]
 pub fn render_scrollbar_custom(
     f: &mut Frame,
     scroll_x: u16,
@@ -162,6 +163,7 @@ pub fn render_scrollbar_custom(
 
 /// Scrollbar integrated into standard bordered containers
 /// Drawn directly in the inner right column (x = area.x + area.width - 2)
+#[allow(clippy::too_many_arguments)]
 pub fn render_scrollbar(
     f: &mut Frame,
     area: ratatui::layout::Rect,
@@ -183,6 +185,7 @@ pub fn render_scrollbar(
 
 /// Scrollbar integrated into an inner pane (without own border, e.g. left pane in filters or explorer)
 /// Drawn at the far right of the pane (x = pane.x + pane.width - 1) across its full height (top_y = pane.y, bot_y = pane.y + pane.height - 1)
+#[allow(clippy::too_many_arguments)]
 pub fn render_scrollbar_pane(
     f: &mut Frame,
     pane: ratatui::layout::Rect,

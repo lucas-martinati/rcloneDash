@@ -237,16 +237,12 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
             state.phase = "4. Applying".to_string();
             state.phase_index = 3;
         }
-    } else if ll.contains("path2: checking") || ll.contains("path2: matching") || ll.contains("validating listings for path2") {
-        if state.phase_index < 2 {
-            state.phase = "3. Remote Diffs".to_string();
-            state.phase_index = 2;
-        }
-    } else if ll.contains("path1: checking") || ll.contains("path1: matching") || ll.contains("validating listings for path1") {
-        if state.phase_index < 1 {
-            state.phase = "2. Local Diffs".to_string();
-            state.phase_index = 1;
-        }
+    } else if (ll.contains("path2: checking") || ll.contains("path2: matching") || ll.contains("validating listings for path2")) && state.phase_index < 2 {
+        state.phase = "3. Remote Diffs".to_string();
+        state.phase_index = 2;
+    } else if (ll.contains("path1: checking") || ll.contains("path1: matching") || ll.contains("validating listings for path1")) && state.phase_index < 1 {
+        state.phase = "2. Local Diffs".to_string();
+        state.phase_index = 1;
     }
 
     // Parsing métriques de transfert

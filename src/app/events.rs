@@ -779,7 +779,7 @@ impl App {
                         }
                         KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             if let Some(pasted) = crate::clipboard::paste_from_clipboard() {
-                                let clean = pasted.trim().replace('\n', "").replace('\r', "");
+                                let clean = pasted.trim().replace(['\n', '\r'], "");
                                 let clean_chars: Vec<char> = clean.chars().collect();
                                 let clean_len = clean_chars.len();
                                 match state.active_field {

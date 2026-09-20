@@ -2192,4 +2192,17 @@ use crate::monitor::history::{PastRun, RunStatus};
             "Found dead code or unused imports/variables:\n{}",
             compiler_violations.join("\n")
         );
+
+        // 3. Verify with cargo clippy --all-targets -- -D warnings that there are zero linter warnings
+        let clippy_output = std::process::Command::new("cargo")
+            .current_dir(manifest_dir)
+            .args(["clippy", "--all-targets", "--", "-D", "warnings"])
+            .output()
+            .expect("Failed to execute cargo clippy");
+
+        assert!(
+            clippy_output.status.success(),
+            "cargo clippy failed:\n{}",
+            String::from_utf8_lossy(&clippy_output.stderr)
+        );
     }

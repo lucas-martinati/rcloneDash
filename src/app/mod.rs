@@ -758,7 +758,7 @@ impl App {
             let (tx, rx) = std::sync::mpsc::channel();
             self.file_count_rx = Some(rx);
             let base = config::expand_tilde(&self.config.local_dir);
-            spawn_file_count(std::path::PathBuf::from(base), tx);
+            spawn_file_count(base, tx);
         }
 
         if self.dry_run_running {
@@ -944,7 +944,7 @@ impl App {
             list.truncate(100);
         }
 
-        let base = std::path::PathBuf::from(config::expand_tilde(&self.config.local_dir));
+        let base = config::expand_tilde(&self.config.local_dir);
         for item in list.iter_mut() {
             let full = base.join(&item.1);
             if let Ok(meta) = std::fs::metadata(&full) {
@@ -1093,10 +1093,8 @@ impl App {
         if self.live.is_syncing {
             let duration_s = if let Some(start) = self.live.sync_start {
                 start.elapsed().as_secs()
-            } else if let Some(proc_secs) = crate::monitor::streamer::get_running_sync_elapsed_seconds() {
-                proc_secs
             } else {
-                0
+                crate::monitor::streamer::get_running_sync_elapsed_seconds().unwrap_or_default()
             };
             if duration_s > 300 {
                 alerts.push(Alert {

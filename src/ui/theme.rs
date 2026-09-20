@@ -241,7 +241,7 @@ pub struct ThemePalette {
 
 impl ThemePalette {
     /// Converts all palette colors to grayscale (monochrome).
-    pub fn to_grayscale(&self) -> ThemePalette {
+    pub fn to_grayscale(self) -> ThemePalette {
         let to_gray = |c: Color| -> Color {
             match c {
                 Color::Rgb(r, g, b) => {

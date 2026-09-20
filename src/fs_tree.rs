@@ -192,8 +192,7 @@ pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool
         }
 
         // « base/** » : le dossier « base » lui-même est aussi considéré exclu
-        if body.ends_with("/**") {
-            let base_body = &body[..body.len() - 3];
+        if let Some(base_body) = body.strip_suffix("/**") {
             let rx_base = glob_to_regex(base_body);
             if match_any_level(&rx_base, clean, anchored) {
                 return true;
@@ -201,11 +200,12 @@ pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool
         }
 
         // Si c'est un dossier et que le motif se termine par '/', tester la base
-        if is_dir && body.ends_with('/') {
-            let base_body = &body[..body.len() - 1];
-            let rx_base = glob_to_regex(base_body);
-            if match_any_level(&rx_base, clean, anchored) {
-                return true;
+        if is_dir {
+            if let Some(base_body) = body.strip_suffix('/') {
+                let rx_base = glob_to_regex(base_body);
+                if match_any_level(&rx_base, clean, anchored) {
+                    return true;
+                }
             }
         }
     }

@@ -162,11 +162,9 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
 
         if ll.contains("aucun changement local") || ll.contains("ignoré") || ll.contains("garde légère") {
             status = RunStatus::Skipped;
-        } else if ll.contains("error :") || ll.contains("fatal error") || ll.contains("failed") || is_resync_trigger(line) {
-            if !ll.contains("0 errors") {
-                status = RunStatus::Failed;
-                errors.push(line.to_string());
-            }
+        } else if (ll.contains("error :") || ll.contains("fatal error") || ll.contains("failed") || is_resync_trigger(line)) && !ll.contains("0 errors") {
+            status = RunStatus::Failed;
+            errors.push(line.to_string());
         }
 
         if let Some(synced) = parse_synced_file(line) {

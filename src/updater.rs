@@ -82,7 +82,7 @@ pub async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
     }
 
     let dl_url = download_url.unwrap_or_else(|| {
-        format!("https://github.com/lucas-martinati/rcloneDash/releases/latest/download/rclonedash-linux-x86_64")
+        "https://github.com/lucas-martinati/rcloneDash/releases/latest/download/rclonedash-linux-x86_64".to_string()
     });
 
     Ok(Some(UpdateInfo {

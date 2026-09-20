@@ -334,12 +334,10 @@ impl App {
                         self.auto_scroll = false;
                         self.logs_scroll += 1;
                     }
-                } else {
-                    if self.logs_scroll > 0 {
-                        self.logs_scroll = self.logs_scroll.saturating_sub(1);
-                        if self.logs_scroll == 0 {
-                            self.auto_scroll = true;
-                        }
+                } else if self.logs_scroll > 0 {
+                    self.logs_scroll = self.logs_scroll.saturating_sub(1);
+                    if self.logs_scroll == 0 {
+                        self.auto_scroll = true;
                     }
                 }
             }
@@ -447,6 +445,7 @@ impl App {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn apply_scrollbar_drag_to_row(
         &mut self,
         target: ScrollbarTarget,

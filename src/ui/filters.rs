@@ -295,49 +295,50 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 }
 
 fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Rect, _hitboxes: &mut Vec<Hitbox>) {
-    let mut lines = Vec::new();
-    lines.push(Line::from(vec![
-        Span::styled(" FILTER SYNTAX ", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
-    ]));
-    lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::styled(" - ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled("Exclusion", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled(" (skip sync)", Style::default().fg(theme.text_muted)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    - /folder/**, - *.tmp", Style::default().fg(Color::Rgb(255, 175, 175))),
-    ]));
-    lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::styled(" + ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled("Inclusion", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled(" (force sync)", Style::default().fg(theme.text_muted)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    + *.pdf, + /docs/**", Style::default().fg(Color::Rgb(175, 255, 195))),
-    ]));
-    lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::styled(" # ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled("Comment / Note", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(" (ignored)", Style::default().fg(theme.text_muted)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    # Project archive rules", Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC)),
-    ]));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("─".repeat(area.width.saturating_sub(2) as usize), Style::default().fg(theme.border))));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("• Exclusions ignore matching files", Style::default().fg(theme.text_bright))));
-    lines.push(Line::from(Span::styled("  and folders during synchronization.", Style::default().fg(theme.text_muted))));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("• Inclusions take priority over", Style::default().fg(theme.text_bright))));
-    lines.push(Line::from(Span::styled("  subsequent exclusion patterns.", Style::default().fg(theme.text_muted))));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("• All changes are saved automatically", Style::default().fg(theme.cyan))));
-    lines.push(Line::from(Span::styled("  to ~/.config/rclone/gdrive-filters.txt", Style::default().fg(theme.text_muted))));
-    lines.push(Line::from(Span::styled("  and applied on next bisync run.", Style::default().fg(theme.text_muted))));
+    let lines = vec![
+        Line::from(vec![
+            Span::styled(" FILTER SYNTAX ", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(" - ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled("Exclusion", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(" (skip sync)", Style::default().fg(theme.text_muted)),
+        ]),
+        Line::from(vec![
+            Span::styled("    - /folder/**, - *.tmp", Style::default().fg(Color::Rgb(255, 175, 175))),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(" + ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("Inclusion", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled(" (force sync)", Style::default().fg(theme.text_muted)),
+        ]),
+        Line::from(vec![
+            Span::styled("    + *.pdf, + /docs/**", Style::default().fg(Color::Rgb(175, 255, 195))),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(" # ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled("Comment / Note", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled(" (ignored)", Style::default().fg(theme.text_muted)),
+        ]),
+        Line::from(vec![
+            Span::styled("    # Project archive rules", Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("─".repeat(area.width.saturating_sub(2) as usize), Style::default().fg(theme.border))),
+        Line::from(""),
+        Line::from(Span::styled("• Exclusions ignore matching files", Style::default().fg(theme.text_bright))),
+        Line::from(Span::styled("  and folders during synchronization.", Style::default().fg(theme.text_muted))),
+        Line::from(""),
+        Line::from(Span::styled("• Inclusions take priority over", Style::default().fg(theme.text_bright))),
+        Line::from(Span::styled("  subsequent exclusion patterns.", Style::default().fg(theme.text_muted))),
+        Line::from(""),
+        Line::from(Span::styled("• All changes are saved automatically", Style::default().fg(theme.cyan))),
+        Line::from(Span::styled("  to ~/.config/rclone/gdrive-filters.txt", Style::default().fg(theme.text_muted))),
+        Line::from(Span::styled("  and applied on next bisync run.", Style::default().fg(theme.text_muted))),
+    ];
 
     let p = Paragraph::new(lines).block(
         Block::default()
