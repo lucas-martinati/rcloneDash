@@ -126,19 +126,26 @@ notify_failure() {
         return 0
     fi
 
-    if command -v notify-send >/dev/null 2>&1; then
-        (
-            ACTION=$(notify-send "RcloneDash" "Échec de la synchronisation. Cliquez pour ouvrir le tableau de bord." \
-                --icon=dialog-error \
-                -u critical \
-                -a "RcloneDash" \
-                --action=default="Ouvrir" \
-                --action=open="Ouvrir le tableau de bord" 2>/dev/null || true)
+    local notif_script="__HOME__/.local/share/RcloneDash/rclonedash-notify.py"
+    if [ ! -f "$notif_script" ]; then
+        local script_dir
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [ -f "$script_dir/rclonedash-notify.py" ]; then
+            notif_script="$script_dir/rclonedash-notify.py"
+        fi
+    fi
 
-            if [ -n "$ACTION" ]; then
-                open_rclonedash
-            fi
-        ) >/dev/null 2>&1 &
+    if [ -f "$notif_script" ] && command -v python3 >/dev/null 2>&1; then
+        if command -v systemd-run >/dev/null 2>&1; then
+            systemd-run --user --quiet --unit="rclonedash-notify-$$-$(date +%s)" python3 "$notif_script" "$rc" 2>/dev/null || \
+                setsid python3 "$notif_script" "$rc" >/dev/null 2>&1 &
+        else
+            setsid python3 "$notif_script" "$rc" >/dev/null 2>&1 &
+        fi
+    elif command -v notify-send >/dev/null 2>&1; then
+        notify-send "RcloneDash — Échec de synchronisation" \
+            "La dernière synchronisation a échoué (code $rc)." \
+            --icon=dialog-error -u critical -a "RcloneDash" 2>/dev/null || true
     fi
 }
 

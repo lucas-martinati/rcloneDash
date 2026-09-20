@@ -229,6 +229,12 @@ else
     exit 1
 fi
 
+if [ -f "$TEMPLATE_DIR/rclonedash-notify.py" ]; then
+    cp "$TEMPLATE_DIR/rclonedash-notify.py" "$DATA_DIR/rclonedash-notify.py"
+    chmod +x "$DATA_DIR/rclonedash-notify.py"
+    ok "Notification helper installed at $DATA_DIR/rclonedash-notify.py"
+fi
+
 # Install desktop file for notification integration
 APP_DIR="$HOME/.local/share/applications"
 mkdir -p "$APP_DIR"
