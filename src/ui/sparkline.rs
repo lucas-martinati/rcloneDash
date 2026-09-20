@@ -116,20 +116,41 @@ pub fn render_history_graph_multiline(
             };
 
             let is_sel = selected_idx == Some(*orig_idx);
-            let color = match run.status {
+
+            let cell_level = (row_from_bottom * 8 + (level.saturating_sub(low_thresh)).min(8)).min(total_levels);
+            let cell_ratio = (cell_level as f64 / (total_levels as f64).max(1.0)).clamp(0.0, 1.0);
+
+            let base_color = match run.status {
                 RunStatus::Success => {
-                    if row_from_bottom == 0 {
-                        theme.green
-                    } else if row_from_bottom == 1 {
-                        theme.cyan
-                    } else if row_from_bottom == 2 {
-                        theme.yellow
-                    } else {
-                        theme.orange
-                    }
+                    let stops = [
+                        (0.0, theme.green),
+                        (0.35, theme.green),
+                        (0.60, theme.yellow),
+                        (0.85, theme.orange),
+                        (1.0, theme.red),
+                    ];
+                    crate::ui::theme::gradient_multi_stop(&stops, cell_ratio)
                 }
-                RunStatus::Failed => theme.red,
-                RunStatus::Skipped => theme.text_muted,
+                RunStatus::Failed => {
+                    let stops = [
+                        (0.0, crate::ui::theme::color_with_opacity(theme.red, 0.60, Some(ratatui::style::Color::Rgb(50, 10, 15)))),
+                        (1.0, theme.red),
+                    ];
+                    crate::ui::theme::gradient_multi_stop(&stops, cell_ratio)
+                }
+                RunStatus::Skipped => {
+                    let stops = [
+                        (0.0, crate::ui::theme::color_with_opacity(theme.text_muted, 0.45, None)),
+                        (1.0, theme.text_muted),
+                    ];
+                    crate::ui::theme::gradient_multi_stop(&stops, cell_ratio)
+                }
+            };
+
+            let color = if is_sel {
+                crate::ui::theme::lerp_color(base_color, ratatui::style::Color::White, 0.35)
+            } else {
+                base_color
             };
 
             let mut style = Style::default().fg(color);
@@ -191,19 +212,18 @@ pub fn render_gradient_bar(
     let mut spans = Vec::new();
     spans.push(Span::styled("[", Style::default().fg(theme.border)));
 
+    let stops = [
+        (0.0, theme.green),
+        (0.40, theme.green),
+        (0.65, theme.yellow),
+        (0.85, theme.orange),
+        (1.0, theme.red),
+    ];
+
     for i in 0..width {
         if i < filled_slots {
-            // Calcul du dégradé selon position relative
-            let ratio = i as f64 / width as f64;
-            let color = if ratio < 0.5 {
-                theme.cyan
-            } else if ratio < 0.75 {
-                theme.yellow
-            } else if ratio < 0.90 {
-                theme.orange
-            } else {
-                theme.red
-            };
+            let ratio = i as f64 / width.max(1) as f64;
+            let color = crate::ui::theme::gradient_multi_stop(&stops, ratio);
             spans.push(Span::styled(fill_char, Style::default().fg(color).add_modifier(Modifier::BOLD)));
         } else {
             spans.push(Span::styled("·", Style::default().fg(theme.separator)));

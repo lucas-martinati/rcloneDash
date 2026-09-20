@@ -683,6 +683,37 @@ use crate::monitor::history::{PastRun, RunStatus};
         );
     }
 
+    #[test]
+    fn test_color_gradient_and_opacity() {
+        use ratatui::style::Color;
+        use crate::ui::theme::{lerp_color, color_with_opacity, gradient_multi_stop};
+
+        // 1. Lerp test
+        let c1 = Color::Rgb(0, 0, 0);
+        let c2 = Color::Rgb(200, 100, 50);
+        assert_eq!(lerp_color(c1, c2, 0.0), Color::Rgb(0, 0, 0));
+        assert_eq!(lerp_color(c1, c2, 1.0), Color::Rgb(200, 100, 50));
+        assert_eq!(lerp_color(c1, c2, 0.5), Color::Rgb(100, 50, 25));
+
+        // 2. Opacity test
+        let col = Color::Rgb(100, 200, 100);
+        let bg = Color::Rgb(0, 0, 0);
+        assert_eq!(color_with_opacity(col, 1.0, Some(bg)), Color::Rgb(100, 200, 100));
+        assert_eq!(color_with_opacity(col, 0.0, Some(bg)), Color::Rgb(0, 0, 0));
+
+        // 3. Multi-stop gradient test
+        let stops = [
+            (0.0, Color::Rgb(0, 0, 255)),
+            (0.5, Color::Rgb(0, 255, 0)),
+            (1.0, Color::Rgb(255, 0, 0)),
+        ];
+        assert_eq!(gradient_multi_stop(&stops, 0.0), Color::Rgb(0, 0, 255));
+        assert_eq!(gradient_multi_stop(&stops, 0.5), Color::Rgb(0, 255, 0));
+        assert_eq!(gradient_multi_stop(&stops, 1.0), Color::Rgb(255, 0, 0));
+        assert_eq!(gradient_multi_stop(&stops, 0.25), Color::Rgb(0, 128, 128));
+    }
+
+
 
     #[tokio::test]
     async fn test_universal_q_closes_modals() {

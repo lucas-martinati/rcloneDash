@@ -86,7 +86,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
             Span::styled("│ Checks: ", Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", checks), Style::default().fg(theme.text_bright)),
             Span::styled("│ Progress: ", Style::default().fg(theme.text_muted)),
-            Span::styled(format!("{} ", pct_str), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("— ", Style::default().fg(theme.text_muted)),
             Span::styled("│ Status: ", Style::default().fg(theme.text_muted)),
             Span::styled(status_text, Style::default().fg(theme.yellow)),
         ]
@@ -312,15 +312,10 @@ fn format_active_file_spans<'a>(
     let pct = af.pct.min(100);
     let bar_len = 14usize;
     let filled_len = (pct as usize * bar_len) / 100;
-    let empty_len = bar_len.saturating_sub(filled_len);
-
     let fill_char = match graph_style {
         crate::config::GraphStyleChoice::Braille => "⣿",
         crate::config::GraphStyleChoice::Blocks => "█",
     };
-
-    let filled_str: String = fill_char.repeat(filled_len);
-    let empty_str: String = "·".repeat(empty_len);
 
     let speed_suffix = if !af.speed.is_empty() {
         format!(" ({})", af.speed)
@@ -345,11 +340,14 @@ fn format_active_file_spans<'a>(
         af.name.clone()
     };
 
+    let filled_str: String = fill_char.repeat(filled_len);
+    let empty_str: String = "·".repeat(bar_len.saturating_sub(filled_len));
+
     let mut spans = vec![
         Span::styled("  ⚡ Active: ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{} ", display_name), Style::default().fg(theme.text_bright)),
         Span::styled("[", Style::default().fg(theme.border)),
-        Span::styled(filled_str, Style::default().fg(theme.green)),
+        Span::styled(filled_str, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         Span::styled(empty_str, Style::default().fg(theme.separator)),
         Span::styled("]", Style::default().fg(theme.border)),
         Span::styled(pct_text, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),

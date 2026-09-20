@@ -282,3 +282,73 @@ impl ThemePalette {
         }
     }
 }
+
+/// Helper to extract (r, g, b) from a ratatui Color.
+pub fn color_to_rgb(c: Color) -> (u8, u8, u8) {
+    match c {
+        Color::Rgb(r, g, b) => (r, g, b),
+        Color::Black => (0, 0, 0),
+        Color::Red => (255, 0, 0),
+        Color::Green => (0, 255, 0),
+        Color::Yellow => (255, 255, 0),
+        Color::Blue => (0, 0, 255),
+        Color::Magenta => (255, 0, 255),
+        Color::Cyan => (0, 255, 255),
+        Color::Gray => (128, 128, 128),
+        Color::DarkGray => (64, 64, 64),
+        Color::LightRed => (255, 100, 100),
+        Color::LightGreen => (100, 255, 100),
+        Color::LightYellow => (255, 255, 100),
+        Color::LightBlue => (100, 100, 255),
+        Color::LightMagenta => (255, 100, 255),
+        Color::LightCyan => (100, 255, 255),
+        Color::White => (255, 255, 255),
+        _ => (128, 128, 128),
+    }
+}
+
+/// Linearly interpolates between two colors with a ratio t in [0.0, 1.0].
+pub fn lerp_color(c1: Color, c2: Color, t: f64) -> Color {
+    let t = t.clamp(0.0, 1.0);
+    let (r1, g1, b1) = color_to_rgb(c1);
+    let (r2, g2, b2) = color_to_rgb(c2);
+    let r = (r1 as f64 + (r2 as f64 - r1 as f64) * t).round() as u8;
+    let g = (g1 as f64 + (g2 as f64 - g1 as f64) * t).round() as u8;
+    let b = (b1 as f64 + (b2 as f64 - b1 as f64) * t).round() as u8;
+    Color::Rgb(r, g, b)
+}
+
+/// Computes a color with simulated opacity (fading towards a background color or dark base).
+/// opacity is in [0.0, 1.0], where 0.0 is base_bg (or dark) and 1.0 is full color.
+pub fn color_with_opacity(color: Color, opacity: f64, base_bg: Option<Color>) -> Color {
+    let bg = base_bg.unwrap_or(Color::Rgb(15, 18, 28));
+    lerp_color(bg, color, opacity)
+}
+
+/// Samples a multi-stop color gradient at position t in [0.0, 1.0].
+/// Stops should be sorted by position, e.g. &[(0.0, cyan), (0.5, yellow), (1.0, red)].
+pub fn gradient_multi_stop(stops: &[(f64, Color)], t: f64) -> Color {
+    if stops.is_empty() {
+        return Color::Reset;
+    }
+    if stops.len() == 1 || t <= stops[0].0 {
+        return stops[0].1;
+    }
+    if t >= stops[stops.len() - 1].0 {
+        return stops[stops.len() - 1].1;
+    }
+    for i in 0..stops.len() - 1 {
+        let (p1, c1) = stops[i];
+        let (p2, c2) = stops[i + 1];
+        if t >= p1 && t <= p2 {
+            let range = p2 - p1;
+            if range <= f64::EPSILON {
+                return c1;
+            }
+            let local_t = (t - p1) / range;
+            return lerp_color(c1, c2, local_t);
+        }
+    }
+    stops[stops.len() - 1].1
+}
+

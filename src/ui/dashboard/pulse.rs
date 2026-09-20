@@ -38,7 +38,10 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
         let prefix_style = Style::default().fg(theme.green).add_modifier(Modifier::BOLD);
         line_spans.push(Span::styled("⚡ Sync: ", prefix_style));
 
-        if live_pct > 0 {
+        let has_transfer_info = app.live.phase_index >= 3
+            && (app.live.transfer.pct > 0 || app.live.transfer.files_total > 0 || !app.live.transfer.speed.is_empty());
+
+        if has_transfer_info {
             // Live transfer with known progress percentage
             if max_w >= 60 && app.live.phase_index >= 3 && app.live.transfer.files_total > 0 {
                 let files_str = format!("{}/{} files ", app.live.transfer.files_done, app.live.transfer.files_total);
@@ -80,7 +83,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 line_spans.push(Span::styled(right_text, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
             }
         } else {
-            // Indeterminate: listing / diffing / scanning phase
+            // Indeterminate: listing / diffing / scanning phase (when searching / before transfer info is available)
             let status_msg = if max_w < 50 {
                 "scanning... "
             } else {
@@ -106,7 +109,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
             if max_w > left_w + right_w + brackets_w + 3 {
                 let bar_w = max_w - left_w - right_w - brackets_w;
 
-                // Animated roving beam across the track
+                // Animated roving wave across the track with symmetric tiers & smooth color/opacity gradient
                 let t = (std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -122,13 +125,34 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                     let start = head - beam_len as isize;
                     if pos >= start && pos < head {
                         let rel = pos - start;
-                        if rel == 0 || rel == (beam_len as isize - 1) {
-                            line_spans.push(Span::styled(beam_low, Style::default().fg(theme.green)));
-                        } else if rel == 1 || rel == (beam_len as isize - 2) {
-                            line_spans.push(Span::styled(beam_mid, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+                        let center = (beam_len as f64 - 1.0) / 2.0;
+                        let dist = if center > 0.0 {
+                            ((rel as f64 - center).abs() / center).clamp(0.0, 1.0)
                         } else {
-                            line_spans.push(Span::styled(beam_high, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+                            0.0
+                        };
+                        let intensity = 1.0 - dist; // 0.0 at outer edges, 1.0 at center
+
+                        let stops = [
+                            (0.0, crate::ui::theme::color_with_opacity(theme.green, 0.45, Some(theme.separator))),
+                            (0.40, theme.green),
+                            (1.0, crate::ui::theme::lerp_color(theme.green, ratatui::style::Color::White, 0.35)),
+                        ];
+                        let slot_color = crate::ui::theme::gradient_multi_stop(&stops, intensity);
+
+                        let (char_to_use, is_bold) = if intensity < 0.35 {
+                            (beam_low, false)
+                        } else if intensity < 0.70 {
+                            (beam_mid, true)
+                        } else {
+                            (beam_high, true)
+                        };
+
+                        let mut style = Style::default().fg(slot_color);
+                        if is_bold {
+                            style = style.add_modifier(Modifier::BOLD);
                         }
+                        line_spans.push(Span::styled(char_to_use, style));
                     } else {
                         line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
                     }

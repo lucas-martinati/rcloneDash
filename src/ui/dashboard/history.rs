@@ -178,8 +178,16 @@ pub fn render_history_panel(
             // In-progress synchronization row
             let elapsed = if app.live.transfer.elapsed.is_empty() { "0s" } else { &app.live.transfer.elapsed };
             let time_str = "In progress";
-            let pct_val = app.live.overall_progress_pct();
-            let status_str = format!("● {}%", pct_val);
+            let has_transfer_info = app.live.phase_index >= 3
+                && (app.live.transfer.pct > 0 || app.live.transfer.files_total > 0 || !app.live.transfer.speed.is_empty());
+
+            let status_str = if has_transfer_info {
+                format!("● {}%", app.live.overall_progress_pct())
+            } else if app.live.phase_index == 0 {
+                "● Listing".to_string()
+            } else {
+                "● Scanning".to_string()
+            };
             let copied_count = app.live.synced_files.iter().filter(|f| f.action == "new" || f.action == "copied").count().max(app.live.transfer.files_done as usize);
             let copied_val = copied_count.to_string();
             let mod_count = app.live.synced_files.iter().filter(|f| f.action == "modified").count();
@@ -203,7 +211,7 @@ pub fn render_history_panel(
                 let cursor = Span::styled("  ", Style::default());
                 table_rows.push(Row::new(vec![
                     Cell::from(Line::from(vec![cursor, Span::styled(time_str, Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))])),
-                    Cell::from(Span::styled(status_str, Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD))),
+                    Cell::from(Span::styled(status_str, Style::default().fg(if has_transfer_info { theme.cyan } else { theme.yellow }).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(copied_val, Style::default().fg(theme.green).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(mod_val, Style::default().fg(theme.yellow))),
                     Cell::from(Span::styled(del_val, Style::default().fg(theme.red))),
