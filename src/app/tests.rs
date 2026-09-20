@@ -176,6 +176,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         let plus_event = KeyEvent::new(KeyCode::Char('+'), KeyModifiers::NONE);
         app.handle_key(plus_event);
         assert_eq!(app.config.stats_interval, "2s");
+        assert!(app.stats_interval_changed);
 
         app.handle_key(plus_event);
         assert_eq!(app.config.stats_interval, "3s");

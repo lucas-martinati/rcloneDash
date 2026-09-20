@@ -628,6 +628,14 @@ impl Default for AppConfig {
     }
 }
 
+impl AppConfig {
+    pub fn stats_interval_duration(&self) -> std::time::Duration {
+        let s = self.stats_interval.trim_end_matches('s');
+        let secs: u64 = s.parse().unwrap_or(1);
+        std::time::Duration::from_secs(secs.max(1))
+    }
+}
+
 pub fn expand_tilde<P: AsRef<Path>>(path: P) -> PathBuf {
     let p = path.as_ref();
     if p.starts_with("~") {
@@ -1171,6 +1179,21 @@ mod tests {
         assert!(!formatted_1s.contains("▶ 15s (active)"));
         assert!(formatted_1s.contains("• 10s"));
         assert!(formatted_1s.contains("• 15s"));
+    }
+
+    #[test]
+    fn test_stats_interval_duration() {
+        let mut config = AppConfig {
+            stats_interval: "1s".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(config.stats_interval_duration(), std::time::Duration::from_secs(1));
+
+        config.stats_interval = "5s".to_string();
+        assert_eq!(config.stats_interval_duration(), std::time::Duration::from_secs(5));
+
+        config.stats_interval = "30s".to_string();
+        assert_eq!(config.stats_interval_duration(), std::time::Duration::from_secs(30));
     }
 
     #[test]

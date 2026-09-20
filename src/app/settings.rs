@@ -155,6 +155,7 @@ impl App {
                     let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
                     let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
                     self.config.stats_interval = options[next].to_string();
+                    self.stats_interval_changed = true;
                     self.set_toast(format!("Rclone stats: {}", self.config.stats_interval));
                 }
                 6 => {

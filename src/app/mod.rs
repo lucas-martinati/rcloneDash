@@ -296,6 +296,7 @@ pub struct App {
 
     // Active panel
     pub focused_panel: FocusedPanel,
+    pub stats_interval_changed: bool,
     pub menu_selected_idx: usize,
     pub ctrl_mode: bool,
     pub recent_filter: String,
@@ -396,6 +397,7 @@ impl App {
             toast: None,
 
             focused_panel: FocusedPanel::RecentFiles,
+            stats_interval_changed: false,
             menu_selected_idx: 0,
             ctrl_mode: false,
             recent_filter: String::new(),
@@ -834,9 +836,14 @@ impl App {
         let new_interval = steps[next_idx];
         if new_interval != current {
             self.config.stats_interval = new_interval.to_string();
+            self.stats_interval_changed = true;
             let _ = config::save_config(&self.config);
             self.set_toast(format!("Rclone stats: {}", new_interval));
         }
+    }
+
+    pub fn stats_interval_duration(&self) -> std::time::Duration {
+        self.config.stats_interval_duration()
     }
 
     pub fn can_dec_stats_interval(&self) -> bool {
