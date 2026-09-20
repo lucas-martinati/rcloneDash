@@ -20,6 +20,7 @@ REMOTE=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('remote', 
 SYNC_DIR=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('local_dir', '~/GoogleDrive'))" < "$CONFIG_FILE" 2>/dev/null || echo "~/GoogleDrive")
 SYNC_DIR="${SYNC_DIR/#\~/$HOME}"
 FULL_INTERVAL=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('full_sync_interval', '60'))" < "$CONFIG_FILE" 2>/dev/null || echo "60")
+STATS_INTERVAL=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('stats_interval', '1s'))" < "$CONFIG_FILE" 2>/dev/null || echo "1s")
 
 RCLONE_CONF="__HOME__/.config/rclone"
 STAMP="$RCLONE_CONF/.last-full-sync"
@@ -63,7 +64,7 @@ run_bisync() {
         --drive-skip-gdocs \
         --tpslimit 8 \
         -v \
-        --stats 5s \
+        --stats "$STATS_INTERVAL" \
         --stats-file-name-length 0 \
         --conflict-resolve newer \
         --resilient \

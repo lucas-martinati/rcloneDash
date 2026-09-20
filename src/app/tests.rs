@@ -160,25 +160,25 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
-    async fn test_tick_rate_stepping() {
+    async fn test_stats_interval_stepping() {
         let mut app = App::new();
-        app.tick_rate_ms_live = 2000;
+        app.config.stats_interval = "3s".to_string();
 
-        // '-' speeds up (lower ms: 2000 -> 1500 -> 1000)
+        // '-' decreases interval: 3s -> 2s -> 1s
         let minus_event = KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE);
         app.handle_key(minus_event);
-        assert_eq!(app.tick_rate_ms_live, 1500);
+        assert_eq!(app.config.stats_interval, "2s");
 
         app.handle_key(minus_event);
-        assert_eq!(app.tick_rate_ms_live, 1000);
+        assert_eq!(app.config.stats_interval, "1s");
 
-        // '+' slows down (higher ms)
+        // '+' increases interval: 1s -> 2s -> 3s
         let plus_event = KeyEvent::new(KeyCode::Char('+'), KeyModifiers::NONE);
         app.handle_key(plus_event);
-        assert_eq!(app.tick_rate_ms_live, 1500);
+        assert_eq!(app.config.stats_interval, "2s");
 
         app.handle_key(plus_event);
-        assert_eq!(app.tick_rate_ms_live, 2000);
+        assert_eq!(app.config.stats_interval, "3s");
     }
 
     #[tokio::test]
@@ -331,24 +331,23 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
-    async fn test_tick_rate_stepping_and_settings_harmony() {
+    async fn test_stats_interval_stepping_and_settings_harmony() {
         let mut app = App::new();
-        app.tick_rate_ms_live = 1000;
+        app.config.stats_interval = "2s".to_string();
 
         // Step up
-        app.step_tick_rate(false); // ralentit
-        assert_eq!(app.tick_rate_ms_live, 1500);
+        app.step_stats_interval(true);
+        assert_eq!(app.config.stats_interval, "3s");
 
         // Step down
-        app.step_tick_rate(true); // accélère
-        assert_eq!(app.tick_rate_ms_live, 1000);
+        app.step_stats_interval(false);
+        assert_eq!(app.config.stats_interval, "2s");
 
         // Cycle via settings
         app.settings_tab = 1;
-        app.settings_selected_idx = 5; // Taux de rafraîchissement UI
+        app.settings_selected_idx = 5; // Rclone stats interval
         app.cycle_setting(true);
-        assert_eq!(app.tick_rate_ms_live, 1500);
-        assert_eq!(app.config.tick_rate_ms, Some(1500));
+        assert_eq!(app.config.stats_interval, "3s");
     }
 
     #[tokio::test]
@@ -570,19 +569,19 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
-    async fn test_tick_rate_boundaries() {
+    async fn test_stats_interval_boundaries() {
         let mut app = App::new();
-        app.tick_rate_ms_live = 100;
-        assert!(!app.can_dec_tick_rate());
-        assert!(app.can_inc_tick_rate());
+        app.config.stats_interval = "1s".to_string();
+        assert!(!app.can_dec_stats_interval());
+        assert!(app.can_inc_stats_interval());
 
-        app.tick_rate_ms_live = 10000;
-        assert!(app.can_dec_tick_rate());
-        assert!(!app.can_inc_tick_rate());
+        app.config.stats_interval = "30s".to_string();
+        assert!(app.can_dec_stats_interval());
+        assert!(!app.can_inc_stats_interval());
 
-        app.tick_rate_ms_live = 1000;
-        assert!(app.can_dec_tick_rate());
-        assert!(app.can_inc_tick_rate());
+        app.config.stats_interval = "5s".to_string();
+        assert!(app.can_dec_stats_interval());
+        assert!(app.can_inc_stats_interval());
     }
 
     #[tokio::test]
@@ -1792,7 +1791,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         let mut app = App::new();
         app.modal = Modal::Settings;
         app.settings_tab = 1;
-        app.settings_selected_idx = 5; // UI loop frequency (22 choices)
+        app.settings_selected_idx = 5; // Rclone stats interval
 
         // 1. Écran de taille moyenne (100x30) : logo masqué pour laisser 25 lignes à la modale
         let backend = TestBackend::new(100, 30);
@@ -1805,9 +1804,9 @@ use crate::monitor::history::{PastRun, RunStatus};
             .collect::<Vec<_>>()
             .join("\n");
 
-        // Le premier et le dernier élément (10000ms) doivent impérativement être visibles dans le rendu
-        assert!(rendered.contains("100ms"), "Le premier élément 100ms doit être rendu");
-        assert!(rendered.contains("10000ms"), "Le dernier élément 10000ms doit être présent sans dépassement");
+        // Le premier et le dernier élément (30s) doivent impérativement être visibles dans le rendu
+        assert!(rendered.contains("1s"), "Le premier élément 1s doit être rendu");
+        assert!(rendered.contains("30s"), "Le dernier élément 30s doit être présent sans dépassement");
 
         // 2. Grand écran (120x40) : logo affiché et modale complète
         let backend_large = TestBackend::new(120, 40);
@@ -1818,7 +1817,7 @@ use crate::monitor::history::{PastRun, RunStatus};
             .map(|y| (0..buffer_large.area.width).map(|x| buffer_large[(x, y)].symbol()).collect::<String>())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(rendered_large.contains("10000ms"), "Le dernier élément 10000ms doit être présent sur grand écran");
+        assert!(rendered_large.contains("30s"), "Le dernier élément 30s doit être présent sur grand écran");
     }
 
     #[tokio::test]

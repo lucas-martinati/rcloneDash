@@ -395,15 +395,12 @@ pub fn full_sync_label(val: &str) -> &'static str {
 /// Bandwidth limit presets (single source of truth)
 pub const BWLIMIT_OPTIONS: &[&str] = &["Disabled", "5M", "10M", "20M", "50M"];
 
-/// UI tick rate steps in milliseconds (single source of truth)
-pub const TICK_RATE_STEPS: &[u64] = &[
-    100, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000,
-    1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
-];
+/// Rclone stats interval options (single source of truth)
+pub const STATS_INTERVAL_OPTIONS: &[&str] = &["1s", "2s", "3s", "5s", "10s", "15s", "30s"];
 
-/// Liste canonique des options de fréquence de rafraîchissement UI (source unique de vérité)
-pub fn tick_rate_options() -> Vec<String> {
-    TICK_RATE_STEPS.iter().map(|s| format!("{}ms", s)).collect()
+/// Liste canonique des options d'intervalle de stats rclone (source unique de vérité)
+pub fn stats_interval_options() -> Vec<String> {
+    STATS_INTERVAL_OPTIONS.iter().map(|s| s.to_string()).collect()
 }
 
 /// Registre canonique et centralisé de tous les réglages disponibles dans l'application.
@@ -428,7 +425,7 @@ pub enum SettingId {
     MidPanelOrder,
     BorderStyle,
     GraphStyle,
-    TickRate,
+    StatsInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -473,7 +470,7 @@ impl SettingId {
             (1, 2) => Some(Self::MidPanelOrder),
             (1, 3) => Some(Self::BorderStyle),
             (1, 4) => Some(Self::GraphStyle),
-            (1, 5) => Some(Self::TickRate),
+            (1, 5) => Some(Self::StatsInterval),
             _ => None,
         }
     }
@@ -498,7 +495,7 @@ impl SettingId {
             Self::MidPanelOrder => "Mid-panel order",
             Self::BorderStyle => "Border style",
             Self::GraphStyle => "Graph style",
-            Self::TickRate => "UI Loop frequency",
+            Self::StatsInterval => "Rclone stats interval",
         }
     }
 
@@ -518,7 +515,7 @@ impl SettingId {
             Self::MidPanelOrder => "Mid-panel order.",
             Self::BorderStyle => "Border style.",
             Self::GraphStyle => "Graph style.",
-            Self::TickRate => "UI Loop frequency (tick rate).",
+            Self::StatsInterval => "Rclone stats interval (--stats).",
         }
     }
 
@@ -538,7 +535,7 @@ impl SettingId {
             Self::MidPanelOrder => "Horizontal placement of the middle section containers.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.",
             Self::BorderStyle => "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nPersisted across sessions in dash-config.json.",
             Self::GraphStyle => "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nPersisted across sessions in dash-config.json.",
-            Self::TickRate => "Refresh rate of the TUI display engine in milliseconds.\n\nControls smoothness of log scrolling, metrics calculation, and micro-animations.",
+            Self::StatsInterval => "Frequency at which rclone outputs transfer statistics to the log stream.\n\nDirectly controls the --stats flag passed to rclone bisync.\nA lower value (e.g. 1s) provides near real-time transfer speeds and progress bars, while higher values (e.g. 10s) reduce log verbosity.",
         }
     }
 
@@ -554,7 +551,7 @@ impl SettingId {
             Self::MidPanelOrder => Some(MidPanelOrder::all().iter().map(|m| m.name().to_string()).collect()),
             Self::BorderStyle => Some(BorderStyleChoice::all().iter().map(|b| b.name().to_string()).collect()),
             Self::GraphStyle => Some(GraphStyleChoice::all().iter().map(|g| g.name().to_string()).collect()),
-            Self::TickRate => Some(tick_rate_options()),
+            Self::StatsInterval => Some(stats_interval_options()),
             _ => None,
         }
     }
@@ -565,6 +562,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_stats_interval() -> String {
+    "1s".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub remote: String,
@@ -573,6 +574,9 @@ pub struct AppConfig {
     pub full_sync_interval: String,
     pub bwlimit: Option<String>,
     pub theme: Option<ThemeChoice>,
+    #[serde(default = "default_stats_interval")]
+    pub stats_interval: String,
+    #[serde(default)]
     pub tick_rate_ms: Option<u64>,
     #[serde(default)]
     pub container_layout: ContainerLayout,
@@ -607,7 +611,8 @@ impl Default for AppConfig {
             full_sync_interval: "60".to_string(),
             bwlimit: None,
             theme: Some(ThemeChoice::TokyoNight),
-            tick_rate_ms: Some(250),
+            stats_interval: "1s".to_string(),
+            tick_rate_ms: None,
             container_layout: ContainerLayout::Default,
             mid_panel_order: MidPanelOrder::HistoryLogs,
             border_style: BorderStyleChoice::Rounded,
@@ -1089,19 +1094,19 @@ mod tests {
 
     #[test]
     fn test_setting_choices_single_source_of_truth() {
-        // TICK_RATE_STEPS doit contenir explicitement 250 (valeur par défaut)
-        assert!(TICK_RATE_STEPS.contains(&250));
-        assert_eq!(TICK_RATE_STEPS.len(), 22);
+        // STATS_INTERVAL_OPTIONS doit contenir explicitement "1s" (valeur par défaut)
+        assert!(STATS_INTERVAL_OPTIONS.contains(&"1s"));
+        assert_eq!(STATS_INTERVAL_OPTIONS.len(), 7);
 
-        // tick_rate_options() doit être strictement le reflet de TICK_RATE_STEPS
-        let tick_opts = tick_rate_options();
-        assert_eq!(tick_opts.len(), 22);
-        for (i, &step) in TICK_RATE_STEPS.iter().enumerate() {
-            assert_eq!(tick_opts[i], format!("{}ms", step));
+        // stats_interval_options() doit être strictement le reflet de STATS_INTERVAL_OPTIONS
+        let stats_opts = stats_interval_options();
+        assert_eq!(stats_opts.len(), 7);
+        for (i, &step) in STATS_INTERVAL_OPTIONS.iter().enumerate() {
+            assert_eq!(stats_opts[i], step);
         }
 
-        // SettingId::TickRate.choices() renvoie exactement la même liste
-        assert_eq!(SettingId::TickRate.choices(), Some(tick_opts));
+        // SettingId::StatsInterval.choices() renvoie exactement la même liste
+        assert_eq!(SettingId::StatsInterval.choices(), Some(stats_opts));
 
         // Vérification de la source de vérité pour tous les paramètres à choix
         assert_eq!(
@@ -1152,23 +1157,20 @@ mod tests {
         assert!(timer_formatted.contains("  ▶ 15min (active)"));
         assert!(timer_formatted.contains("  • 10min"));
 
-        // Liste longue (22 éléments tick rate) : grille à 3 colonnes compacte (8 lignes)
-        let choices = tick_rate_options();
-        let formatted_100 = format_setting_options_list(&choices, "100ms");
-        assert_eq!(formatted_100.lines().count(), 8);
+        // stats_interval (7 éléments) : 1 colonne verticale
+        let choices = stats_interval_options();
+        let formatted_1s = format_setting_options_list(&choices, "1s");
+        assert_eq!(formatted_1s.lines().count(), 7);
+        assert!(formatted_1s.contains("▶ 1s (active)"));
+        assert!(formatted_1s.contains("• 5s"));
+        assert!(formatted_1s.contains("• 30s"));
 
-        // Doit marquer '100ms' active mais PAS '1000ms' ni '10000ms'
-        assert!(formatted_100.contains("▶ 100ms (active)"));
-        assert!(!formatted_100.contains("▶ 1000ms (active)"));
-        assert!(!formatted_100.contains("▶ 10000ms (active)"));
-        assert!(formatted_100.contains("• 1000ms"));
-        assert!(formatted_100.contains("• 10000ms"));
-
-        // Doit marquer '250ms' active mais PAS '2500ms'
-        let formatted_250 = format_setting_options_list(&choices, "250ms");
-        assert!(formatted_250.contains("▶ 250ms (active)"));
-        assert!(!formatted_250.contains("▶ 2500ms (active)"));
-        assert!(formatted_250.contains("• 2500ms"));
+        // Doit marquer '1s' active mais PAS '10s' ni '15s'
+        assert!(formatted_1s.contains("▶ 1s (active)"));
+        assert!(!formatted_1s.contains("▶ 10s (active)"));
+        assert!(!formatted_1s.contains("▶ 15s (active)"));
+        assert!(formatted_1s.contains("• 10s"));
+        assert!(formatted_1s.contains("• 15s"));
     }
 
     #[test]

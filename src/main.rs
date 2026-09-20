@@ -141,8 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Async event streams and intervals
     let mut reader = EventStream::new();
-    let tick_ms = app.config.tick_rate_ms.unwrap_or(250);
-    let mut data_interval = interval(Duration::from_millis(tick_ms));
+    let mut data_interval = interval(Duration::from_millis(500));
     let mut ui_interval = interval(Duration::from_millis(50));
 
     // Initial immediate render
@@ -175,10 +174,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if needs_draw && app.running {
                         terminal.draw(|f| ui::render(f, &mut app))?;
                     }
-                }
-                if app.tick_rate_changed {
-                    app.tick_rate_changed = false;
-                    data_interval = interval(Duration::from_millis(app.tick_rate_ms_live));
                 }
             }
         }

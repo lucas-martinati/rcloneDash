@@ -262,12 +262,12 @@ impl App {
                 self.toggle_box(num);
                 Action::None
             }
-            HitAction::TickRateDec => {
-                self.step_tick_rate(true);
+            HitAction::StatsIntervalDec => {
+                self.step_stats_interval(false);
                 Action::None
             }
-            HitAction::TickRateInc => {
-                self.step_tick_rate(false);
+            HitAction::StatsIntervalInc => {
+                self.step_stats_interval(true);
                 Action::None
             }
             HitAction::CloseModal => {
@@ -1706,13 +1706,13 @@ impl App {
                 self.prev_visible_panel();
                 return Action::None;
             }
-            // +/- : dynamic tick rate (- speeds up, + slows down)
+            // +/- : dynamic rclone stats interval (- decreases, + increases)
             KeyCode::Char('+') | KeyCode::Char('=') => {
-                self.step_tick_rate(false); // slows down
+                self.step_stats_interval(true);
                 return Action::None;
             }
             KeyCode::Char('-') | KeyCode::Char('_') => {
-                self.step_tick_rate(true); // speeds up
+                self.step_stats_interval(false);
                 return Action::None;
             }
             // Navigation directed by the active panel

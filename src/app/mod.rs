@@ -161,7 +161,7 @@ pub enum EditState {
     AddingFilter { buffer: String },
 }
 
-pub use crate::config::TICK_RATE_STEPS;
+pub use crate::config::STATS_INTERVAL_OPTIONS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollbarTarget {
@@ -182,8 +182,8 @@ pub enum HitAction {
     ButtonFiles,
     ButtonFilters,
     ButtonPanel,
-    TickRateDec,
-    TickRateInc,
+    StatsIntervalDec,
+    StatsIntervalInc,
     ToggleCtrlMode,
     HistoryRow(usize),
     HistoryFile(usize),
@@ -294,10 +294,8 @@ pub struct App {
     pub log_filter: LogFilter,
     pub toast: Option<(String, Instant)>,
 
-    // Active panel and dynamic tick rate
+    // Active panel
     pub focused_panel: FocusedPanel,
-    pub tick_rate_ms_live: u64,
-    pub tick_rate_changed: bool,
     pub menu_selected_idx: usize,
     pub ctrl_mode: bool,
     pub recent_filter: String,
@@ -375,7 +373,6 @@ impl App {
         let streamer = spawn_log_streamer();
         let config = config::load_config();
         let current_theme = config.theme.unwrap_or(ThemeChoice::TokyoNight);
-        let tick_rate = config.tick_rate_ms.unwrap_or(250);
         let log_filter = config.log_filter;
         let service_info = get_service_info();
         let past_runs = fetch_past_runs(50);
@@ -399,8 +396,6 @@ impl App {
             toast: None,
 
             focused_panel: FocusedPanel::RecentFiles,
-            tick_rate_ms_live: tick_rate,
-            tick_rate_changed: false,
             menu_selected_idx: 0,
             ctrl_mode: false,
             recent_filter: String::new(),
@@ -827,35 +822,35 @@ impl App {
         });
     }
 
-    pub fn step_tick_rate(&mut self, faster: bool) {
-        let steps = TICK_RATE_STEPS;
-        let current = self.tick_rate_ms_live;
-        let pos = steps
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, &s)| (s as i64 - current as i64).abs())
-            .map(|(i, _)| i)
-            .unwrap_or(11);
-        let next_idx = if faster {
-            pos.saturating_sub(1)
-        } else {
+    pub fn step_stats_interval(&mut self, increase: bool) {
+        let steps = STATS_INTERVAL_OPTIONS;
+        let current = self.config.stats_interval.as_str();
+        let pos = steps.iter().position(|&s| s == current).unwrap_or(0);
+        let next_idx = if increase {
             (pos + 1).min(steps.len() - 1)
+        } else {
+            pos.saturating_sub(1)
         };
-        let new_rate = steps[next_idx];
-        if new_rate != current {
-            self.tick_rate_ms_live = new_rate;
-            self.tick_rate_changed = true;
-            self.config.tick_rate_ms = Some(new_rate);
+        let new_interval = steps[next_idx];
+        if new_interval != current {
+            self.config.stats_interval = new_interval.to_string();
             let _ = config::save_config(&self.config);
+            self.set_toast(format!("Rclone stats: {}", new_interval));
         }
     }
 
-    pub fn can_dec_tick_rate(&self) -> bool {
-        self.tick_rate_ms_live > TICK_RATE_STEPS[0]
+    pub fn can_dec_stats_interval(&self) -> bool {
+        let steps = STATS_INTERVAL_OPTIONS;
+        let current = self.config.stats_interval.as_str();
+        let pos = steps.iter().position(|&s| s == current).unwrap_or(0);
+        pos > 0
     }
 
-    pub fn can_inc_tick_rate(&self) -> bool {
-        self.tick_rate_ms_live < TICK_RATE_STEPS[TICK_RATE_STEPS.len() - 1]
+    pub fn can_inc_stats_interval(&self) -> bool {
+        let steps = STATS_INTERVAL_OPTIONS;
+        let current = self.config.stats_interval.as_str();
+        let pos = steps.iter().position(|&s| s == current).unwrap_or(0);
+        pos < steps.len() - 1
     }
 
     pub fn next_theme(&mut self) {

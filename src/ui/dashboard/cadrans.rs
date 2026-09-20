@@ -202,20 +202,19 @@ pub fn render_metrics_box(
     hitboxes: &mut Vec<Hitbox>,
 ) {
     let clock_str = Local::now().format("%H:%M:%S").to_string();
-    let tick_ms = app.tick_rate_ms_live;
-    let tick_str = format!("{}ms", tick_ms);
+    let stats_interval_str = &app.config.stats_interval;
 
-    // Hitboxes for tick rate stepper [ - ] and [ + ]
-    let tick_widget_len = (tick_str.chars().count() + 4) as u16;
-    let tick_x = area.x + area.width.saturating_sub(tick_widget_len + 1);
+    // Hitboxes for stats interval stepper [ - ] and [ + ]
+    let widget_len = (stats_interval_str.chars().count() + 4) as u16;
+    let widget_x = area.x + area.width.saturating_sub(widget_len + 1);
 
     hitboxes.push(Hitbox {
-        rect: Rect { x: tick_x + 1, y: area.y, width: 2, height: 1 },
-        action: HitAction::TickRateDec,
+        rect: Rect { x: widget_x + 1, y: area.y, width: 2, height: 1 },
+        action: HitAction::StatsIntervalDec,
     });
     hitboxes.push(Hitbox {
-        rect: Rect { x: tick_x + tick_widget_len.saturating_sub(2), y: area.y, width: 2, height: 1 },
-        action: HitAction::TickRateInc,
+        rect: Rect { x: widget_x + widget_len.saturating_sub(2), y: area.y, width: 2, height: 1 },
+        action: HitAction::StatsIntervalInc,
     });
 
     let bg = app.border_glyphs();
@@ -233,13 +232,13 @@ pub fn render_metrics_box(
             Span::styled(format!(" {}", bg.horizontal), Style::default().fg(theme.border_sys)),
         ]))
         .title({
-            let dec_col = if app.can_dec_tick_rate() { theme.red } else { theme.text_muted };
-            let inc_col = if app.can_inc_tick_rate() { theme.red } else { theme.text_muted };
+            let dec_col = if app.can_dec_stats_interval() { theme.red } else { theme.text_muted };
+            let inc_col = if app.can_inc_stats_interval() { theme.red } else { theme.text_muted };
             Line::from(vec![
                 Span::styled(bg.top_left, Style::default().fg(theme.border_sys)),
                 Span::styled("-", Style::default().fg(dec_col).add_modifier(Modifier::BOLD)),
                 Span::styled(" ", Style::default().fg(theme.border_sys)),
-                Span::styled(tick_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+                Span::styled(stats_interval_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
                 Span::styled(" ", Style::default().fg(theme.border_sys)),
                 Span::styled("+", Style::default().fg(inc_col).add_modifier(Modifier::BOLD)),
                 Span::styled(bg.top_right, Style::default().fg(theme.border_sys)),

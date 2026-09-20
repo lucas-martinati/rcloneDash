@@ -202,13 +202,12 @@ impl App {
                     self.set_toast(format!("Graph style: {}", self.config.graph_style.name()));
                 }
                 5 => {
-                    let options = TICK_RATE_STEPS;
-                    let cur = self.config.tick_rate_ms.unwrap_or(250);
-                    let pos = options.iter().position(|&o| o == cur).unwrap_or(2);
+                    let options = STATS_INTERVAL_OPTIONS;
+                    let cur = self.config.stats_interval.as_str();
+                    let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
                     let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                    self.config.tick_rate_ms = Some(options[next]);
-                    self.tick_rate_ms_live = options[next];
-                    self.tick_rate_changed = true;
+                    self.config.stats_interval = options[next].to_string();
+                    self.set_toast(format!("Rclone stats: {}", self.config.stats_interval));
                 }
                 _ => {}
             }

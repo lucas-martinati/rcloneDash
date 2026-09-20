@@ -231,7 +231,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             (SettingId::MidPanelOrder.label(), app.config.mid_panel_order.name().to_string()),
             (SettingId::BorderStyle.label(), app.config.border_style.name().to_string()),
             (SettingId::GraphStyle.label(), app.config.graph_style.name().to_string()),
-            (SettingId::TickRate.label(), format!("{}ms", app.tick_rate_ms_live)),
+            (SettingId::StatsInterval.label(), app.config.stats_interval.clone()),
         ]
     };
 
@@ -488,16 +488,16 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 ),
             )
         }
-        Some(SettingId::TickRate) => {
-            let current_str = format!("{}ms", app.tick_rate_ms_live);
-            let choices = SettingId::TickRate.choices().unwrap_or_default();
+        Some(SettingId::StatsInterval) => {
+            let current_str = &app.config.stats_interval;
+            let choices = SettingId::StatsInterval.choices().unwrap_or_default();
             (
-                SettingId::TickRate.desc_title(),
+                SettingId::StatsInterval.desc_title(),
                 format!(
                     "{}\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.\n\nAvailable options:\n{}",
-                    SettingId::TickRate.desc_intro(),
+                    SettingId::StatsInterval.desc_intro(),
                     k_dec, k_inc,
-                    config::format_setting_options_list(&choices, &current_str)
+                    config::format_setting_options_list(&choices, current_str)
                 ),
             )
         }
