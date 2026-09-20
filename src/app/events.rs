@@ -1660,7 +1660,7 @@ impl App {
                 return Action::None;
             }
             KeyCode::Char('c') => {
-                if self.service_info.state == ServiceState::Active || self.live.is_syncing {
+                if self.is_syncing() {
                     self.modal = Modal::ConfirmCancel;
                 } else {
                     self.set_toast("No active synchronization to cancel.");

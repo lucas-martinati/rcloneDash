@@ -31,12 +31,18 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
 
         if live_pct > 0 {
             // Live transfer with known progress percentage
-            let files_str = format!("{} files ", app.live.transfer.files_done);
-            if max_w >= 60 {
+            if max_w >= 60 && app.live.phase_index >= 3 && app.live.transfer.files_total > 0 {
+                let files_str = format!("{}/{} files ", app.live.transfer.files_done, app.live.transfer.files_total);
                 line_spans.push(Span::styled(files_str, Style::default().fg(theme.text_bright)));
             }
 
-            let right_text = if max_w >= 70 && !app.live.transfer.speed.is_empty() {
+            let show_speed = max_w >= 70
+                && app.live.phase_index == 3
+                && !app.live.transfer.speed.is_empty()
+                && app.live.transfer.speed != "0 B/s"
+                && app.live.transfer.speed != "0/s";
+
+            let right_text = if show_speed {
                 format!(" {}% ({})", live_pct, app.live.transfer.speed)
             } else {
                 format!(" {}%", live_pct)

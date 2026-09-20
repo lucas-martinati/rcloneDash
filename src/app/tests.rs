@@ -2062,6 +2062,8 @@ use crate::monitor::history::{PastRun, RunStatus};
     #[tokio::test]
     async fn test_partial_dashboard_layouts() {
         let mut app = App::new();
+        app.service_info.state = ServiceState::Idle;
+        app.live.is_syncing = false;
         let area = Rect::new(0, 0, 100, 40);
 
         // Case 1: Only history visible
@@ -2267,6 +2269,52 @@ use crate::monitor::history::{PastRun, RunStatus};
                 render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: w, height: 1 });
             }).unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn test_sync_phase_progression_and_path_modified() {
+        use crate::monitor::streamer::StreamerState;
+
+        let mut app = App::new();
+        let mut state = StreamerState::default();
+
+        // 1. Initial sync state when starting: must start at phase 0 (Listings), NOT phase 3 (Applying)
+        assert_eq!(state.phase_index, 0);
+        assert!(!state.path1_modified);
+        assert!(!state.path2_modified);
+
+        // 2. Path modified detection
+        state.path1_modified = true;
+        app.live = state.clone();
+        assert!(app.live.path1_modified);
+        assert!(!app.live.path2_modified);
+
+        // 3. Render active sync section with path modified: must not crash
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+        let backend = TestBackend::new(120, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let theme = app.current_theme.palette();
+
+        app.live.is_syncing = true;
+        terminal.draw(|f| {
+            crate::ui::dashboard::sync::render_active_sync_section(f, &app, &theme, Rect { x: 0, y: 0, width: 120, height: 10 });
+        }).unwrap();
+
+        // 4. Render active sync section in Phase 3 (Applying) with an active file
+        app.live.phase_index = 3;
+        app.live.active_files.insert(
+            "Debout - Leo Succulent.mp3".to_string(),
+            crate::monitor::parser::ActiveFile {
+                name: "aaaa/réveil/Debout - Leo Succulent.mp3".to_string(),
+                pct: 29,
+                speed: "60.104 KiB/s".to_string(),
+                last_seen: std::time::Instant::now(),
+            },
+        );
+        terminal.draw(|f| {
+            crate::ui::dashboard::sync::render_active_sync_section(f, &app, &theme, Rect { x: 0, y: 0, width: 120, height: 10 });
+        }).unwrap();
     }
 
     #[test]

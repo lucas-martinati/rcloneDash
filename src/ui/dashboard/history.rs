@@ -180,7 +180,7 @@ pub fn render_history_panel(
             let time_str = "In progress";
             let pct_val = app.live.overall_progress_pct();
             let status_str = format!("● {}%", pct_val);
-            let copied_count = app.live.synced_files.iter().filter(|f| f.action == "new" || f.action == "copied").count() + app.live.transfer.files_done as usize;
+            let copied_count = app.live.synced_files.iter().filter(|f| f.action == "new" || f.action == "copied").count().max(app.live.transfer.files_done as usize);
             let copied_val = copied_count.to_string();
             let mod_count = app.live.synced_files.iter().filter(|f| f.action == "modified").count();
             let mod_val = mod_count.to_string();

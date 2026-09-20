@@ -17,7 +17,7 @@ pub fn render_footer(
     area: Rect,
     hitboxes: &mut Vec<Hitbox>,
 ) {
-    let sync_or_cancel = if app.live.is_syncing {
+    let sync_or_cancel = if app.is_syncing() {
         ("c", "cancel", HitAction::ButtonCancel)
     } else {
         ("s", "sync", HitAction::ButtonSync)

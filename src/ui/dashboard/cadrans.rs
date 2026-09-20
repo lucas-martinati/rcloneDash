@@ -265,7 +265,7 @@ pub fn render_metrics_box(
     };
 
     // 1. Rclone service status & schedules
-    let is_active = app.service_info.state == crate::systemd::ServiceState::Active || app.live.is_syncing;
+    let is_active = app.is_syncing();
     let (status_dot, status_label, status_col) = if is_active {
         ("●", "SYNC ACTIVE", theme.green)
     } else {

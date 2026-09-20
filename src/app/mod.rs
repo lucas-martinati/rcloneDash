@@ -680,7 +680,16 @@ impl App {
                 self.service_info_rx = None;
                 if self.service_info.state == ServiceState::Idle || self.service_info.state == ServiceState::Failed {
                     self.live.is_syncing = false;
+                    self.live.sync_start = None;
                     self.live.transfer = crate::monitor::parser::TransferStats::default();
+                    self.live.active_files.clear();
+                    self.live.synced_files.clear();
+                    self.live.changes_local.clear();
+                    self.live.changes_remote.clear();
+                    self.live.changes_local_details.clear();
+                    self.live.changes_remote_details.clear();
+                    self.live.path1_modified = false;
+                    self.live.path2_modified = false;
                 }
             }
         }
@@ -1092,7 +1101,7 @@ impl App {
             });
         }
 
-        if self.live.is_syncing {
+        if self.is_syncing() {
             let duration_s = if let Some(start) = self.live.sync_start {
                 start.elapsed().as_secs()
             } else {

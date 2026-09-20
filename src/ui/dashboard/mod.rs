@@ -38,7 +38,7 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
 
     let cadrans_h: u16 = if app.is_box_visible(1) || app.is_box_visible(2) { 6 } else { 0 };
     let pulse_h: u16 = if (app.is_box_visible(1) || app.is_box_visible(2)) && area.height >= 14 { 1 } else { 0 };
-    let sys_h: u16 = cadrans_h + pulse_h + if show_alert { 3 } else { 0 } + if show_active_sync { 7 } else { 0 };
+    let sys_h: u16 = cadrans_h + pulse_h + if show_alert { 3 } else { 0 } + if show_active_sync { 8 } else { 0 };
 
     let show_mid = app.is_box_visible(3) || app.is_box_visible(4);
     let show_recent = app.is_box_visible(5);
@@ -125,7 +125,7 @@ pub fn compute_dashboard_layout(area: Rect, app: &App) -> DashboardLayout {
         sys_constraints.push(Constraint::Length(3));
     }
     if show_active_sync {
-        sys_constraints.push(Constraint::Length(7));
+        sys_constraints.push(Constraint::Length(8));
     }
 
     let (cadrans_area, pulse_area, alert_area, sync_area) = if sys_constraints.is_empty() || sys_rect.height == 0 {

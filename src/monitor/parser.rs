@@ -32,43 +32,43 @@ pub struct SyncedFile {
 
 // Lazy static regexes
 static RE_SYNCED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"INFO\s+:\s+(.*?):\s+(Copied \(new\)|Copied \(replaced existing\)|Updated modification time in destination|Deleted|Updated file)").unwrap()
+    Regex::new(r"(?i)(?:.*?\s+)?(?:INFO|NOTICE|DEBUG|WARN|WARNING)\s*:\s+(.*?):\s+(Copied \(new\)|Copied \(replaced existing\)|Updated modification time in destination|Deleted|Updated file)").unwrap()
 });
 
 static RE_TRANSFER_BYTES: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"transferred:\s+([\d.]+\s*\S+)\s*/\s*([\d.]+\s*\S+),\s*(\d+|-)\s*%?").unwrap()
+    Regex::new(r"(?i)transferred:\s+([\d.]+\s*\S+)\s*/\s*([\d.]+\s*\S+),\s*(\d+|-)\s*%?").unwrap()
 });
 
 static RE_SPEED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"([\d.]+\s*\S+/s)").unwrap()
+    Regex::new(r"(?i)([\d.]+\s*\S+/s)").unwrap()
 });
 
 static RE_ETA: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"ETA\s+(\S+)").unwrap()
+    Regex::new(r"(?i)ETA\s+(\S+)").unwrap()
 });
 
 static RE_FILES: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"transferred:\s+(\d+)\s*/\s*(\d+),").unwrap()
+    Regex::new(r"(?i)transferred:\s+(\d+)\s*/\s*(\d+),?").unwrap()
 });
 
 static RE_CHECKS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"checks:\s+(\d+)\s*/\s*(\d+)").unwrap()
+    Regex::new(r"(?i)checks:\s+(\d+)\s*/\s*(\d+)").unwrap()
 });
 
 static RE_ELAPSED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"elapsed time:\s*(\S+)").unwrap()
+    Regex::new(r"(?i)elapsed time:\s*(\S+)").unwrap()
 });
 
 static RE_ACTIVE_FULL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\*\s+(.+?):\s*(\d+)%\s*/([^,]+),\s*([^,]+),\s*(\S+)").unwrap()
+    Regex::new(r"(?i)\*\s+(.+?):\s*(\d+)%\s*/([^,]+),\s*([^,]+),\s*(\S+)").unwrap()
 });
 
 static RE_ACTIVE_SHORT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\*\s+(.+?):\s*(\d+)%\s*/(\S+)").unwrap()
+    Regex::new(r"(?i)\*\s+(.+?):\s*(\d+)%\s*/(\S+)").unwrap()
 });
 
 static RE_ACTIVE_STATUS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\*\s+(.+?):\s*(checking|transferring)\s*$").unwrap()
+    Regex::new(r"(?i)\*\s+(.+?):\s*(checking|transferring)\s*$").unwrap()
 });
 
 pub fn parse_synced_file(line: &str) -> Option<SyncedFile> {
@@ -100,20 +100,7 @@ pub fn parse_transfer_stats(line: &str, stats: &mut TransferStats) {
             stats.bytes_done = d.as_str().trim().to_string();
             stats.bytes_total = t.as_str().trim().to_string();
             let p_str = p.as_str().trim();
-            stats.pct = if p_str == "-" { 0 } else { p_str.parse().unwrap_or(0) };
-        }
-    }
-
-    if (ll.contains("transferred:") || ll.contains("copied") || ll.contains("transferring")) && !ll.contains("checks:") {
-        if let Some(sm) = RE_SPEED.captures(line) {
-            if let Some(s) = sm.get(1) {
-                stats.speed = s.as_str().to_string();
-            }
-        }
-        if let Some(em) = RE_ETA.captures(line) {
-            if let Some(e) = em.get(1) {
-                stats.eta = e.as_str().to_string();
-            }
+            stats.pct = p_str.parse().unwrap_or(0);
         }
     }
 
@@ -131,9 +118,21 @@ pub fn parse_transfer_stats(line: &str, stats: &mut TransferStats) {
         }
     }
 
-    if let Some(caps) = RE_ELAPSED.captures(&ll) {
+    if let Some(caps) = RE_SPEED.captures(line) {
+        if let Some(s) = caps.get(1) {
+            stats.speed = s.as_str().trim().to_string();
+        }
+    }
+
+    if let Some(caps) = RE_ETA.captures(line) {
         if let Some(e) = caps.get(1) {
-            stats.elapsed = e.as_str().to_string();
+            stats.eta = e.as_str().trim().to_string();
+        }
+    }
+
+    if let Some(caps) = RE_ELAPSED.captures(&ll) {
+        if let Some(el) = caps.get(1) {
+            stats.elapsed = el.as_str().trim().to_string();
         }
     }
 }
@@ -142,7 +141,7 @@ pub fn parse_active_file(line: &str) -> Option<ActiveFile> {
     if let Some(caps) = RE_ACTIVE_FULL.captures(line) {
         let name = caps.get(1)?.as_str().trim().to_string();
         let pct = caps.get(2)?.as_str().parse().unwrap_or(0);
-        let speed = caps.get(4)?.as_str().trim().to_string();
+        let speed = caps.get(4).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
         return Some(ActiveFile {
             name,
             pct,
@@ -210,6 +209,33 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_synced_files_future_log_formats_and_levels() {
+        // NOTICE log level (commonly used by rclone with -v)
+        let l1 = "2026/09/17 21:30:00 NOTICE: Documents/rapport.pdf: Copied (new)";
+        let res1 = parse_synced_file(l1).expect("should parse NOTICE log level");
+        assert_eq!(res1.path, "Documents/rapport.pdf");
+        assert_eq!(res1.action, "new");
+
+        // DEBUG log level
+        let l2 = "DEBUG : Images/photo.png: Updated file";
+        let res2 = parse_synced_file(l2).expect("should parse DEBUG log level");
+        assert_eq!(res2.path, "Images/photo.png");
+        assert_eq!(res2.action, "modified");
+
+        // ISO8601 timestamp format
+        let l3 = "2026-09-20T17:46:29.123456+02:00 INFO : music/track.flac: Deleted";
+        let res3 = parse_synced_file(l3).expect("should parse ISO8601 timestamp");
+        assert_eq!(res3.path, "music/track.flac");
+        assert_eq!(res3.action, "deleted");
+
+        // Without timestamp prefix
+        let l4 = "INFO: backup/data.tar.gz: Copied (new)";
+        let res4 = parse_synced_file(l4).expect("should parse without timestamp");
+        assert_eq!(res4.path, "backup/data.tar.gz");
+        assert_eq!(res4.action, "new");
+    }
+
+    #[test]
     fn test_parse_transfer_stats() {
         let mut stats = TransferStats::default();
 
@@ -236,6 +262,41 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_transfer_stats_edge_cases_and_future_variations() {
+        let mut stats = TransferStats::default();
+
+        // Uppercase / different units / hyphen percent
+        parse_transfer_stats("TRANSFERRED: 1.250 GiB / 5.000 GiB, - %", &mut stats);
+        assert_eq!(stats.bytes_done, "1.250 gib");
+        assert_eq!(stats.bytes_total, "5.000 gib");
+        assert_eq!(stats.pct, 0);
+
+        // Zero bytes transfer
+        parse_transfer_stats("transferred: 0 B / 0 B, -, 0 B/s, ETA -", &mut stats);
+        assert_eq!(stats.bytes_done, "0 b");
+        assert_eq!(stats.bytes_total, "0 b");
+        assert_eq!(stats.speed, "0 B/s");
+        assert_eq!(stats.eta, "-");
+
+        // Gigabytes per second speed
+        parse_transfer_stats("transferred: 10 / 10, 100%, 1.250 GiB/s, ETA 0s", &mut stats);
+        assert_eq!(stats.files_done, 10);
+        assert_eq!(stats.files_total, 10);
+        assert_eq!(stats.speed, "1.250 GiB/s");
+        assert_eq!(stats.eta, "0s");
+
+        // Checks with different spacing
+        parse_transfer_stats("checks: 0 / 500", &mut stats);
+        assert_eq!(stats.checks_done, 0);
+        assert_eq!(stats.checks_total, 500);
+
+        // Malformed lines must not panic
+        parse_transfer_stats("", &mut stats);
+        parse_transfer_stats("transferred: abc / def, xyz%", &mut stats);
+        parse_transfer_stats("checks: NaN / Infinity", &mut stats);
+    }
+
+    #[test]
     fn test_parse_active_file() {
         let l1 = "* Documents/video.mp4: 45% /1.234Mi, 4.5Mi/s, 2m3s";
         let res1 = parse_active_file(l1).expect("should parse full active transfer");
@@ -247,13 +308,25 @@ mod tests {
         let res2 = parse_active_file(l2).expect("should parse checking file");
         assert_eq!(res2.name, "Audio/album.flac");
         assert_eq!(res2.pct, 0);
+
+        // Short transfer format
+        let l3 = "* Images/photo.png: 80% /500Ki";
+        let res3 = parse_active_file(l3).expect("should parse short active transfer");
+        assert_eq!(res3.name, "Images/photo.png");
+        assert_eq!(res3.pct, 80);
+
+        // Malformed lines must return None and never panic
+        assert!(parse_active_file("").is_none());
+        assert!(parse_active_file("* ").is_none());
+        assert!(parse_active_file("* invalid line without percentage").is_none());
     }
 
     #[test]
     fn test_resync_trigger() {
         assert!(is_resync_trigger("ERROR : Bisync error: must run --resync to recover"));
         assert!(is_resync_trigger("Fatal: Path1 and Path2 are out of sync"));
+        assert!(is_resync_trigger("prior or current is not in sync"));
         assert!(!is_resync_trigger("INFO  : Bisync successful"));
+        assert!(!is_resync_trigger(""));
     }
 }
-
