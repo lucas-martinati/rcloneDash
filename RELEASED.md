@@ -1,5 +1,35 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.3] - Notifications Interactives, Icône Vectorielle Officielle & Mise à Jour Système Globale
+
+Cette version apporte des notifications de bureau interactives en cas d'échec de synchronisation avec ouverture directe du TUI au clic, une nouvelle identité visuelle avec l'icône vectorielle officielle **Dual-Sync**, l'intégration complète du raccourci de bureau (`.desktop`), un système de mise à jour exhaustif préservant les données utilisateurs, et l'option « Jamais » pour suspendre le timer de synchronisation automatique.
+
+---
+
+### 🌟 Nouveautés et Améliorations
+
+#### 1. 🔔 Notifications de Bureau Interactives (Desktop Notifications)
+- **Notification critique immédiate** : alerte de bureau native déclenchée automatiquement par systemd uniquement en cas d'échec de `rclone bisync`.
+- **Ouverture directe au clic** : cliquer sur le corps de la notification ou sur l'action « View Dashboard » ouvre instantanément RcloneDash dans votre émulateur de terminal favori (`ptyxis`, `gnome-terminal`, `konsole`, `alacritty`, `kitty`, `xfce4-terminal`, etc.).
+- **Résilience système & Contournement AppArmor** : utilisation des liaisons natives GObject/libnotify (`gi.repository.Notify`) pour contourner le confinement AppArmor d'Ubuntu 24.04+, et détachement via `systemd-run --user` garantissant que la notification survit à l'arrêt du cgroup de service (`KillMode=control-group`).
+- **Zéro ressource en tâche de fond** : aucun processus résident ni boucle de surveillance polling (0.00% CPU et 0 Mo RAM en fonctionnement normal).
+
+#### 2. 🎨 Nouvelle Identité Visuelle & Raccourci Desktop
+- **Icône vectorielle officielle SVG Dual-Sync** : design contemporain à double flèche rouge néon dynamique (`#ff5252` → `#e62525` → `#9e1313`) sur fond transparent avec lueur intégrée, parfaitement contrastée sur docks sombres et clairs.
+- **Raccourci applicatif `.desktop`** : intégration dans le lanceur d'applications, le dock et la recherche système (`rclonedash.desktop`), avec catégorie Utilitaire et mots-clés de recherche.
+- **Titre de fenêtre explicite** : définition systématique du titre `RcloneDash` sur les fenêtres et onglets de terminal via `crossterm::terminal::SetTitle` et les drapeaux d'émulateurs (`--title` / `-T`).
+
+#### 3. 📦 Mise à Jour Complète & Préservation des Réglages
+- **Auto-Updater global (`rclonedash --update`)** : téléchargement de l'archive officielle `.tar.gz` et exécution de l'installateur complet pour mettre à jour atomiquement tous les composants (binaire, unités systemd, icône SVG, scripts de notification).
+- **Préservation intégrale des configurations** : l'installateur et l'updater ne réécrivent jamais sur vos réglages existants (`dash-config.json`) ni sur vos filtres d'exclusion (`gdrive-filters.txt`).
+- **Gestion automatique des dépendances** : détection et proposition d'installation automatique des dépendances Python requises selon la distribution Linux (APT sur Debian/Ubuntu, DNF sur Fedora, Pacman sur Arch).
+- **Désinstallation propre** : script `uninstall.sh` enrichi pour retirer proprement l'icône, le fichier `.desktop` et le cache GTK.
+
+#### 4. ⏱️ Option de suspension du Timer (« Never »)
+- **Pause indéfinie du timer** : ajout de l'option `never` dans les paramètres d'intervalle de timer pour suspendre totalement la synchronisation périodique automatique sans désactiver manuellement les services.
+
+---
+
 ## [v1.0.2] - Refonte UI Settings (btop++ style), Factorisation & Raccourcis Exposants
 
 Cette version apporte une refonte visuelle majeure du panneau des paramètres inspirée par l'ergonomie et l'esthétique de **btop++**, ainsi qu'une factorisation en profondeur de l'architecture des réglages.
