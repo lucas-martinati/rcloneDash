@@ -47,24 +47,27 @@ impl KeybindingRegistry {
     /// - If `key` is not in `word` or is a special key (e.g. "↵", "Esc", "Tab", "↑"),
     ///   the key is displayed as a prefix followed by a space and the word.
     pub fn format_shortcut_label(key: &str, word: &str, key_fg: Color, text_fg: Color) -> Vec<Span<'static>> {
-        if key.chars().count() == 1 {
-            let key_char = key.chars().next().unwrap();
-            let key_lower = key_char.to_lowercase().next().unwrap();
-            let word_lower = word.to_lowercase();
-            if let Some(byte_pos) = word_lower.find(key_lower) {
-                let char_len = word[byte_pos..].chars().next().unwrap().len_utf8();
-                let mut spans = Vec::new();
-                if byte_pos > 0 {
-                    spans.push(Span::styled(word[..byte_pos].to_string(), Style::default().fg(text_fg)));
+        if let Some(key_char) = key.chars().next() {
+            if key.chars().count() == 1 {
+                let key_lower = key_char.to_lowercase().next().unwrap_or(key_char);
+                let word_lower = word.to_lowercase();
+                if let Some(byte_pos) = word_lower.find(key_lower) {
+                    if let Some(found_char) = word[byte_pos..].chars().next() {
+                        let char_len = found_char.len_utf8();
+                        let mut spans = Vec::new();
+                        if byte_pos > 0 {
+                            spans.push(Span::styled(word[..byte_pos].to_string(), Style::default().fg(text_fg)));
+                        }
+                        spans.push(Span::styled(
+                            word[byte_pos..byte_pos + char_len].to_string(),
+                            Style::default().fg(key_fg).add_modifier(Modifier::BOLD),
+                        ));
+                        if byte_pos + char_len < word.len() {
+                            spans.push(Span::styled(word[byte_pos + char_len..].to_string(), Style::default().fg(text_fg)));
+                        }
+                        return spans;
+                    }
                 }
-                spans.push(Span::styled(
-                    word[byte_pos..byte_pos + char_len].to_string(),
-                    Style::default().fg(key_fg).add_modifier(Modifier::BOLD),
-                ));
-                if byte_pos + char_len < word.len() {
-                    spans.push(Span::styled(word[byte_pos + char_len..].to_string(), Style::default().fg(text_fg)));
-                }
-                return spans;
             }
         }
 

@@ -62,7 +62,9 @@ pub async fn install_rclone_user() -> Result<String, String> {
 
     // 1. Download zip archive with curl
     let status = tokio::process::Command::new("curl")
-        .args(["-fsSL", "--connect-timeout", "10", "--max-time", "60", "-o", tmp_zip.to_str().unwrap(), &download_url])
+        .args(["-fsSL", "--connect-timeout", "10", "--max-time", "60", "-o"])
+        .arg(&tmp_zip)
+        .arg(&download_url)
         .status()
         .await
         .map_err(|e| format!("Failed to run curl: {}", e))?;
@@ -74,7 +76,9 @@ pub async fn install_rclone_user() -> Result<String, String> {
 
     // 2. Extract rclone binary using unzip
     let unzip_status = tokio::process::Command::new("unzip")
-        .args(["-p", tmp_zip.to_str().unwrap(), "*/rclone"])
+        .arg("-p")
+        .arg(&tmp_zip)
+        .arg("*/rclone")
         .output()
         .await;
 
@@ -84,7 +88,9 @@ pub async fn install_rclone_user() -> Result<String, String> {
         Ok(out) if out.status.success() && !out.stdout.is_empty() => {
             fs::write(&target_binary, out.stdout)
                 .map_err(|e| format!("Failed to write binary to {:?}: {}", target_binary, e))?;
-            let _ = fs::set_permissions(&target_binary, fs::Permissions::from_mode(0o755));
+            if let Err(e) = fs::set_permissions(&target_binary, fs::Permissions::from_mode(0o755)) {
+                eprintln!("Warning: Failed to set 0755 permissions on {:?}: {}", target_binary, e);
+            }
         }
         _ => {
             // Fallback: try python zipfile extraction if unzip command is not present
@@ -103,7 +109,9 @@ pub async fn install_rclone_user() -> Result<String, String> {
                 if py_out.status.success() && !py_out.stdout.is_empty() {
                     fs::write(&target_binary, py_out.stdout)
                         .map_err(|e| format!("Failed to write binary: {}", e))?;
-                    let _ = fs::set_permissions(&target_binary, fs::Permissions::from_mode(0o755));
+                    if let Err(e) = fs::set_permissions(&target_binary, fs::Permissions::from_mode(0o755)) {
+                        eprintln!("Warning: Failed to set 0755 permissions on {:?}: {}", target_binary, e);
+                    }
                 } else {
                     return Err("Failed to extract rclone binary (neither unzip nor python3 zipfile succeeded)".to_string());
                 }

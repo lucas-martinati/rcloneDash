@@ -338,7 +338,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let (desc_title, desc_body): (&str, String) = match SettingId::from_tab_and_idx(app.settings_tab, app.settings_selected_idx) {
         // --- Category 0: Rclone ---
         Some(SettingId::TimerInterval) => {
-            let choices = SettingId::TimerInterval.choices().unwrap();
+            let choices = SettingId::TimerInterval.choices().unwrap_or_default();
             (
                 SettingId::TimerInterval.desc_title(),
                 format!(
@@ -349,7 +349,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             )
         }
         Some(SettingId::CloudSafetyNet) => {
-            let choices = SettingId::CloudSafetyNet.choices().unwrap();
+            let choices = SettingId::CloudSafetyNet.choices().unwrap_or_default();
             let current = config::full_sync_label(&app.config.full_sync_interval);
             (
                 SettingId::CloudSafetyNet.desc_title(),
@@ -361,7 +361,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             )
         }
         Some(SettingId::BandwidthLimit) => {
-            let choices = SettingId::BandwidthLimit.choices().unwrap();
+            let choices = SettingId::BandwidthLimit.choices().unwrap_or_default();
             let current = app.config.bwlimit.as_deref().unwrap_or("Disabled");
             (
                 SettingId::BandwidthLimit.desc_title(),
@@ -429,7 +429,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
         // --- Category 1: UI & Appearance ---
         Some(SettingId::ColorTheme) => {
-            let choices = SettingId::ColorTheme.choices().unwrap();
+            let choices = SettingId::ColorTheme.choices().unwrap_or_default();
             let current = app.current_theme.name();
             (
                 SettingId::ColorTheme.desc_title(),
@@ -441,7 +441,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             )
         }
         Some(SettingId::ContainerLayout) => {
-            let choices = SettingId::ContainerLayout.choices().unwrap();
+            let choices = SettingId::ContainerLayout.choices().unwrap_or_default();
             let current = app.config.container_layout.name();
             (
                 SettingId::ContainerLayout.desc_title(),
@@ -453,7 +453,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             )
         }
         Some(SettingId::MidPanelOrder) => {
-            let choices = SettingId::MidPanelOrder.choices().unwrap();
+            let choices = SettingId::MidPanelOrder.choices().unwrap_or_default();
             let current = app.config.mid_panel_order.name();
             (
                 SettingId::MidPanelOrder.desc_title(),
@@ -465,7 +465,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             )
         }
         Some(SettingId::BorderStyle) => {
-            let choices = SettingId::BorderStyle.choices().unwrap();
+            let choices = SettingId::BorderStyle.choices().unwrap_or_default();
             let current = app.config.border_style.name();
             (
                 SettingId::BorderStyle.desc_title(),
@@ -477,7 +477,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             )
         }
         Some(SettingId::GraphStyle) => {
-            let choices = SettingId::GraphStyle.choices().unwrap();
+            let choices = SettingId::GraphStyle.choices().unwrap_or_default();
             let current = app.config.graph_style.name();
             (
                 SettingId::GraphStyle.desc_title(),
@@ -490,7 +490,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         }
         Some(SettingId::TickRate) => {
             let current_str = format!("{}ms", app.tick_rate_ms_live);
-            let choices = SettingId::TickRate.choices().unwrap();
+            let choices = SettingId::TickRate.choices().unwrap_or_default();
             (
                 SettingId::TickRate.desc_title(),
                 format!(

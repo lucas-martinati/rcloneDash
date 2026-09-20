@@ -823,7 +823,9 @@ pub fn write_rclone_credentials(remote: &str, client_id: &str, client_secret: &s
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+        if let Err(e) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
+            eprintln!("Warning: Failed to set 0600 permissions on {}: {}", path.display(), e);
+        }
     }
 
     Ok(())

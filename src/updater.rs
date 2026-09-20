@@ -106,7 +106,9 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
     if info.download_url.ends_with(".tar.gz") {
         let tar_tmp = exe_dir.join(format!(".rclonedash-update-{}.tar.gz", pid));
         let status = tokio::process::Command::new("curl")
-            .args(["-fSL", "--progress-bar", "-o", tar_tmp.to_str().unwrap(), &info.download_url])
+            .args(["-fSL", "--progress-bar", "-o"])
+            .arg(&tar_tmp)
+            .arg(&info.download_url)
             .status()
             .await
             .map_err(|e| format!("Download failed: {}", e))?;
@@ -117,7 +119,11 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
         }
 
         let untar = tokio::process::Command::new("tar")
-            .args(["-xzf", tar_tmp.to_str().unwrap(), "--strip-components=1", "-C", exe_dir.to_str().unwrap()])
+            .arg("-xzf")
+            .arg(&tar_tmp)
+            .arg("--strip-components=1")
+            .arg("-C")
+            .arg(exe_dir)
             .status()
             .await;
         let _ = std::fs::remove_file(&tar_tmp);
@@ -129,7 +135,9 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
     } else {
         // Direct standalone binary download
         let status = tokio::process::Command::new("curl")
-            .args(["-fSL", "--progress-bar", "-o", tmp_dest.to_str().unwrap(), &info.download_url])
+            .args(["-fSL", "--progress-bar", "-o"])
+            .arg(&tmp_dest)
+            .arg(&info.download_url)
             .status()
             .await
             .map_err(|e| format!("Download failed: {}", e))?;
