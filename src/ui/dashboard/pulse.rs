@@ -165,11 +165,12 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
         }
     } else {
         // IDLE mode: Countdown to next scheduled sync
-        let is_disabled = app.service_info.timer_left.eq_ignore_ascii_case("disabled");
+        let is_disabled = app.service_info.timer_left.eq_ignore_ascii_case("disabled")
+            || app.config.timer_interval.eq_ignore_ascii_case("never");
 
         if is_disabled {
             line_spans.push(Span::styled("⚡ Sync timer: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)));
-            line_spans.push(Span::styled("Disabled ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+            line_spans.push(Span::styled("Paused ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)));
             if max_w >= 50 {
                 line_spans.push(Span::styled("(manual sync only)", Style::default().fg(theme.text_muted)));
             }

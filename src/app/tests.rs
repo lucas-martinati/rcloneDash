@@ -1621,7 +1621,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.settings_selected_idx = 0; // timer_interval
         app.config.timer_interval = "10min".to_string();
 
-        // Forward cycle: 10min -> 15min -> 30min -> 1h -> 2h -> 4h -> 10min
+        // Forward cycle: 10min -> 15min -> 30min -> 1h -> 2h -> 4h -> never -> 10min
         app.cycle_setting(true);
         assert_eq!(app.config.timer_interval, "15min");
         app.cycle_setting(true);
@@ -1633,9 +1633,13 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.cycle_setting(true);
         assert_eq!(app.config.timer_interval, "4h"); // Visited 4h!
         app.cycle_setting(true);
+        assert_eq!(app.config.timer_interval, "never");
+        app.cycle_setting(true);
         assert_eq!(app.config.timer_interval, "10min");
 
-        // Backward cycle: 10min -> 4h -> 2h -> 1h -> 30min -> 15min -> 10min
+        // Backward cycle: 10min -> never -> 4h -> 2h -> 1h -> 30min -> 15min -> 10min
+        app.cycle_setting(false);
+        assert_eq!(app.config.timer_interval, "never");
         app.cycle_setting(false);
         assert_eq!(app.config.timer_interval, "4h");
         app.cycle_setting(false);
@@ -2189,6 +2193,8 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.timer_cycle_seconds(), 7200);
         app.config.timer_interval = "4h".to_string();
         assert_eq!(app.timer_cycle_seconds(), 14400);
+        app.config.timer_interval = "never".to_string();
+        assert_eq!(app.timer_cycle_seconds(), 0);
 
         // 2. Timer remaining seconds parsing
         app.config.timer_interval = "10min".to_string();
@@ -2213,7 +2219,14 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.service_info.timer_left = "--".to_string();
         assert_eq!(app.timer_remaining_seconds(), None);
 
+        // When interval is "never", timer_remaining_seconds is None regardless of timer_left
+        app.config.timer_interval = "never".to_string();
+        app.service_info.timer_left = "4m 12s".to_string();
+        assert_eq!(app.timer_remaining_seconds(), None);
+        assert_eq!(app.timer_progress(), None);
+
         // 3. Timer progress ratio
+        app.config.timer_interval = "10min".to_string();
         app.service_info.timer_left = "4m 12s".to_string(); // 252s rem / 600s cycle = 0.42 remaining -> 0.58 progress
         let prog = app.timer_progress().unwrap();
         assert!((prog - 0.58).abs() < 0.01);

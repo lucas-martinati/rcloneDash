@@ -127,7 +127,13 @@ impl App {
 
     pub fn setting_value(&self, setting: config::SettingId) -> String {
         match setting {
-            config::SettingId::TimerInterval => self.config.timer_interval.clone(),
+            config::SettingId::TimerInterval => {
+                if self.config.timer_interval == "never" {
+                    "Never (Paused)".to_string()
+                } else {
+                    self.config.timer_interval.clone()
+                }
+            }
             config::SettingId::CloudSafetyNet => config::full_sync_label(&self.config.full_sync_interval).to_string(),
             config::SettingId::BandwidthLimit => self.config.bwlimit.as_deref().unwrap_or("Disabled").to_string(),
             config::SettingId::StatsInterval => self.config.stats_interval.clone(),

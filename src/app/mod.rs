@@ -1194,9 +1194,12 @@ impl App {
         conflicts
     }
 
-    /// Returns the timer interval in seconds (default 600s = 10min).
+    /// Returns the timer interval in seconds (default 600s = 10min, or 0 if never).
     pub fn timer_cycle_seconds(&self) -> u64 {
         let interval = self.config.timer_interval.trim();
+        if interval.eq_ignore_ascii_case("never") {
+            return 0;
+        }
         if interval.ends_with("min") {
             interval.trim_end_matches("min").parse::<u64>().unwrap_or(10) * 60
         } else if interval.ends_with('m') {
@@ -1212,6 +1215,9 @@ impl App {
 
     /// Returns remaining seconds until the next sync, parsed from `service_info.timer_left`.
     pub fn timer_remaining_seconds(&self) -> Option<u64> {
+        if self.config.timer_interval.eq_ignore_ascii_case("never") {
+            return None;
+        }
         let left = self.service_info.timer_left.trim();
         if left.is_empty() || left == "--" || left == "—" || left.eq_ignore_ascii_case("disabled") {
             return None;

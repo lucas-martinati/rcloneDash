@@ -18,6 +18,7 @@ pub fn format_setting_options_list<T: AsRef<str>>(choices: &[T], current: &str) 
         let norm_cur = current.trim().replace(' ', "");
         norm_c.eq_ignore_ascii_case(&norm_cur)
             || (c == "Disabled" && (current.is_empty() || current.eq_ignore_ascii_case("Disabled")))
+            || (c.eq_ignore_ascii_case("never") && current.to_lowercase().contains("never"))
     };
 
     if choices.len() <= 8 {
@@ -364,7 +365,7 @@ impl LogFilter {
 }
 
 /// Interval options for bisync timer (single source of truth)
-pub const TIMER_INTERVAL_OPTIONS: &[&str] = &["10min", "15min", "30min", "1h", "2h", "4h"];
+pub const TIMER_INTERVAL_OPTIONS: &[&str] = &["10min", "15min", "30min", "1h", "2h", "4h", "never"];
 
 /// Cloud safety net / full sync intervals (single source of truth)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -940,6 +941,13 @@ pub fn save_config(cfg: &AppConfig) -> Result<(), String> {
 
 #[cfg(not(test))]
 pub fn update_systemd_timer_interval(interval: &str) {
+    if interval.eq_ignore_ascii_case("never") {
+        let _ = std::process::Command::new("systemctl")
+            .args(["--user", "stop", "rclone-bisync.timer"])
+            .output();
+        return;
+    }
+
     if let Some(home) = dirs_home() {
         let timer_path = home.join(".config/systemd/user/rclone-bisync.timer");
         if timer_path.exists() {
@@ -953,6 +961,10 @@ pub fn update_systemd_timer_interval(interval: &str) {
                         .output();
                     let _ = std::process::Command::new("systemctl")
                         .args(["--user", "restart", "rclone-bisync.timer"])
+                        .output();
+                } else {
+                    let _ = std::process::Command::new("systemctl")
+                        .args(["--user", "start", "rclone-bisync.timer"])
                         .output();
                 }
             }
@@ -1217,9 +1229,10 @@ mod tests {
     fn test_format_setting_options_list_columns_and_precision() {
         // Liste courte (<= 8 éléments) : 1 colonne verticale
         let timer_formatted = format_setting_options_list(TIMER_INTERVAL_OPTIONS, "15min");
-        assert_eq!(timer_formatted.lines().count(), 6);
+        assert_eq!(timer_formatted.lines().count(), 7);
         assert!(timer_formatted.contains("  ▶ 15min (active)"));
         assert!(timer_formatted.contains("  • 10min"));
+        assert!(timer_formatted.contains("  • never"));
 
         // stats_interval (7 éléments) : 1 colonne verticale
         let choices = stats_interval_options();

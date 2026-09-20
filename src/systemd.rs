@@ -70,9 +70,12 @@ pub fn get_service_info() -> ServiceInfo {
     if let Ok(out) = timer_out {
         let text = String::from_utf8_lossy(&out.stdout);
         let line = text.trim();
-        if !line.is_empty() {
+        let cfg_interval = config::load_config().timer_interval;
+        if cfg_interval.eq_ignore_ascii_case("never") {
+            info.timer_left = "Disabled".to_string();
+            info.timer_next = "Disabled".to_string();
+        } else if !line.is_empty() {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            let cfg_interval = config::load_config().timer_interval;
             let interval_mins: u64 = if cfg_interval.ends_with("min") {
                 cfg_interval.trim_end_matches("min").parse().unwrap_or(10)
             } else if cfg_interval.ends_with('h') {
