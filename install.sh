@@ -267,15 +267,8 @@ fi
 # Install application icon
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 mkdir -p "$ICON_DIR"
-ICON_SRC=""
 if [ -f "$TEMPLATE_DIR/rclonedash.svg" ]; then
-    ICON_SRC="$TEMPLATE_DIR/rclonedash.svg"
-elif [ -f "$SCRIPT_DIR/assets/icons/rclonedash.svg" ]; then
-    ICON_SRC="$SCRIPT_DIR/assets/icons/rclonedash.svg"
-fi
-
-if [ -n "$ICON_SRC" ] && [ -f "$ICON_SRC" ]; then
-    cp "$ICON_SRC" "$ICON_DIR/rclonedash.svg"
+    cp "$TEMPLATE_DIR/rclonedash.svg" "$ICON_DIR/rclonedash.svg"
     ok "Application icon installed at $ICON_DIR/rclonedash.svg"
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >> "$LOG_FILE" 2>&1 || true
