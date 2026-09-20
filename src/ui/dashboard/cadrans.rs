@@ -18,17 +18,33 @@ pub fn render_system_cadrans(
     area: Rect,
     hitboxes: &mut Vec<Hitbox>,
 ) {
-    let sub = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(area);
-
-    render_disks_cloud_box(f, app, theme, sub[0]);
-    render_metrics_box(f, app, theme, sub[1], hitboxes);
+    match (app.is_box_visible(1), app.is_box_visible(2)) {
+        (true, true) => {
+            let sub = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(area);
+            render_disks_cloud_box(f, app, theme, sub[0], hitboxes);
+            render_metrics_box(f, app, theme, sub[1], hitboxes);
+        }
+        (true, false) => {
+            render_disks_cloud_box(f, app, theme, area, hitboxes);
+        }
+        (false, true) => {
+            render_metrics_box(f, app, theme, area, hitboxes);
+        }
+        (false, false) => {}
+    }
 }
 
 /// Renders the Disks & Cloud Storage status card.
-pub fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect) {
+pub fn render_disks_cloud_box(
+    f: &mut Frame,
+    app: &App,
+    theme: &ThemePalette,
+    area: Rect,
+    hitboxes: &mut Vec<Hitbox>,
+) {
     let bg = app.border_glyphs();
     let outer_block = Block::default()
         .borders(Borders::ALL)
@@ -37,6 +53,7 @@ pub fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, ar
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
             Span::styled(bg.top_left, Style::default().fg(theme.border_storage)),
+            Span::styled("¹", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("disks & cloud", Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
             Span::styled(bg.top_right, Style::default().fg(theme.border_storage)),
         ]))
@@ -47,6 +64,16 @@ pub fn render_disks_cloud_box(f: &mut Frame, app: &App, theme: &ThemePalette, ar
             .alignment(Alignment::Right),
         );
     f.render_widget(outer_block, area);
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x,
+            y: area.y,
+            width: 18,
+            height: 1,
+        },
+        action: HitAction::ToggleBox(1),
+    });
 
     let inner = Rect {
         x: area.x + 2,
@@ -199,6 +226,7 @@ pub fn render_metrics_box(
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
             Span::styled(bg.top_left, Style::default().fg(theme.border_sys)),
+            Span::styled("²", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("metrics", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{} ", bg.horizontal), Style::default().fg(theme.border_sys)),
             Span::styled(clock_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
@@ -219,6 +247,16 @@ pub fn render_metrics_box(
             .alignment(Alignment::Right)
         });
     f.render_widget(outer_block, area);
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x,
+            y: area.y,
+            width: 12,
+            height: 1,
+        },
+        action: HitAction::ToggleBox(2),
+    });
 
     let inner = Rect {
         x: area.x + 2,

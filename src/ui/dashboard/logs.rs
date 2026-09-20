@@ -80,12 +80,23 @@ pub fn render_logs_panel(
 
     let mut title_spans: Vec<Span> = Vec::new();
     title_spans.push(Span::styled(bg.top_left, Style::default().fg(border_color)));
+    title_spans.push(Span::styled("⁴", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     title_spans.push(Span::styled("logs", Style::default().fg(border_color).add_modifier(Modifier::BOLD)));
     title_spans.push(Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)));
 
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x,
+            y: area.y,
+            width: 8,
+            height: 1,
+        },
+        action: HitAction::ToggleBox(4),
+    });
+
     // area.x + 1 is start of block title inside border.
-    // "┐" (1) + "logs" (4) + "┌┐" (2) = 7 chars, so selector starts at area.x + 1 + 7 = area.x + 8
-    let mut cur_hit_x = area.x + 8;
+    // "┐" (1) + "⁴" (1) + "logs" (4) + "┌┐" (2) = 8 chars, so selector starts at area.x + 1 + 8 = area.x + 9
+    let mut cur_hit_x = area.x + 9;
 
     // Left arrow button: ←
     hitboxes.push(Hitbox {

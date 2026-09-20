@@ -92,7 +92,6 @@ impl App {
         self.edit_state = EditState::Idle;
     }
 
-    #[allow(dead_code)]
     pub fn cancel_setting_edit(&mut self) {
         self.edit_state = EditState::Idle;
         self.set_toast("ℹ Edit cancelled");

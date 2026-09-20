@@ -1,3 +1,8 @@
+#![deny(dead_code)]
+#![deny(unused_imports)]
+#![deny(unused_variables)]
+#![deny(unused_mut)]
+
 mod app;
 mod clipboard;
 mod config;

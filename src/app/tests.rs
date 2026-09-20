@@ -731,10 +731,10 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
         assert_eq!(app.edit_buffer(), "/home/user/drive/su");
 
-        // Exit with Esc: what is in the buffer is preserved
+        // Cancel with Esc: modifications are discarded, original value preserved
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(!app.is_editing_setting());
-        assert_eq!(app.config.local_dir, "/home/user/drive/su");
+        assert_eq!(app.config.local_dir, "/home/user/drive");
 
         // Enter editing with 'e', modify and validate with Enter
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
@@ -821,7 +821,6 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.settings_selected_idx = 7;
         assert_eq!(config::SettingId::from_tab_and_idx(0, 7), Some(config::SettingId::GoogleClientId));
         assert!(config::SettingId::GoogleClientId.is_text_input());
-        assert!(!config::SettingId::GoogleClientId.is_secret());
 
         // Press Enter to start editing
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -839,7 +838,6 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.settings_selected_idx = 8;
         assert_eq!(config::SettingId::from_tab_and_idx(0, 8), Some(config::SettingId::GoogleClientSecret));
         assert!(config::SettingId::GoogleClientSecret.is_text_input());
-        assert!(config::SettingId::GoogleClientSecret.is_secret());
 
         // Press 'e' to start editing
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
@@ -1288,9 +1286,9 @@ use crate::monitor::history::{PastRun, RunStatus};
         ));
         assert_eq!(app.log_filter, LogFilter::Files);
 
-        // Number keys 1-3 jump directly to filter
+        // 'f' again cycles to Problems
         app.handle_key(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('3'),
+            crossterm::event::KeyCode::Char('f'),
             crossterm::event::KeyModifiers::NONE,
         ));
         assert_eq!(app.log_filter, LogFilter::Problems);
@@ -1331,6 +1329,9 @@ use crate::monitor::history::{PastRun, RunStatus};
             crossterm::event::KeyModifiers::NONE,
         ));
         assert_eq!(action, Action::OpenFullLogs);
+
+        // Clean up: reset to All
+        app.set_log_filter(LogFilter::All);
     }
 
     #[tokio::test]
@@ -1958,3 +1959,237 @@ use crate::monitor::history::{PastRun, RunStatus};
         let _ = config::write_rclone_credentials(&app.config.remote, "", "");
     }
 
+    #[tokio::test]
+    async fn test_toggle_boxes_and_focus_adjustment() {
+        let mut app = App::new();
+        app.config.show_cadrans = true;
+        app.config.show_metrics = true;
+        app.config.show_history = true;
+        app.config.show_logs = true;
+        app.config.show_recent = true;
+        let _ = crate::config::save_config(&app.config);
+
+        assert!(app.is_box_visible(1));
+        assert!(app.is_box_visible(2));
+        assert!(app.is_box_visible(3));
+        assert!(app.is_box_visible(4));
+        assert!(app.is_box_visible(5));
+        assert!(app.any_box_visible());
+
+        // Toggle box 1 off (disks & cloud)
+        app.toggle_box(1);
+        assert!(!app.is_box_visible(1));
+        assert!(app.any_box_visible());
+
+        // Toggle box 2 off (metrics)
+        app.toggle_box(2);
+        assert!(!app.is_box_visible(2));
+        assert!(app.any_box_visible());
+
+        // Set focus to History (box 3), then toggle it off -> focus should shift to next visible panel (Logs)
+        app.focused_panel = FocusedPanel::History;
+        app.toggle_box(3);
+        assert!(!app.is_box_visible(3));
+        assert_eq!(app.focused_panel, FocusedPanel::Logs);
+
+        // Toggle remaining boxes off
+        app.toggle_box(4);
+        app.toggle_box(5);
+        assert!(!app.any_box_visible());
+
+        // Navigation when all are hidden
+        app.focused_panel = FocusedPanel::Logs;
+        app.next_visible_panel();
+        assert_eq!(app.focused_panel, FocusedPanel::Logs);
+        app.prev_visible_panel();
+        assert_eq!(app.focused_panel, FocusedPanel::Logs);
+
+        // Turn boxes 3 and 5 back on
+        app.toggle_box(3);
+        app.toggle_box(5);
+        assert!(app.any_box_visible());
+        app.focused_panel = FocusedPanel::History;
+        app.next_visible_panel();
+        assert_eq!(app.focused_panel, FocusedPanel::RecentFiles);
+        app.next_visible_panel();
+        assert_eq!(app.focused_panel, FocusedPanel::History);
+        app.prev_visible_panel();
+        assert_eq!(app.focused_panel, FocusedPanel::RecentFiles);
+
+        // Clean up: restore all boxes to visible
+        app.config.show_cadrans = true;
+        app.config.show_metrics = true;
+        app.config.show_history = true;
+        app.config.show_logs = true;
+        app.config.show_recent = true;
+        let _ = crate::config::save_config(&app.config);
+    }
+
+    #[tokio::test]
+    async fn test_empty_dashboard_rendering_no_panic() {
+        let mut app = App::new();
+        // Hide all 5 boxes
+        app.config.show_cadrans = false;
+        app.config.show_metrics = false;
+        app.config.show_history = false;
+        app.config.show_logs = false;
+        app.config.show_recent = false;
+        assert!(!app.any_box_visible());
+
+        let backend = ratatui::backend::TestBackend::new(120, 35);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+
+        terminal.draw(|f| {
+            crate::ui::render(f, &mut app);
+        }).unwrap();
+
+        // Hitboxes should contain ToggleBox(1..=5) from the empty dashboard
+        let toggle_actions: Vec<_> = app.hit_mgr.dashboard.iter().filter_map(|hb| {
+            if let HitAction::ToggleBox(n) = hb.action {
+                Some(n)
+            } else {
+                None
+            }
+        }).collect();
+
+        assert!(toggle_actions.contains(&1));
+        assert!(toggle_actions.contains(&2));
+        assert!(toggle_actions.contains(&3));
+        assert!(toggle_actions.contains(&4));
+        assert!(toggle_actions.contains(&5));
+    }
+
+    #[tokio::test]
+    async fn test_partial_dashboard_layouts() {
+        let mut app = App::new();
+        let area = Rect::new(0, 0, 100, 40);
+
+        // Case 1: Only history visible
+        app.config.show_cadrans = false;
+        app.config.show_metrics = false;
+        app.config.show_history = true;
+        app.config.show_logs = false;
+        app.config.show_recent = false;
+        let layout = crate::ui::dashboard::compute_dashboard_layout(area, &app);
+        assert_eq!(layout.cadrans_area.height, 0);
+        assert_eq!(layout.history_area.height, 40);
+        assert_eq!(layout.logs_area.height, 0);
+        assert_eq!(layout.recent_area.height, 0);
+
+        // Case 2: Only bottom row (logs + recent) visible
+        app.config.show_cadrans = false;
+        app.config.show_metrics = false;
+        app.config.show_history = false;
+        app.config.show_logs = true;
+        app.config.show_recent = true;
+        let layout2 = crate::ui::dashboard::compute_dashboard_layout(area, &app);
+        assert_eq!(layout2.cadrans_area.height, 0);
+        assert_eq!(layout2.history_area.height, 0);
+        assert!(layout2.logs_area.height > 0);
+        assert!(layout2.recent_area.height > 0);
+        assert_eq!(layout2.logs_area.height + layout2.recent_area.height, 40);
+    }
+
+    #[tokio::test]
+    async fn test_log_filter_persistence() {
+        let mut app = App::new();
+        // Set log filter to Problems
+        app.set_log_filter(LogFilter::Problems);
+        assert_eq!(app.log_filter, LogFilter::Problems);
+        assert_eq!(app.config.log_filter, LogFilter::Problems);
+
+        // Load config from disk and verify it is restored
+        let loaded = crate::config::load_config();
+        assert_eq!(loaded.log_filter, LogFilter::Problems);
+
+        // Change to Files
+        app.set_log_filter(LogFilter::Files);
+        assert_eq!(app.log_filter, LogFilter::Files);
+        let loaded2 = crate::config::load_config();
+        assert_eq!(loaded2.log_filter, LogFilter::Files);
+
+        // Clean up: reset to All and remove test config file
+        app.set_log_filter(LogFilter::All);
+        let _ = std::fs::remove_file(crate::config::config_file());
+    }
+
+    #[test]
+    fn test_no_dead_code_or_unused_imports() {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+
+        // 1. Verify that no #[allow(dead_code)] or #[allow(unused...)] exists in any source file
+        let src_dir = std::path::Path::new(manifest_dir).join("src");
+        fn collect_rs_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        collect_rs_files(&path, files);
+                    } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                        files.push(path);
+                    }
+                }
+            }
+        }
+
+        let mut rs_files = Vec::new();
+        collect_rs_files(&src_dir, &mut rs_files);
+        assert!(!rs_files.is_empty(), "Expected to find .rs files in src/");
+
+        let mut allow_violations = Vec::new();
+        for file_path in rs_files {
+            let content = std::fs::read_to_string(&file_path).unwrap_or_default();
+            for (line_no, line) in content.lines().enumerate() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*') {
+                    continue;
+                }
+                if trimmed.starts_with("#[allow(") && (trimmed.contains("dead_code") || trimmed.contains("unused")) {
+                    allow_violations.push(format!("{}:{}: {}", file_path.display(), line_no + 1, trimmed));
+                }
+            }
+        }
+
+        assert!(
+            allow_violations.is_empty(),
+            "Found #[allow(dead_code)] or #[allow(unused...)] attributes in source files:\n{}",
+            allow_violations.join("\n")
+        );
+
+        // 2. Verify with cargo check --message-format=json --all-targets that there are zero dead_code or unused warnings
+        let output = std::process::Command::new("cargo")
+            .current_dir(manifest_dir)
+            .args(["check", "--message-format=json", "--all-targets"])
+            .output()
+            .expect("Failed to execute cargo check");
+
+        assert!(output.status.success(), "cargo check --all-targets failed");
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut compiler_violations = Vec::new();
+
+        for line in stdout.lines() {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                if val["reason"] == "compiler-message" {
+                    let code = val["message"]["code"]["code"].as_str().unwrap_or("");
+                    let msg = val["message"]["message"].as_str().unwrap_or("");
+                    let rendered = val["message"]["rendered"].as_str().unwrap_or("");
+
+                    if code == "dead_code"
+                        || code.starts_with("unused")
+                        || msg.contains("dead_code")
+                        || msg.contains("unused import")
+                        || msg.contains("unused variable")
+                    {
+                        compiler_violations.push(rendered.to_string());
+                    }
+                }
+            }
+        }
+
+        assert!(
+            compiler_violations.is_empty(),
+            "Found dead code or unused imports/variables:\n{}",
+            compiler_violations.join("\n")
+        );
+    }

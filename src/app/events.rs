@@ -255,7 +255,11 @@ impl App {
                 Action::None
             }
             HitAction::ButtonPanel => {
-                self.focused_panel = self.focused_panel.next();
+                self.next_visible_panel();
+                Action::None
+            }
+            HitAction::ToggleBox(num) => {
+                self.toggle_box(num);
                 Action::None
             }
             HitAction::TickRateDec => {
@@ -509,12 +513,12 @@ impl App {
             HitAction::FilterOpenEditor => Action::OpenEditor,
             HitAction::FilterArea => Action::None,
             HitAction::LogFilterPrev => {
-                self.log_filter = self.log_filter.prev();
+                self.set_log_filter(self.log_filter.prev());
                 self.focused_panel = FocusedPanel::Logs;
                 Action::None
             }
             HitAction::LogFilterNext | HitAction::LogFilterCycle => {
-                self.log_filter = self.log_filter.next();
+                self.set_log_filter(self.log_filter.next());
                 self.focused_panel = FocusedPanel::Logs;
                 Action::None
             }
@@ -1009,7 +1013,10 @@ impl App {
                             return Action::None;
                         }
                         match key.code {
-                            KeyCode::Esc | KeyCode::Enter => {
+                            KeyCode::Esc => {
+                                self.cancel_setting_edit();
+                            }
+                            KeyCode::Enter => {
                                 self.commit_setting_edit();
                             }
                             KeyCode::Left => {
@@ -1514,7 +1521,7 @@ impl App {
             }
             KeyCode::Char('f') => {
                 if self.focused_panel == FocusedPanel::Logs {
-                    self.log_filter = self.log_filter.next();
+                    self.set_log_filter(self.log_filter.next());
                     return Action::None;
                 }
                 self.focused_panel = FocusedPanel::RecentFiles;
@@ -1526,16 +1533,24 @@ impl App {
                 self.is_filtering_recent = true;
                 return Action::None;
             }
-            KeyCode::Char('1') if self.focused_panel == FocusedPanel::Logs => {
-                self.log_filter = LogFilter::All;
+            KeyCode::Char('1') => {
+                self.toggle_box(1);
                 return Action::None;
             }
-            KeyCode::Char('2') if self.focused_panel == FocusedPanel::Logs => {
-                self.log_filter = LogFilter::Files;
+            KeyCode::Char('2') => {
+                self.toggle_box(2);
                 return Action::None;
             }
-            KeyCode::Char('3') if self.focused_panel == FocusedPanel::Logs => {
-                self.log_filter = LogFilter::Problems;
+            KeyCode::Char('3') => {
+                self.toggle_box(3);
+                return Action::None;
+            }
+            KeyCode::Char('4') => {
+                self.toggle_box(4);
+                return Action::None;
+            }
+            KeyCode::Char('5') => {
+                self.toggle_box(5);
                 return Action::None;
             }
             KeyCode::Char('b') | KeyCode::Char('B') | KeyCode::Char('p') | KeyCode::Char('P') => {
@@ -1607,15 +1622,15 @@ impl App {
             }
             // Tab / Shift+Tab: cycle active panel
             KeyCode::Tab => {
-                self.focused_panel = if key.modifiers.contains(KeyModifiers::SHIFT) {
-                    self.focused_panel.prev()
+                if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    self.prev_visible_panel();
                 } else {
-                    self.focused_panel.next()
-                };
+                    self.next_visible_panel();
+                }
                 return Action::None;
             }
             KeyCode::BackTab => {
-                self.focused_panel = self.focused_panel.prev();
+                self.prev_visible_panel();
                 return Action::None;
             }
             // +/- : dynamic tick rate (- speeds up, + slows down)
@@ -1763,13 +1778,13 @@ impl App {
             }
             KeyCode::Left => {
                 if self.focused_panel == FocusedPanel::Logs {
-                    self.log_filter = self.log_filter.prev();
+                    self.set_log_filter(self.log_filter.prev());
                     return Action::None;
                 }
             }
             KeyCode::Right => {
                 if self.focused_panel == FocusedPanel::Logs {
-                    self.log_filter = self.log_filter.next();
+                    self.set_log_filter(self.log_filter.next());
                     return Action::None;
                 }
             }

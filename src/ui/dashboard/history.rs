@@ -83,12 +83,23 @@ pub fn render_history_panel(
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
             Span::styled(bg.top_left, Style::default().fg(border_color)),
+            Span::styled("³", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("history", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
             Span::styled(bg.top_right, Style::default().fg(border_color)),
         ]))
         .title_bottom(left_bottom.alignment(Alignment::Left))
         .title_bottom(right_bottom.alignment(Alignment::Right));
     f.render_widget(outer_block, area);
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x,
+            y: area.y,
+            width: 12,
+            height: 1,
+        },
+        action: HitAction::ToggleBox(3),
+    });
 
     // Hitbox for the bottom details button (active only when a past run is selected)
     if let Some(idx) = app.selected_run_idx {

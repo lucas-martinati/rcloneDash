@@ -43,61 +43,7 @@ impl FocusedPanel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LogFilter {
-    All,
-    Files,     // Successfully transferred files
-    Problems,  // Issues (errors, warnings)
-}
-
-impl LogFilter {
-    pub fn next(self) -> Self {
-        match self {
-            LogFilter::All => LogFilter::Files,
-            LogFilter::Files => LogFilter::Problems,
-            LogFilter::Problems => LogFilter::All,
-        }
-    }
-    pub fn prev(self) -> Self {
-        match self {
-            LogFilter::All => LogFilter::Problems,
-            LogFilter::Files => LogFilter::All,
-            LogFilter::Problems => LogFilter::Files,
-        }
-    }
-    pub fn label(self) -> &'static str {
-        match self {
-            LogFilter::All => "All",
-            LogFilter::Files => "Files",
-            LogFilter::Problems => "Problems",
-        }
-    }
-    /// Returns true if a log line passes this filter
-    pub fn matches(self, line: &str) -> bool {
-        match self {
-            LogFilter::All => true,
-            LogFilter::Files => {
-                let ll = line.to_lowercase();
-                ll.contains("copied")
-                    || ll.contains("moved")
-                    || ll.contains("deleted")
-                    || ll.contains("transferred")
-                    || ll.contains("bisync successful")
-            }
-            LogFilter::Problems => {
-                let ll = line.to_lowercase();
-                ll.contains("error")
-                    || ll.contains("failed")
-                    || ll.contains("fatal")
-                    || ll.contains("errno")
-                    || ll.contains("corrupt")
-                    || ll.contains("warn")
-                    || ll.contains("skipped")
-                    || ll.contains("conflict")
-            }
-        }
-    }
-}
+pub use crate::config::LogFilter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -272,6 +218,7 @@ pub enum HitAction {
     FirstRunSaveCredentials,
     FirstRunSkipCredentials,
     FirstRunToggleHelp,
+    ToggleBox(usize),
     ScrollbarArrowUp(ScrollbarTarget),
     ScrollbarArrowDown(ScrollbarTarget),
     ScrollbarTrack {
@@ -429,6 +376,7 @@ impl App {
         let config = config::load_config();
         let current_theme = config.theme.unwrap_or(ThemeChoice::TokyoNight);
         let tick_rate = config.tick_rate_ms.unwrap_or(250);
+        let log_filter = config.log_filter;
         let service_info = get_service_info();
         let past_runs = fetch_past_runs(50);
         let filters = config::read_filters();
@@ -447,7 +395,7 @@ impl App {
             selected_filter_idx: 0,
             logs_scroll: 0,
             auto_scroll: true,
-            log_filter: LogFilter::All,
+            log_filter,
             toast: None,
 
             focused_panel: FocusedPanel::RecentFiles,
@@ -599,6 +547,107 @@ impl App {
         match &self.edit_state {
             EditState::Setting { cursor, .. } => *cursor,
             _ => self.edit_buffer().chars().count(),
+        }
+    }
+
+    pub fn is_box_visible(&self, box_num: usize) -> bool {
+        match box_num {
+            1 => self.config.show_cadrans,
+            2 => self.config.show_metrics,
+            3 => self.config.show_history,
+            4 => self.config.show_logs,
+            5 => self.config.show_recent,
+            _ => false,
+        }
+    }
+
+    pub fn any_box_visible(&self) -> bool {
+        self.config.show_cadrans
+            || self.config.show_metrics
+            || self.config.show_history
+            || self.config.show_logs
+            || self.config.show_recent
+    }
+
+    pub fn toggle_box(&mut self, box_num: usize) {
+        match box_num {
+            1 => {
+                self.config.show_cadrans = !self.config.show_cadrans;
+                let state = if self.config.show_cadrans { "shown" } else { "hidden" };
+                self.set_toast(format!("Disks & Cloud box {}", state));
+            }
+            2 => {
+                self.config.show_metrics = !self.config.show_metrics;
+                let state = if self.config.show_metrics { "shown" } else { "hidden" };
+                self.set_toast(format!("Metrics box {}", state));
+            }
+            3 => {
+                self.config.show_history = !self.config.show_history;
+                let state = if self.config.show_history { "shown" } else { "hidden" };
+                self.set_toast(format!("History box {}", state));
+            }
+            4 => {
+                self.config.show_logs = !self.config.show_logs;
+                let state = if self.config.show_logs { "shown" } else { "hidden" };
+                self.set_toast(format!("Logs box {}", state));
+            }
+            5 => {
+                self.config.show_recent = !self.config.show_recent;
+                let state = if self.config.show_recent { "shown" } else { "hidden" };
+                self.set_toast(format!("Recent Files box {}", state));
+            }
+            _ => return,
+        }
+        self.adjust_focused_panel();
+        let _ = crate::config::save_config(&self.config);
+    }
+
+    pub fn set_log_filter(&mut self, filter: LogFilter) {
+        self.log_filter = filter;
+        self.config.log_filter = filter;
+        let _ = crate::config::save_config(&self.config);
+    }
+
+    pub fn adjust_focused_panel(&mut self) {
+        let is_current_visible = match self.focused_panel {
+            FocusedPanel::History => self.config.show_history,
+            FocusedPanel::Logs => self.config.show_logs,
+            FocusedPanel::RecentFiles => self.config.show_recent,
+        };
+        if !is_current_visible {
+            self.next_visible_panel();
+        }
+    }
+
+    pub fn next_visible_panel(&mut self) {
+        let mut cur = self.focused_panel;
+        for _ in 0..3 {
+            cur = cur.next();
+            let visible = match cur {
+                FocusedPanel::History => self.config.show_history,
+                FocusedPanel::Logs => self.config.show_logs,
+                FocusedPanel::RecentFiles => self.config.show_recent,
+            };
+            if visible {
+                self.focused_panel = cur;
+                break;
+            }
+        }
+    }
+
+    pub fn prev_visible_panel(&mut self) {
+        let mut cur = self.focused_panel;
+        for _ in 0..3 {
+            cur = cur.prev();
+            let visible = match cur {
+                FocusedPanel::History => self.config.show_history,
+                FocusedPanel::Logs => self.config.show_logs,
+                FocusedPanel::RecentFiles => self.config.show_recent,
+            };
+            if visible {
+                self.focused_panel = cur;
+                break;
+            }
         }
     }
 

@@ -169,10 +169,22 @@ pub fn render_recent_files_panel(
 
     let mut top_spans = vec![
         Span::styled(bg.top_left, Style::default().fg(border_color)),
+        Span::styled("⁵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         Span::styled("recent files", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)),
     ];
-    let filter_start_x = area.x + 14;
+
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: area.x,
+            y: area.y,
+            width: 14,
+            height: 1,
+        },
+        action: HitAction::ToggleBox(5),
+    });
+
+    let filter_start_x = area.x + 15;
     let filter_w = if app.is_filtering_recent {
         top_spans.push(Span::styled("filter: ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
         top_spans.push(Span::styled(&app.recent_filter, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));

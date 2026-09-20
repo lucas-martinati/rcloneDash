@@ -296,6 +296,68 @@ impl GraphStyleChoice {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum LogFilter {
+    #[default]
+    All,
+    Files,     // Successfully transferred files
+    Problems,  // Issues (errors, warnings)
+}
+
+impl LogFilter {
+    pub fn next(self) -> Self {
+        match self {
+            LogFilter::All => LogFilter::Files,
+            LogFilter::Files => LogFilter::Problems,
+            LogFilter::Problems => LogFilter::All,
+        }
+    }
+
+    pub fn prev(self) -> Self {
+        match self {
+            LogFilter::All => LogFilter::Problems,
+            LogFilter::Files => LogFilter::All,
+            LogFilter::Problems => LogFilter::Files,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            LogFilter::All => "All",
+            LogFilter::Files => "Files",
+            LogFilter::Problems => "Problems",
+        }
+    }
+
+    /// Returns true if a log line passes this filter
+    pub fn matches(self, line: &str) -> bool {
+        match self {
+            LogFilter::All => true,
+            LogFilter::Files => {
+                let ll = line.to_lowercase();
+                ll.contains("copied")
+                    || ll.contains("moved")
+                    || ll.contains("deleted")
+                    || ll.contains("transferred")
+                    || ll.contains("bisync successful")
+            }
+            LogFilter::Problems => {
+                let ll = line.to_lowercase();
+                ll.contains("error")
+                    || ll.contains("failed")
+                    || ll.contains("fatal")
+                    || ll.contains("errno")
+                    || ll.contains("corrupt")
+                    || ll.contains("warn")
+                    || ll.contains("skipped")
+                    || ll.contains("conflict")
+                    || ll.contains("critical")
+                    || ll.contains("retry")
+            }
+        }
+    }
+}
+
 /// Interval options for bisync timer (single source of truth)
 pub const TIMER_INTERVAL_OPTIONS: &[&str] = &["10min", "15min", "30min", "1h", "2h", "4h"];
 
@@ -386,19 +448,8 @@ impl SettingId {
         matches!(self.kind(), SettingKind::TextInput)
     }
 
-    #[allow(dead_code)]
-    pub fn is_action(&self) -> bool {
-        matches!(self.kind(), SettingKind::Action)
-    }
-
-    #[allow(dead_code)]
     pub fn is_cycle(&self) -> bool {
         matches!(self.kind(), SettingKind::Cycle)
-    }
-
-    #[allow(dead_code)]
-    pub fn is_secret(&self) -> bool {
-        matches!(self, Self::GoogleClientSecret)
     }
 
     pub fn from_tab_and_idx(tab: usize, idx: usize) -> Option<Self> {
@@ -505,6 +556,10 @@ impl SettingId {
 }
 
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub remote: String,
@@ -524,6 +579,18 @@ pub struct AppConfig {
     pub graph_style: GraphStyleChoice,
     #[serde(default)]
     pub first_run_completed: Option<bool>,
+    #[serde(default = "default_true")]
+    pub show_cadrans: bool,
+    #[serde(default = "default_true")]
+    pub show_metrics: bool,
+    #[serde(default = "default_true")]
+    pub show_history: bool,
+    #[serde(default = "default_true")]
+    pub show_logs: bool,
+    #[serde(default = "default_true")]
+    pub show_recent: bool,
+    #[serde(default)]
+    pub log_filter: LogFilter,
 }
 
 impl Default for AppConfig {
@@ -541,6 +608,12 @@ impl Default for AppConfig {
             border_style: BorderStyleChoice::Rounded,
             graph_style: GraphStyleChoice::Braille,
             first_run_completed: None,
+            show_cadrans: true,
+            show_metrics: true,
+            show_history: true,
+            show_logs: true,
+            show_recent: true,
+            log_filter: LogFilter::All,
         }
     }
 }
