@@ -229,6 +229,19 @@ else
     exit 1
 fi
 
+# Install desktop file for notification integration
+APP_DIR="$HOME/.local/share/applications"
+mkdir -p "$APP_DIR"
+if [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
+    BIN_PATH="$INSTALL_BIN_DIR/rclonedash"
+    [ -x "/usr/bin/rclonedash" ] && BIN_PATH="/usr/bin/rclonedash"
+    sed -e "s|__BIN__|$BIN_PATH|g" "$TEMPLATE_DIR/rclonedash.desktop.template" > "$APP_DIR/rclonedash.desktop"
+    chmod +x "$APP_DIR/rclonedash.desktop"
+    ok "Desktop entry installed at $APP_DIR/rclonedash.desktop"
+else
+    info "Desktop template not found — skipping .desktop file installation"
+fi
+
 # --------------------------------------------------------------------------- #
 #  Step 3 — Configuration & Rclone Exclusion Filters
 # --------------------------------------------------------------------------- #
@@ -330,4 +343,5 @@ printf '  %s• Installed binary:%s       %s\n' "$BOLD" "$RESET" "$INSTALL_BIN_D
 printf '  %s• Configuration:%s          %s\n' "$BOLD" "$RESET" "$CONFIG_FILE"
 printf '  %s• Exclusion filters:%s      %s\n' "$BOLD" "$RESET" "$RCLONE_CONF_DIR/gdrive-filters.txt"
 printf '  %s• Guard script:%s           %s\n' "$BOLD" "$RESET" "$DATA_DIR/rclone-bisync-guard.sh"
+printf '  %s• Desktop entry:%s          %s\n' "$BOLD" "$RESET" "$APP_DIR/rclonedash.desktop"
 printf '  %s• Timer status:%s           systemctl --user status rclone-bisync.timer\n\n' "$BOLD" "$RESET"

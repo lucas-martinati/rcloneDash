@@ -80,6 +80,68 @@ run_bisync() {
     return $rc
 }
 
+open_rclonedash() {
+    local cmd="rclonedash"
+    if ! command -v rclonedash >/dev/null 2>&1; then
+        if [ -x "$HOME/.local/bin/rclonedash" ]; then
+            cmd="$HOME/.local/bin/rclonedash"
+        elif [ -x "$HOME/.cargo/bin/rclonedash" ]; then
+            cmd="$HOME/.cargo/bin/rclonedash"
+        fi
+    fi
+
+    # 1. Essayer le lanceur de bureau
+    if command -v gtk-launch >/dev/null 2>&1 && [ -f "$HOME/.local/share/applications/rclonedash.desktop" ]; then
+        if gtk-launch rclonedash 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # 2. Détecter l'émulateur de terminal disponible
+    if command -v ptyxis >/dev/null 2>&1; then
+        ptyxis -- "$cmd" &
+    elif command -v gnome-terminal >/dev/null 2>&1; then
+        gnome-terminal -- "$cmd" &
+    elif command -v konsole >/dev/null 2>&1; then
+        konsole -e "$cmd" &
+    elif command -v alacritty >/dev/null 2>&1; then
+        alacritty -e "$cmd" &
+    elif command -v kitty >/dev/null 2>&1; then
+        kitty "$cmd" &
+    elif command -v xfce4-terminal >/dev/null 2>&1; then
+        xfce4-terminal -e "$cmd" &
+    elif command -v foot >/dev/null 2>&1; then
+        foot "$cmd" &
+    elif command -v x-terminal-emulator >/dev/null 2>&1; then
+        x-terminal-emulator -e "$cmd" &
+    elif command -v xterm >/dev/null 2>&1; then
+        xterm -e "$cmd" &
+    fi
+}
+
+notify_failure() {
+    local rc="${1:-1}"
+    # Ne pas notifier en cas d'interruption volontaire (SIGTERM = 143, SIGINT = 130)
+    if [ "$rc" -eq 143 ] || [ "$rc" -eq 130 ]; then
+        return 0
+    fi
+
+    if command -v notify-send >/dev/null 2>&1; then
+        (
+            ACTION=$(notify-send "RcloneDash" "Échec de la synchronisation. Cliquez pour ouvrir le tableau de bord." \
+                --icon=dialog-error \
+                -u critical \
+                -a "RcloneDash" \
+                --action=default="Ouvrir" \
+                --action=open="Ouvrir le tableau de bord" 2>/dev/null || true)
+
+            if [ -n "$ACTION" ]; then
+                open_rclonedash
+            fi
+        ) >/dev/null 2>&1 &
+    fi
+}
+
 is_resync=0
 is_auto_resync=0
 reason=""
@@ -140,7 +202,11 @@ fi
 if [ -n "$reason" ]; then
     echo "RcloneDash: lancement du bisync — $reason"
     run_bisync "$is_resync" "$is_auto_resync"
-    exit $?
+    exit_rc=$?
+    if [ $exit_rc -ne 0 ]; then
+        notify_failure "$exit_rc"
+    fi
+    exit $exit_rc
 fi
 
 echo "RcloneDash: aucun changement local et filet cloud non échu — bisync ignoré"

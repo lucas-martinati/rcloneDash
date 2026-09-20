@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=RcloneDash
+GenericName=Rclone Bisync Dashboard
+Comment=Tableau de bord de synchronisation Google Drive & Rclone
+Exec=__BIN__
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+Categories=Utility;ConsoleOnly;
+Keywords=rclone;sync;bisync;dashboard;drive;
+StartupNotify=true
