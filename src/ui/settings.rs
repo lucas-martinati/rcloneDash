@@ -104,25 +104,23 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     };
 
     // Tab bar title in outer block: tab→   [1 rclone]    2ui
-    let tab0_span = if app.settings_tab == 0 {
-        Span::styled("[1 rclone]", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))
-    } else {
-        Span::styled(" 1rclone ", Style::default().fg(theme.text_muted))
-    };
-    let tab1_span = if app.settings_tab == 1 {
-        Span::styled("[2 ui]", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))
-    } else {
-        Span::styled(" 2ui ", Style::default().fg(theme.text_muted))
-    };
-
-    let title_extra = vec![
+    let mut title_extra = vec![
         Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(theme.red)),
         Span::styled("Tab", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         Span::styled(" ⇆ ", Style::default().fg(Color::White)),
-        tab0_span,
-        Span::styled("   ", Style::default().fg(theme.border)),
-        tab1_span,
     ];
+    for (i, cat) in config::SettingCategory::ALL.iter().enumerate() {
+        if i > 0 {
+            title_extra.push(Span::styled("   ", Style::default().fg(theme.border)));
+        }
+        let is_active = i == app.settings_tab;
+        let label = format!("{}{}", i + 1, cat.short_name());
+        if is_active {
+            title_extra.push(Span::styled(format!("[{}]", label), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+        } else {
+            title_extra.push(Span::styled(format!(" {} ", label), Style::default().fg(theme.text_muted)));
+        }
+    }
 
     let inner = render_modal_container(
         f,
@@ -155,28 +153,24 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             width: 6,
             height: 1,
         },
-        action: HitAction::SettingsTab((app.settings_tab + 1) % 2),
+        action: HitAction::SettingsTab((app.settings_tab + 1) % config::SettingCategory::ALL.len()),
     });
-    // Hitbox for Tab 0: "[1 rclone]" -> start x = area.x + 18, len = 10
-    hitboxes.push(Hitbox {
-        rect: Rect {
-            x: area.x + 18,
-            y: area.y,
-            width: 10,
-            height: 1,
-        },
-        action: HitAction::SettingsTab(0),
-    });
-    // Hitbox for Tab 1: "[2 ui]" -> start x = area.x + 31, len = 6
-    hitboxes.push(Hitbox {
-        rect: Rect {
-            x: area.x + 31,
-            y: area.y,
-            width: 6,
-            height: 1,
-        },
-        action: HitAction::SettingsTab(1),
-    });
+    // Dynamic hitboxes for individual tabs
+    let mut tab_x = area.x + 18;
+    for (i, cat) in config::SettingCategory::ALL.iter().enumerate() {
+        let label = format!("{}{}", i + 1, cat.short_name());
+        let tab_len = (label.chars().count() + 2) as u16;
+        hitboxes.push(Hitbox {
+            rect: Rect {
+                x: tab_x,
+                y: area.y,
+                width: tab_len,
+                height: 1,
+            },
+            action: HitAction::SettingsTab(i),
+        });
+        tab_x += tab_len + 3; // +3 for spacing "   "
+    }
 
     if inner.height < 4 || inner.width < 40 {
         return;
@@ -203,37 +197,14 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         .collect();
     f.render_widget(Paragraph::new(sep_lines), sep_area);
 
-    use crate::config::SettingId;
+    use crate::config::{SettingCategory, SettingId};
 
     // Settings data based on active tab
-    let full_sync_display = config::full_sync_label(&app.config.full_sync_interval).to_string();
-
-    let (google_id, google_secret) = config::read_rclone_credentials(&app.config.remote);
-    let id_disp = google_id.as_deref().unwrap_or("(default / unset)").to_string();
-    let sec_disp = if google_secret.is_some() { "••••••••••••".to_string() } else { "(default / unset)".to_string() };
-
-    let settings: Vec<(&str, String)> = if app.settings_tab == 0 {
-        vec![
-            (SettingId::TimerInterval.label(), app.config.timer_interval.clone()),
-            (SettingId::CloudSafetyNet.label(), full_sync_display),
-            (SettingId::BandwidthLimit.label(), app.config.bwlimit.as_deref().unwrap_or("Disabled").to_string()),
-            (SettingId::StatsInterval.label(), app.config.stats_interval.clone()),
-            (SettingId::LocalDirectory.label(), app.config.local_dir.clone()),
-            (SettingId::RemoteStorage.label(), app.config.remote.clone()),
-            (SettingId::ResyncAction.label(), "Run (--resync)".to_string()),
-            (SettingId::LogJournalAction.label(), "Open logs".to_string()),
-            (SettingId::GoogleClientId.label(), id_disp),
-            (SettingId::GoogleClientSecret.label(), sec_disp),
-        ]
-    } else {
-        vec![
-            (SettingId::ColorTheme.label(), app.current_theme.name().to_string()),
-            (SettingId::ContainerLayout.label(), app.config.container_layout.name().to_string()),
-            (SettingId::MidPanelOrder.label(), app.config.mid_panel_order.name().to_string()),
-            (SettingId::BorderStyle.label(), app.config.border_style.name().to_string()),
-            (SettingId::GraphStyle.label(), app.config.graph_style.name().to_string()),
-        ]
-    };
+    let current_cat = SettingCategory::ALL.get(app.settings_tab).copied().unwrap_or(SettingCategory::Rclone);
+    let settings: Vec<(&str, String)> = SettingId::for_category(current_cat)
+        .into_iter()
+        .map(|s| (s.label(), app.setting_value(s)))
+        .collect();
 
     // Render left column with smooth scrolling
     let mut left_lines = Vec::new();
@@ -336,39 +307,27 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let k_esc = KeybindingRegistry::get_key_str(KeyAction::CancelEdit);
 
     let (desc_title, desc_body): (&str, String) = match SettingId::from_tab_and_idx(app.settings_tab, app.settings_selected_idx) {
-        // --- Category 0: Rclone ---
-        Some(SettingId::TimerInterval) => {
-            let choices = SettingId::TimerInterval.choices().unwrap_or_default();
+        Some(setting) if setting.is_cycle() => {
+            let choices = setting.choices().unwrap_or_default();
+            let current = app.setting_value(setting);
+            let header = if setting == SettingId::BandwidthLimit {
+                "Available presets:"
+            } else {
+                "Available options:"
+            };
+            let extra_hint = if setting == SettingId::StatsInterval {
+                format!("\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.", k_dec, k_inc)
+            } else {
+                String::new()
+            };
             (
-                SettingId::TimerInterval.desc_title(),
+                setting.desc_title(),
                 format!(
-                    "{}\n\nAvailable options:\n{}",
-                    SettingId::TimerInterval.desc_intro(),
-                    config::format_setting_options_list(&choices, &app.config.timer_interval)
-                ),
-            )
-        }
-        Some(SettingId::CloudSafetyNet) => {
-            let choices = SettingId::CloudSafetyNet.choices().unwrap_or_default();
-            let current = config::full_sync_label(&app.config.full_sync_interval);
-            (
-                SettingId::CloudSafetyNet.desc_title(),
-                format!(
-                    "{}\n\nAvailable options:\n{}",
-                    SettingId::CloudSafetyNet.desc_intro(),
-                    config::format_setting_options_list(&choices, current)
-                ),
-            )
-        }
-        Some(SettingId::BandwidthLimit) => {
-            let choices = SettingId::BandwidthLimit.choices().unwrap_or_default();
-            let current = app.config.bwlimit.as_deref().unwrap_or("Disabled");
-            (
-                SettingId::BandwidthLimit.desc_title(),
-                format!(
-                    "{}\n\nAvailable presets:\n{}",
-                    SettingId::BandwidthLimit.desc_intro(),
-                    config::format_setting_options_list(&choices, current)
+                    "{}{}\n\n{}\n{}",
+                    setting.desc_intro(),
+                    extra_hint,
+                    header,
+                    config::format_setting_options_list(&choices, &current)
                 ),
             )
         }
@@ -405,6 +364,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             ),
         ),
         Some(SettingId::GoogleClientId) => {
+            let (google_id, _) = config::read_rclone_credentials(&app.config.remote);
             let cur = google_id.as_deref().unwrap_or("(default / unset)");
             (
                 SettingId::GoogleClientId.desc_title(),
@@ -416,6 +376,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             )
         }
         Some(SettingId::GoogleClientSecret) => {
+            let (_, google_secret) = config::read_rclone_credentials(&app.config.remote);
             let cur_display = if google_secret.is_some() { "•••••••••••• (configured)" } else { "(default / unset)" };
             (
                 SettingId::GoogleClientSecret.desc_title(),
@@ -426,82 +387,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 ),
             )
         }
-
-        // --- Category 1: UI & Appearance ---
-        Some(SettingId::ColorTheme) => {
-            let choices = SettingId::ColorTheme.choices().unwrap_or_default();
-            let current = app.current_theme.name();
-            (
-                SettingId::ColorTheme.desc_title(),
-                format!(
-                    "{}\n\nAvailable options:\n{}",
-                    SettingId::ColorTheme.desc_intro(),
-                    config::format_setting_options_list(&choices, current)
-                ),
-            )
-        }
-        Some(SettingId::ContainerLayout) => {
-            let choices = SettingId::ContainerLayout.choices().unwrap_or_default();
-            let current = app.config.container_layout.name();
-            (
-                SettingId::ContainerLayout.desc_title(),
-                format!(
-                    "{}\n\nAvailable options:\n{}",
-                    SettingId::ContainerLayout.desc_intro(),
-                    config::format_setting_options_list(&choices, current)
-                ),
-            )
-        }
-        Some(SettingId::MidPanelOrder) => {
-            let choices = SettingId::MidPanelOrder.choices().unwrap_or_default();
-            let current = app.config.mid_panel_order.name();
-            (
-                SettingId::MidPanelOrder.desc_title(),
-                format!(
-                    "{}\n\nAvailable options:\n{}",
-                    SettingId::MidPanelOrder.desc_intro(),
-                    config::format_setting_options_list(&choices, current)
-                ),
-            )
-        }
-        Some(SettingId::BorderStyle) => {
-            let choices = SettingId::BorderStyle.choices().unwrap_or_default();
-            let current = app.config.border_style.name();
-            (
-                SettingId::BorderStyle.desc_title(),
-                format!(
-                    "{}\n\nAvailable options:\n{}",
-                    SettingId::BorderStyle.desc_intro(),
-                    config::format_setting_options_list(&choices, current)
-                ),
-            )
-        }
-        Some(SettingId::GraphStyle) => {
-            let choices = SettingId::GraphStyle.choices().unwrap_or_default();
-            let current = app.config.graph_style.name();
-            (
-                SettingId::GraphStyle.desc_title(),
-                format!(
-                    "{}\n\nAvailable options:\n{}",
-                    SettingId::GraphStyle.desc_intro(),
-                    config::format_setting_options_list(&choices, current)
-                ),
-            )
-        }
-        Some(SettingId::StatsInterval) => {
-            let current_str = &app.config.stats_interval;
-            let choices = SettingId::StatsInterval.choices().unwrap_or_default();
-            (
-                SettingId::StatsInterval.desc_title(),
-                format!(
-                    "{}\nDirectly synchronized with keys [{}] and [{}] or clicking the frequency widget.\n\nAvailable options:\n{}",
-                    SettingId::StatsInterval.desc_intro(),
-                    k_dec, k_inc,
-                    config::format_setting_options_list(&choices, current_str)
-                ),
-            )
-        }
-        None => ("Description.", "Select a setting to view its detailed documentation.".to_string()),
+        _ => ("Description.", "Select a setting to view its detailed documentation.".to_string()),
     };
 
     let desc_inner = Rect {

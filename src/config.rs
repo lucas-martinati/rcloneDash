@@ -403,6 +403,27 @@ pub fn stats_interval_options() -> Vec<String> {
     STATS_INTERVAL_OPTIONS.iter().map(|s| s.to_string()).collect()
 }
 
+/// Catégories de réglages disponibles dans la modale Settings
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingCategory {
+    Rclone,
+    Appearance,
+}
+
+impl SettingCategory {
+    pub const ALL: &'static [SettingCategory] = &[
+        SettingCategory::Rclone,
+        SettingCategory::Appearance,
+    ];
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Self::Rclone => "rclone",
+            Self::Appearance => "ui",
+        }
+    }
+}
+
 /// Registre canonique et centralisé de tous les réglages disponibles dans l'application.
 /// Définit pour chaque paramètre ses étiquettes, descriptions et sa liste d'options
 /// directement liée aux enums et constantes canoniques (sans duplication).
@@ -436,6 +457,66 @@ pub enum SettingKind {
 }
 
 impl SettingId {
+    /// Liste ordonnée de tous les réglages disponibles (source de vérité unique)
+    pub const ALL: &'static [SettingId] = &[
+        // Rclone
+        Self::TimerInterval,
+        Self::CloudSafetyNet,
+        Self::BandwidthLimit,
+        Self::StatsInterval,
+        Self::LocalDirectory,
+        Self::RemoteStorage,
+        Self::ResyncAction,
+        Self::LogJournalAction,
+        Self::GoogleClientId,
+        Self::GoogleClientSecret,
+
+        // UI & Apparence
+        Self::ColorTheme,
+        Self::ContainerLayout,
+        Self::MidPanelOrder,
+        Self::BorderStyle,
+        Self::GraphStyle,
+    ];
+
+    /// Catégorie d'appartenance de chaque réglage
+    pub fn category(&self) -> SettingCategory {
+        match self {
+            Self::TimerInterval
+            | Self::CloudSafetyNet
+            | Self::BandwidthLimit
+            | Self::StatsInterval
+            | Self::LocalDirectory
+            | Self::RemoteStorage
+            | Self::ResyncAction
+            | Self::LogJournalAction
+            | Self::GoogleClientId
+            | Self::GoogleClientSecret => SettingCategory::Rclone,
+
+            Self::ColorTheme
+            | Self::ContainerLayout
+            | Self::MidPanelOrder
+            | Self::BorderStyle
+            | Self::GraphStyle => SettingCategory::Appearance,
+        }
+    }
+
+    /// Récupère la liste ordonnée des réglages pour une catégorie donnée
+    pub fn for_category(cat: SettingCategory) -> Vec<SettingId> {
+        Self::ALL.iter().copied().filter(|s| s.category() == cat).collect()
+    }
+
+    pub fn from_tab_and_idx(tab: usize, idx: usize) -> Option<Self> {
+        let cat = *SettingCategory::ALL.get(tab)?;
+        Self::for_category(cat).get(idx).copied()
+    }
+
+    pub fn tab_count(tab: usize) -> usize {
+        SettingCategory::ALL.get(tab)
+            .map(|&cat| Self::for_category(cat).len())
+            .unwrap_or(0)
+    }
+
     pub fn kind(&self) -> SettingKind {
         match self {
             Self::LocalDirectory | Self::RemoteStorage | Self::GoogleClientId | Self::GoogleClientSecret => {
@@ -452,31 +533,6 @@ impl SettingId {
 
     pub fn is_cycle(&self) -> bool {
         matches!(self.kind(), SettingKind::Cycle)
-    }
-
-    pub fn from_tab_and_idx(tab: usize, idx: usize) -> Option<Self> {
-        match (tab, idx) {
-            (0, 0) => Some(Self::TimerInterval),
-            (0, 1) => Some(Self::CloudSafetyNet),
-            (0, 2) => Some(Self::BandwidthLimit),
-            (0, 3) => Some(Self::StatsInterval),
-            (0, 4) => Some(Self::LocalDirectory),
-            (0, 5) => Some(Self::RemoteStorage),
-            (0, 6) => Some(Self::ResyncAction),
-            (0, 7) => Some(Self::LogJournalAction),
-            (0, 8) => Some(Self::GoogleClientId),
-            (0, 9) => Some(Self::GoogleClientSecret),
-            (1, 0) => Some(Self::ColorTheme),
-            (1, 1) => Some(Self::ContainerLayout),
-            (1, 2) => Some(Self::MidPanelOrder),
-            (1, 3) => Some(Self::BorderStyle),
-            (1, 4) => Some(Self::GraphStyle),
-            _ => None,
-        }
-    }
-
-    pub fn tab_count(tab: usize) -> usize {
-        if tab == 0 { 10 } else { 5 }
     }
 
     pub fn label(&self) -> &'static str {

@@ -125,94 +125,111 @@ impl App {
         };
     }
 
-    pub fn cycle_setting(&mut self, forward: bool) {
-        if self.settings_tab == 0 {
-            // Rclone settings
-            match self.settings_selected_idx {
-                0 => {
-                    let options = config::TIMER_INTERVAL_OPTIONS;
-                    let pos = options.iter().position(|&o| o == self.config.timer_interval).unwrap_or(0);
-                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                    self.config.timer_interval = options[next].to_string();
+    pub fn setting_value(&self, setting: config::SettingId) -> String {
+        match setting {
+            config::SettingId::TimerInterval => self.config.timer_interval.clone(),
+            config::SettingId::CloudSafetyNet => config::full_sync_label(&self.config.full_sync_interval).to_string(),
+            config::SettingId::BandwidthLimit => self.config.bwlimit.as_deref().unwrap_or("Disabled").to_string(),
+            config::SettingId::StatsInterval => self.config.stats_interval.clone(),
+            config::SettingId::LocalDirectory => self.config.local_dir.clone(),
+            config::SettingId::RemoteStorage => self.config.remote.clone(),
+            config::SettingId::ResyncAction => "Run (--resync)".to_string(),
+            config::SettingId::LogJournalAction => "Open logs".to_string(),
+            config::SettingId::GoogleClientId => {
+                let (id, _) = config::read_rclone_credentials(&self.config.remote);
+                match id {
+                    Some(id) if !id.is_empty() => {
+                        let prefix: String = id.chars().take(16).collect();
+                        format!("{}…", prefix)
+                    }
+                    _ => "(not set)".to_string(),
                 }
-                1 => {
-                    let options = config::FULL_SYNC_OPTIONS;
-                    let pos = options.iter().position(|o| o.value == self.config.full_sync_interval).unwrap_or(0);
-                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                    self.config.full_sync_interval = options[next].value.to_string();
-                }
-                2 => {
-                    let options = config::BWLIMIT_OPTIONS;
-                    let cur = self.config.bwlimit.as_deref().unwrap_or("Disabled");
-                    let cur = if cur == "Désactivé" { "Disabled" } else { cur };
-                    let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
-                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                    self.config.bwlimit = if options[next] == "Disabled" { None } else { Some(options[next].to_string()) };
-                }
-                3 => {
-                    let options = STATS_INTERVAL_OPTIONS;
-                    let cur = self.config.stats_interval.as_str();
-                    let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
-                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                    self.config.stats_interval = options[next].to_string();
-                    self.stats_interval_changed = true;
-                    self.set_toast(format!("Rclone stats: {}", self.config.stats_interval));
-                }
-                6 => {
-                    self.modal = Modal::ConfirmResync;
-                }
-                _ => {}
             }
-            if self.settings_selected_idx <= 3 {
+            config::SettingId::GoogleClientSecret => {
+                let (_, secret) = config::read_rclone_credentials(&self.config.remote);
+                match secret {
+                    Some(s) if !s.is_empty() => "••••••••••••".to_string(),
+                    _ => "(not set)".to_string(),
+                }
+            }
+            config::SettingId::ColorTheme => self.current_theme.name().to_string(),
+            config::SettingId::ContainerLayout => self.config.container_layout.name().to_string(),
+            config::SettingId::MidPanelOrder => self.config.mid_panel_order.name().to_string(),
+            config::SettingId::BorderStyle => self.config.border_style.name().to_string(),
+            config::SettingId::GraphStyle => self.config.graph_style.name().to_string(),
+        }
+    }
+
+    pub fn cycle_setting(&mut self, forward: bool) {
+        let setting = match config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+            Some(s) => s,
+            None => return,
+        };
+
+        match setting {
+            config::SettingId::TimerInterval => {
+                let options = config::TIMER_INTERVAL_OPTIONS;
+                let pos = options.iter().position(|&o| o == self.config.timer_interval).unwrap_or(0);
+                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                self.config.timer_interval = options[next].to_string();
                 self.save_current_settings();
             }
-        } else {
-            // UI settings
-            match self.settings_selected_idx {
-                0 => {
-                    self.current_theme = if forward {
-                        self.current_theme.next()
-                    } else {
-                        self.current_theme.prev()
-                    };
-                    self.config.theme = Some(self.current_theme);
-                    self.set_toast(format!("Active theme: {}", self.current_theme.name()));
-                }
-                1 => {
-                    self.config.container_layout = if forward {
-                        self.config.container_layout.next()
-                    } else {
-                        self.config.container_layout.prev()
-                    };
-                    self.set_toast(format!("Container layout: {}", self.config.container_layout.name()));
-                }
-                2 => {
-                    self.config.mid_panel_order = if forward {
-                        self.config.mid_panel_order.next()
-                    } else {
-                        self.config.mid_panel_order.prev()
-                    };
-                    self.set_toast(format!("Mid-panel order: {}", self.config.mid_panel_order.name()));
-                }
-                3 => {
-                    self.config.border_style = if forward {
-                        self.config.border_style.next()
-                    } else {
-                        self.config.border_style.prev()
-                    };
-                    self.set_toast(format!("Border style: {}", self.config.border_style.name()));
-                }
-                4 => {
-                    self.config.graph_style = if forward {
-                        self.config.graph_style.next()
-                    } else {
-                        self.config.graph_style.prev()
-                    };
-                    self.set_toast(format!("Graph style: {}", self.config.graph_style.name()));
-                }
-                _ => {}
+            config::SettingId::CloudSafetyNet => {
+                let options = config::FULL_SYNC_OPTIONS;
+                let pos = options.iter().position(|o| o.value == self.config.full_sync_interval).unwrap_or(0);
+                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                self.config.full_sync_interval = options[next].value.to_string();
+                self.save_current_settings();
             }
-            self.save_current_settings();
+            config::SettingId::BandwidthLimit => {
+                let options = config::BWLIMIT_OPTIONS;
+                let cur = self.config.bwlimit.as_deref().unwrap_or("Disabled");
+                let cur = if cur == "Désactivé" { "Disabled" } else { cur };
+                let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
+                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                self.config.bwlimit = if options[next] == "Disabled" { None } else { Some(options[next].to_string()) };
+                self.save_current_settings();
+            }
+            config::SettingId::StatsInterval => {
+                let options = STATS_INTERVAL_OPTIONS;
+                let cur = self.config.stats_interval.as_str();
+                let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
+                let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                self.config.stats_interval = options[next].to_string();
+                self.stats_interval_changed = true;
+                self.set_toast(format!("Rclone stats: {}", self.config.stats_interval));
+                self.save_current_settings();
+            }
+            config::SettingId::ResyncAction => {
+                self.modal = Modal::ConfirmResync;
+            }
+            config::SettingId::ColorTheme => {
+                self.current_theme = if forward { self.current_theme.next() } else { self.current_theme.prev() };
+                self.config.theme = Some(self.current_theme);
+                self.set_toast(format!("Active theme: {}", self.current_theme.name()));
+                self.save_current_settings();
+            }
+            config::SettingId::ContainerLayout => {
+                self.config.container_layout = if forward { self.config.container_layout.next() } else { self.config.container_layout.prev() };
+                self.set_toast(format!("Container layout: {}", self.config.container_layout.name()));
+                self.save_current_settings();
+            }
+            config::SettingId::MidPanelOrder => {
+                self.config.mid_panel_order = if forward { self.config.mid_panel_order.next() } else { self.config.mid_panel_order.prev() };
+                self.set_toast(format!("Mid-panel order: {}", self.config.mid_panel_order.name()));
+                self.save_current_settings();
+            }
+            config::SettingId::BorderStyle => {
+                self.config.border_style = if forward { self.config.border_style.next() } else { self.config.border_style.prev() };
+                self.set_toast(format!("Border style: {}", self.config.border_style.name()));
+                self.save_current_settings();
+            }
+            config::SettingId::GraphStyle => {
+                self.config.graph_style = if forward { self.config.graph_style.next() } else { self.config.graph_style.prev() };
+                self.set_toast(format!("Graph style: {}", self.config.graph_style.name()));
+                self.save_current_settings();
+            }
+            _ => {}
         }
     }
 
