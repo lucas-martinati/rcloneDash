@@ -166,8 +166,37 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
     warn "python3 is not detected in your PATH."
-    detail "The rclone guard script uses python3 to parse JSON configuration."
-    detail "Install it with: sudo apt install python3"
+    detail "The rclone guard script uses python3 to parse configuration and deliver interactive notifications."
+    detail "Install it with: sudo apt install python3 (or equivalent package manager)"
+else
+    ok "python3 detected: $(python3 --version 2>/dev/null)"
+    # Check Python GObject & libnotify bindings for interactive error notifications
+    if python3 -c "import gi; gi.require_version('Notify', '0.7'); from gi.repository import Notify" >/dev/null 2>&1; then
+        ok "Python GObject & libnotify bindings detected (interactive error notifications enabled)"
+    else
+        info "Python libnotify bindings (python3-gi / gir1.2-notify-0.7) not found."
+        detail "Attempting automatic installation for interactive notification support..."
+        INSTALL_GI=0
+        if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update -qq >> "$LOG_FILE" 2>&1 && \
+                sudo apt-get install -y -qq python3-gi gir1.2-notify-0.7 >> "$LOG_FILE" 2>&1 && INSTALL_GI=1
+            elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y -q python3-gobject libnotify >> "$LOG_FILE" 2>&1 && INSTALL_GI=1
+            elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -S --noconfirm --needed python-gobject libnotify >> "$LOG_FILE" 2>&1 && INSTALL_GI=1
+            fi
+        fi
+        if [ "$INSTALL_GI" -eq 1 ] && python3 -c "import gi; gi.require_version('Notify', '0.7'); from gi.repository import Notify" >/dev/null 2>&1; then
+            ok "Python libnotify bindings installed successfully"
+        else
+            warn "Interactive notification libraries missing. Notifications will still work, but without click-to-open."
+            detail "To enable click-to-open on notifications, install:"
+            detail "  • Ubuntu/Debian: sudo apt install python3-gi gir1.2-notify-0.7"
+            detail "  • Fedora:        sudo dnf install python3-gobject libnotify"
+            detail "  • Arch Linux:    sudo pacman -S python-gobject libnotify"
+        fi
+    fi
 fi
 
 # --------------------------------------------------------------------------- #
@@ -235,7 +264,25 @@ if [ -f "$TEMPLATE_DIR/rclonedash-notify.py" ]; then
     ok "Notification helper installed at $DATA_DIR/rclonedash-notify.py"
 fi
 
-# Install desktop file for notification integration
+# Install application icon
+ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+mkdir -p "$ICON_DIR"
+ICON_SRC=""
+if [ -f "$TEMPLATE_DIR/rclonedash.svg" ]; then
+    ICON_SRC="$TEMPLATE_DIR/rclonedash.svg"
+elif [ -f "$SCRIPT_DIR/assets/icons/rclonedash.svg" ]; then
+    ICON_SRC="$SCRIPT_DIR/assets/icons/rclonedash.svg"
+fi
+
+if [ -n "$ICON_SRC" ] && [ -f "$ICON_SRC" ]; then
+    cp "$ICON_SRC" "$ICON_DIR/rclonedash.svg"
+    ok "Application icon installed at $ICON_DIR/rclonedash.svg"
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >> "$LOG_FILE" 2>&1 || true
+    fi
+fi
+
+# Install desktop file for application launcher and notification integration
 APP_DIR="$HOME/.local/share/applications"
 mkdir -p "$APP_DIR"
 if [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
@@ -244,6 +291,9 @@ if [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
     sed -e "s|__BIN__|$BIN_PATH|g" "$TEMPLATE_DIR/rclonedash.desktop.template" > "$APP_DIR/rclonedash.desktop"
     chmod +x "$APP_DIR/rclonedash.desktop"
     ok "Desktop entry installed at $APP_DIR/rclonedash.desktop"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$APP_DIR" >> "$LOG_FILE" 2>&1 || true
+    fi
 else
     info "Desktop template not found — skipping .desktop file installation"
 fi
@@ -346,8 +396,10 @@ printf '%s%s━━━━━━━━━━━━━━━━━━━━━━�
 
 printf '  %s• Launch TUI interface:%s   %s%srclonedash%s\n' "$BOLD" "$RESET" "$BOLD" "$CYAN" "$RESET"
 printf '  %s• Installed binary:%s       %s\n' "$BOLD" "$RESET" "$INSTALL_BIN_DIR/rclonedash"
+printf '  %s• Application icon:%s       %s\n' "$BOLD" "$RESET" "$ICON_DIR/rclonedash.svg"
+printf '  %s• Desktop launcher:%s       %s\n' "$BOLD" "$RESET" "$APP_DIR/rclonedash.desktop"
 printf '  %s• Configuration:%s          %s\n' "$BOLD" "$RESET" "$CONFIG_FILE"
 printf '  %s• Exclusion filters:%s      %s\n' "$BOLD" "$RESET" "$RCLONE_CONF_DIR/gdrive-filters.txt"
 printf '  %s• Guard script:%s           %s\n' "$BOLD" "$RESET" "$DATA_DIR/rclone-bisync-guard.sh"
-printf '  %s• Desktop entry:%s          %s\n' "$BOLD" "$RESET" "$APP_DIR/rclonedash.desktop"
+printf '  %s• Notification helper:%s    %s\n' "$BOLD" "$RESET" "$DATA_DIR/rclonedash-notify.py"
 printf '  %s• Timer status:%s           systemctl --user status rclone-bisync.timer\n\n' "$BOLD" "$RESET"

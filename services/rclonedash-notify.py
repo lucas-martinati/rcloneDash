@@ -28,15 +28,15 @@ def open_rclonedash():
 
     # Prioritize popular terminal emulators for direct, reliable launch
     terminals = [
-        ["ptyxis", "--new-window", "--", cmd],
-        ["gnome-terminal", "--", cmd],
-        ["konsole", "-e", cmd],
-        ["alacritty", "-e", cmd],
-        ["kitty", cmd],
-        ["xfce4-terminal", "-e", cmd],
-        ["foot", cmd],
+        ["ptyxis", "--title=RcloneDash", "--new-window", "--", cmd],
+        ["gnome-terminal", "--title=RcloneDash", "--", cmd],
+        ["konsole", "--title", "RcloneDash", "-e", cmd],
+        ["alacritty", "--title", "RcloneDash", "-e", cmd],
+        ["kitty", "--title", "RcloneDash", cmd],
+        ["xfce4-terminal", "--title=RcloneDash", "-e", cmd],
+        ["foot", "--title=RcloneDash", cmd],
         ["x-terminal-emulator", "-e", cmd],
-        ["xterm", "-e", cmd],
+        ["xterm", "-title", "RcloneDash", "-e", cmd],
     ]
 
     for term in terminals:
@@ -88,6 +88,7 @@ def main():
             "dialog-error"
         )
         n.set_urgency(Notify.Urgency.CRITICAL)
+        n.set_hint("desktop-entry", GLib.Variant("s", "rclonedash"))
         n.add_action("default", "Ouvrir", on_action, None)
         n.add_action("open", "Ouvrir RcloneDash", on_action, None)
         n.connect("closed", on_closed)

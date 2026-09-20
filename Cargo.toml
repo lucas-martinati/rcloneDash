@@ -31,7 +31,7 @@ copyright = "2026 Lucas Martinati"
 license-file = []
 extended-description = """\
 Interactive, blazing fast TUI and monitoring dashboard for rclone bisync."""
-depends = "$auto"
+depends = "$auto, python3, python3-gi, gir1.2-notify-0.7"
 section = "utils"
 priority = "optional"
 assets = [
@@ -41,6 +41,9 @@ assets = [
     ["services/rclone-bisync.service.template", "usr/share/rclonedash/rclone-bisync.service.template", "644"],
     ["services/rclone-bisync.timer", "usr/share/rclonedash/rclone-bisync.timer", "644"],
     ["services/gdrive-filters.txt", "usr/share/rclonedash/gdrive-filters.txt", "644"],
+    ["services/rclonedash-notify.py", "usr/share/rclonedash/rclonedash-notify.py", "755"],
+    ["services/rclonedash.desktop.template", "usr/share/rclonedash/rclonedash.desktop.template", "644"],
+    ["services/rclonedash.svg", "usr/share/icons/hicolor/scalable/apps/rclonedash.svg", "644"],
     ["README.md", "usr/share/doc/rclonedash/README.md", "644"],
 ]
 

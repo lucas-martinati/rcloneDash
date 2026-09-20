@@ -25,7 +25,7 @@ use crossterm::{
         PushKeyboardEnhancementFlags,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen, SetTitle},
 };
 use futures_util::StreamExt;
 use ratatui::{backend::CrosstermBackend, Terminal};
@@ -140,6 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = execute!(
         stdout,
         EnterAlternateScreen,
+        SetTitle("RcloneDash"),
         EnableMouseCapture,
         PushKeyboardEnhancementFlags(
             KeyboardEnhancementFlags::REPORT_EVENT_TYPES

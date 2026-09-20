@@ -46,6 +46,23 @@ if [ -f "$HOME/.local/bin/rclonedash" ]; then
     ok "Binary ~/.local/bin/rclonedash removed"
 fi
 
+# 4. Remove desktop launcher and application icon
+if [ -f "$HOME/.local/share/applications/rclonedash.desktop" ]; then
+    rm -f "$HOME/.local/share/applications/rclonedash.desktop"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+    fi
+    ok "Desktop entry removed"
+fi
+
+if [ -f "$HOME/.local/share/icons/hicolor/scalable/apps/rclonedash.svg" ]; then
+    rm -f "$HOME/.local/share/icons/hicolor/scalable/apps/rclonedash.svg"
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+    fi
+    ok "Application icon removed"
+fi
+
 printf '\n%s%sRcloneDash has been uninstalled successfully.%s\n' "$BOLD" "$GREEN" "$RESET"
 detail "Note: Your configuration and exclusion filters in ~/.config/rclone/ have been preserved."
 printf '\n'
