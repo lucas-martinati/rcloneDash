@@ -234,11 +234,14 @@ pub fn render_gradient_bar(
     spans
 }
 
-/// Render solid progress bar with uniform color: [████····] or [⣿⣿⣿⣿····]
-pub fn render_solid_bar(
-    pct: f64,
+
+/// Renders a reliability / success rate gauge with intermediate shades approaching the target health color:
+/// - If rate >= 90%: soft green -> vibrant green (no red/yellow)
+/// - If rate >= 70%: amber/warm yellow -> bright yellow (no red)
+/// - If rate < 70%: dark red -> bright red
+pub fn render_reliability_bar(
+    rate: f64,
     width: usize,
-    color: ratatui::style::Color,
     graph_style: GraphStyleChoice,
     theme: &ThemePalette,
 ) -> Vec<Span<'static>> {
@@ -246,8 +249,8 @@ pub fn render_solid_bar(
         return vec![];
     }
 
-    let clamped_pct = pct.clamp(0.0, 100.0);
-    let filled_slots = ((clamped_pct / 100.0) * width as f64).round() as usize;
+    let clamped = rate.clamp(0.0, 100.0);
+    let filled_slots = ((clamped / 100.0) * width as f64).round() as usize;
 
     let fill_char = match graph_style {
         GraphStyleChoice::Braille => "⣿",
@@ -257,8 +260,31 @@ pub fn render_solid_bar(
     let mut spans = Vec::new();
     spans.push(Span::styled("[", Style::default().fg(theme.border)));
 
+    let (base_color, target_color) = if clamped >= 90.0 {
+        (
+            crate::ui::theme::color_with_opacity(theme.green, 0.65, None),
+            theme.green,
+        )
+    } else if clamped >= 70.0 {
+        (
+            crate::ui::theme::lerp_color(theme.yellow, theme.orange, 0.35),
+            theme.yellow,
+        )
+    } else {
+        (
+            crate::ui::theme::color_with_opacity(theme.red, 0.55, None),
+            theme.red,
+        )
+    };
+
     for i in 0..width {
         if i < filled_slots {
+            let t = if filled_slots <= 1 {
+                1.0
+            } else {
+                i as f64 / (filled_slots - 1) as f64
+            };
+            let color = crate::ui::theme::lerp_color(base_color, target_color, t);
             spans.push(Span::styled(fill_char, Style::default().fg(color).add_modifier(Modifier::BOLD)));
         } else {
             spans.push(Span::styled("·", Style::default().fg(theme.separator)));
@@ -376,15 +402,14 @@ mod tests {
     }
 
     #[test]
-    fn test_render_solid_bar_styles() {
+    fn test_render_reliability_bar_styles() {
         use crate::ui::theme::ThemeChoice;
-        use ratatui::style::Color;
         let theme = ThemeChoice::TokyoNight.palette();
-        let spans_braille = render_solid_bar(50.0, 10, Color::Green, GraphStyleChoice::Braille, &theme);
+        let spans_braille = render_reliability_bar(50.0, 10, GraphStyleChoice::Braille, &theme);
         let text_braille: String = spans_braille.iter().map(|s| s.content.as_ref()).collect();
         assert!(text_braille.contains('⣿'), "Braille bar should contain '⣿'");
 
-        let spans_blocks = render_solid_bar(50.0, 10, Color::Green, GraphStyleChoice::Blocks, &theme);
+        let spans_blocks = render_reliability_bar(50.0, 10, GraphStyleChoice::Blocks, &theme);
         let text_blocks: String = spans_blocks.iter().map(|s| s.content.as_ref()).collect();
         assert!(text_blocks.contains('█'), "Blocks bar should contain '█'");
     }

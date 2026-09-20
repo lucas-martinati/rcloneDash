@@ -189,7 +189,9 @@ pub fn strip_ansi(s: &str) -> String {
                     chars.next(); // consume charset
                 }
             }
-        } else if c != '\r' {
+        } else if c == '\t' {
+            out.push_str("    ");
+        } else if c != '\r' && !c.is_control() {
             out.push(c);
         }
     }

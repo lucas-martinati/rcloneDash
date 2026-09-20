@@ -25,11 +25,15 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
     };
 
     let max_path_len = (area.width.saturating_sub(42) as usize).max(10);
-    let display_path = if filepath.len() > max_path_len {
-        format!("…{}", &filepath[filepath.len().saturating_sub(max_path_len - 1)..])
-    } else {
-        filepath.clone()
-    };
+    let path_spans = crate::ui::theme::truncate_with_fade_spans(
+        &filepath,
+        max_path_len,
+        Style::default().fg(theme.text_muted),
+        true,
+        None,
+    );
+    let mut title_extra = vec![Span::styled(": ", Style::default().fg(theme.text_muted))];
+    title_extra.extend(path_spans);
 
     use crate::ui::keys::KeybindingRegistry;
 
@@ -54,7 +58,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
         ModalContainerConfig {
             title_prefix: "exclusion filters",
             title_color: Some(theme.purple),
-            title_extra: Some(vec![Span::styled(format!(": {}", display_path), Style::default().fg(theme.text_muted))]),
+            title_extra: Some(title_extra),
             nav_arrows: Some(NavArrowsConfig {
                 label: "select",
                 up_active: can_up,
@@ -253,19 +257,26 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     };
 
                     let max_rule_w = (area.width.saturating_sub(12) as usize).max(5);
-                    let display_rule = if rule_text.chars().count() > max_rule_w {
-                        let truncated: String = rule_text.chars().take(max_rule_w - 1).collect();
-                        format!("{}…", truncated)
+                    let row_bg = if is_selected {
+                        Some(Color::Rgb(55, 32, 65))
                     } else {
-                        rule_text.to_string()
+                        None
                     };
+                    let rule_spans = crate::ui::theme::truncate_with_fade_spans(
+                        rule_text,
+                        max_rule_w,
+                        rule_style,
+                        false,
+                        row_bg,
+                    );
 
-                    let line = Line::from(vec![
+                    let mut line_spans = vec![
                         cursor_span,
                         Span::styled(format!("{:2} │ ", i + 1), num_style),
                         Span::styled(sym, Style::default().fg(sym_fg).add_modifier(Modifier::BOLD)),
-                        Span::styled(display_rule, rule_style),
-                    ]);
+                    ];
+                    line_spans.extend(rule_spans);
+                    let line = Line::from(line_spans);
 
                     let row_style = if is_selected {
                         Style::default().bg(Color::Rgb(55, 32, 65))

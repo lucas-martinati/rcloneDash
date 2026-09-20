@@ -17,6 +17,9 @@ pub fn render_logs_panel(
     area: Rect,
     hitboxes: &mut Vec<Hitbox>,
 ) {
+    // Clear area to eliminate any ghost characters from previous renders or modals
+    f.render_widget(ratatui::widgets::Clear, area);
+
     // Register logs area for mouse scroll
     hitboxes.push(Hitbox {
         rect: area,
@@ -278,6 +281,8 @@ pub fn wrap_text(text: &str, first_max: usize, cont_max: usize) -> Vec<String> {
 
 /// Counts total wrapped lines for a single log line.
 pub fn count_wrapped_line(line: &str, max_width: usize) -> usize {
+    let sanitized = line.replace('\t', "    ");
+    let line = &sanitized;
     if line.len() > 25 && line.chars().nth(4) == Some('-') && line.chars().nth(7) == Some('-') {
         let rest = &line[25..];
         let rest_first = max_width.saturating_sub(25);
@@ -302,6 +307,8 @@ pub fn count_wrapped_log_lines(lines: &std::collections::VecDeque<String>, filte
 
 /// Wraps and colorizes a single log line according to log level and message content.
 pub fn wrap_and_colorize_log_line(line: &str, max_width: usize, theme: &ThemePalette) -> Vec<Line<'static>> {
+    let sanitized = line.replace('\t', "    ");
+    let line = &sanitized;
     let ll = line.to_lowercase();
 
     let (prefix_color, is_bold) = if ll.contains("error") || ll.contains("failed") || ll.contains("critical") {

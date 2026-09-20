@@ -206,7 +206,16 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
                 for i in 0..bar_w {
                     if i < filled {
-                        line_spans.push(Span::styled(fill_char, Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
+                        let slot_color = if filled >= 3 && i == filled - 1 {
+                            crate::ui::theme::lerp_color(bar_color, ratatui::style::Color::White, 0.45)
+                        } else if filled >= 3 && i == filled - 2 {
+                            crate::ui::theme::lerp_color(bar_color, ratatui::style::Color::White, 0.20)
+                        } else if filled == 2 && i == 1 {
+                            crate::ui::theme::lerp_color(bar_color, ratatui::style::Color::White, 0.35)
+                        } else {
+                            bar_color
+                        };
+                        line_spans.push(Span::styled(fill_char, Style::default().fg(slot_color).add_modifier(Modifier::BOLD)));
                     } else {
                         line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
                     }
@@ -226,7 +235,16 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
                 for i in 0..bar_w {
                     if i < filled {
-                        line_spans.push(Span::styled(fill_char, Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
+                        let slot_color = if filled >= 3 && i == filled - 1 {
+                            crate::ui::theme::lerp_color(bar_color, ratatui::style::Color::White, 0.45)
+                        } else if filled >= 3 && i == filled - 2 {
+                            crate::ui::theme::lerp_color(bar_color, ratatui::style::Color::White, 0.20)
+                        } else if filled == 2 && i == 1 {
+                            crate::ui::theme::lerp_color(bar_color, ratatui::style::Color::White, 0.35)
+                        } else {
+                            bar_color
+                        };
+                        line_spans.push(Span::styled(fill_char, Style::default().fg(slot_color).add_modifier(Modifier::BOLD)));
                     } else {
                         line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
                     }

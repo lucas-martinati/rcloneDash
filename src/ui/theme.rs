@@ -352,3 +352,64 @@ pub fn gradient_multi_stop(stops: &[(f64, Color)], t: f64) -> Color {
     stops[stops.len() - 1].1
 }
 
+/// Truncates a string to `max_len` display characters.
+/// If truncated:
+/// - If `fade_left` is true (left truncation, e.g. path prefix `…/foo/bar`):
+///   The leading characters fade in opacity from the background towards full color.
+/// - If `fade_left` is false (right truncation, e.g. suffix `foo/bar/…`):
+///   The trailing characters fade in opacity from full color towards the background.
+pub fn truncate_with_fade_spans(
+    text: &str,
+    max_len: usize,
+    base_style: ratatui::style::Style,
+    fade_left: bool,
+    bg: Option<Color>,
+) -> Vec<ratatui::text::Span<'static>> {
+    use ratatui::text::Span;
+    let char_count = text.chars().count();
+    if char_count <= max_len || max_len == 0 {
+        return vec![Span::styled(text.to_string(), base_style)];
+    }
+
+    let base_fg = base_style.fg.unwrap_or(Color::White);
+
+    if fade_left {
+        // Keep the last `max_len` characters, with the first 3 characters fading in
+        let skip = char_count.saturating_sub(max_len);
+        let visible: Vec<char> = text.chars().skip(skip).collect();
+        let mut spans = Vec::new();
+        let fade_count = 3.min(visible.len());
+
+        for (i, &ch) in visible.iter().enumerate() {
+            let ch_str = ch.to_string();
+            if i < fade_count {
+                let opacity = 0.35 + (i as f64 / fade_count as f64) * 0.50;
+                let c = color_with_opacity(base_fg, opacity, bg);
+                spans.push(Span::styled(ch_str, base_style.fg(c)));
+            } else {
+                spans.push(Span::styled(ch_str, base_style));
+            }
+        }
+        spans
+    } else {
+        // Right truncation: keep the first `max_len` characters, with the last 3 characters fading out
+        let visible: Vec<char> = text.chars().take(max_len).collect();
+        let mut spans = Vec::new();
+        let fade_count = 3.min(visible.len());
+        let normal_count = visible.len().saturating_sub(fade_count);
+
+        for (i, &ch) in visible.iter().enumerate() {
+            let ch_str = ch.to_string();
+            if i >= normal_count {
+                let fade_idx = i - normal_count;
+                let opacity = 0.85 - (fade_idx as f64 / fade_count as f64) * 0.50;
+                let c = color_with_opacity(base_fg, opacity, bg);
+                spans.push(Span::styled(ch_str, base_style.fg(c)));
+            } else {
+                spans.push(Span::styled(ch_str, base_style));
+            }
+        }
+        spans
+    }
+}
+

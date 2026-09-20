@@ -27,11 +27,15 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
     let can_down = total_files > 1 && app.file_selected_idx < total_files.saturating_sub(1);
 
     let max_title_path_len = (area.width.saturating_sub(42) as usize).max(10);
-    let display_title_path = if title_path.len() > max_title_path_len {
-        format!("…{}", &title_path[title_path.len().saturating_sub(max_title_path_len - 1)..])
-    } else {
-        title_path.clone()
-    };
+    let path_spans = crate::ui::theme::truncate_with_fade_spans(
+        &title_path,
+        max_title_path_len,
+        Style::default().fg(theme.text_muted),
+        true,
+        None,
+    );
+    let mut title_extra = vec![Span::styled(": ", Style::default().fg(theme.text_muted))];
+    title_extra.extend(path_spans);
 
     let border_color = theme.border_history;
 
@@ -48,7 +52,7 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
         ModalContainerConfig {
             title_prefix: "file explorer",
             title_color: Some(theme.blue),
-            title_extra: Some(vec![Span::styled(format!(": {}", display_title_path), Style::default().fg(theme.text_muted))]),
+            title_extra: Some(title_extra),
             nav_arrows: Some(NavArrowsConfig {
                 label: "select",
                 up_active: can_up,

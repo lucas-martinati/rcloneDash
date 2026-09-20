@@ -131,12 +131,20 @@ pub fn render_disks_cloud_box(
             Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
         ));
     } else {
-        let remote_display = if app.config.remote.len() > 16 {
-            format!("{}…", &app.config.remote[..15])
+        let remote_spans = crate::ui::theme::truncate_with_fade_spans(
+            &app.config.remote,
+            15,
+            Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD),
+            false,
+            None,
+        );
+        let rem_len = app.config.remote.chars().count();
+        line2_spans.extend(remote_spans);
+        if rem_len < 15 {
+            line2_spans.push(Span::styled(" ".repeat(15 - rem_len + 1), Style::default()));
         } else {
-            app.config.remote.clone()
-        };
-        line2_spans.push(Span::styled(format!("{:<15} ", remote_display), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)));
+            line2_spans.push(Span::styled(" ", Style::default()));
+        }
         line2_spans.push(Span::styled("· syncing quota...", Style::default().fg(theme.text_muted)));
     }
 
@@ -148,16 +156,18 @@ pub fn render_disks_cloud_box(
         "analyzing...".to_string()
     };
     let max_dir_len = (inner.width.saturating_sub(24) as usize).max(8);
-    let display_dir = if app.config.local_dir.len() > max_dir_len {
-        format!("…{}", &app.config.local_dir[app.config.local_dir.len().saturating_sub(max_dir_len - 1)..])
-    } else {
-        app.config.local_dir.clone()
-    };
-    let line3_spans = vec![
+    let dir_spans = crate::ui::theme::truncate_with_fade_spans(
+        &app.config.local_dir,
+        max_dir_len,
+        Style::default().fg(theme.text_bright),
+        true,
+        None,
+    );
+    let mut line3_spans = vec![
         Span::styled("Folder:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{} ", display_dir), Style::default().fg(theme.text_bright)),
-        Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
     ];
+    line3_spans.extend(dir_spans);
+    line3_spans.push(Span::styled(format!(" ({})", count_str), Style::default().fg(theme.text_muted)));
 
     // 4. Cloud Safety Net & bwlimit
     let cloud_net = &app.service_info.cloud_safety_net;
@@ -327,7 +337,7 @@ pub fn render_metrics_box(
     } else {
         theme.red
     };
-    let rel_bar = crate::ui::sparkline::render_solid_bar(rate, bar_width, rel_color, app.config.graph_style, theme);
+    let rel_bar = crate::ui::sparkline::render_reliability_bar(rate, bar_width, app.config.graph_style, theme);
 
     let mut line3_spans = vec![
         Span::styled("Reliability: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),

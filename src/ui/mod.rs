@@ -130,9 +130,11 @@ pub fn render_scrollbar_custom(
         return;
     }
 
-    // Clear the track column between arrows
+    // Clear the track column between arrows with a subtle vertical line
+    let track_color = crate::ui::theme::color_with_opacity(theme.separator, 0.20, None);
+    let track_style = Style::default().fg(track_color);
     for y in (top_y + 1)..bot_y {
-        buf.set_string(scroll_x, y, " ", Style::default());
+        buf.set_string(scroll_x, y, "│", track_style);
     }
 
     // Hitbox for the entire track (click or drag)
@@ -155,11 +157,19 @@ pub fn render_scrollbar_custom(
     // Unified thumb geometry calculation
     let geom = scrollbar::ScrollbarGeometry::compute(total, visible, track_height, pos);
 
-    let thumb_style = Style::default().fg(ratatui::style::Color::Rgb(200, 205, 215));
     for i in 0..geom.thumb_size {
         let y = top_y + 1 + (geom.thumb_start + i) as u16;
         if y < bot_y {
-            buf.set_string(scroll_x, y, "█", thumb_style);
+            let color = if geom.thumb_size >= 3 {
+                if i == 0 || i == geom.thumb_size - 1 {
+                    crate::ui::theme::color_with_opacity(ratatui::style::Color::Rgb(200, 205, 215), 0.60, None)
+                } else {
+                    ratatui::style::Color::Rgb(225, 230, 240)
+                }
+            } else {
+                ratatui::style::Color::Rgb(200, 205, 215)
+            };
+            buf.set_string(scroll_x, y, "█", Style::default().fg(color));
         }
     }
 }

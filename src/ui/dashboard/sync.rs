@@ -58,14 +58,34 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
     let mut stepper_spans = Vec::new();
     for (i, name) in phases.iter().enumerate() {
         if i > 0 {
-            stepper_spans.push(Span::styled(" → ", Style::default().fg(theme.border)));
+            let arrow_color = if i <= app.live.phase_index {
+                theme.border
+            } else {
+                let step_ahead = i - app.live.phase_index;
+                let arrow_opacity = match step_ahead {
+                    1 => 0.65,
+                    2 => 0.45,
+                    3 => 0.30,
+                    _ => 0.18,
+                };
+                crate::ui::theme::color_with_opacity(theme.border, arrow_opacity, None)
+            };
+            stepper_spans.push(Span::styled(" → ", Style::default().fg(arrow_color)));
         }
         let (icon, style) = if i < app.live.phase_index {
             ("✓", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
         } else if i == app.live.phase_index {
             ("●", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
         } else {
-            ("○", Style::default().fg(theme.text_muted))
+            let step_ahead = i - app.live.phase_index;
+            let opacity = match step_ahead {
+                1 => 0.75,
+                2 => 0.55,
+                3 => 0.40,
+                _ => 0.25,
+            };
+            let faded_color = crate::ui::theme::color_with_opacity(theme.text_muted, opacity, None);
+            ("○", Style::default().fg(faded_color))
         };
         stepper_spans.push(Span::styled(format!("{} {}", icon, name), style));
     }
@@ -214,29 +234,32 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
                     "deleted" | "supprimé" | "supprime" => ("● Deleted", theme.red),
                     _ => ("● Modified", theme.yellow),
                 };
-                let display_p = if d.path.chars().count() > max_p_len {
-                    let skip = d.path.chars().count() - max_p_len + 1;
-                    format!("…{}", d.path.chars().skip(skip).collect::<String>())
-                } else {
-                    d.path.clone()
-                };
-                loc_lines.push(Line::from(vec![
-                    Span::styled(format!("  • {} ", display_p), Style::default().fg(theme.text_bright)),
-                    Span::styled(badge_text, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
-                ]));
+                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
+                    &d.path,
+                    max_p_len,
+                    Style::default().fg(theme.text_bright),
+                    true,
+                    None,
+                ));
+                line_spans.push(Span::styled(" ", Style::default()));
+                line_spans.push(Span::styled(badge_text, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)));
+                loc_lines.push(Line::from(line_spans));
             }
             if app.live.changes_local_details.len() > 2 {
                 loc_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_local_details.len() - 2), Style::default().fg(theme.text_muted))));
             }
         } else {
             for f_name in app.live.changes_local.iter().take(2) {
-                let display_p = if f_name.chars().count() > max_p_len {
-                    let skip = f_name.chars().count() - max_p_len + 1;
-                    format!("…{}", f_name.chars().skip(skip).collect::<String>())
-                } else {
-                    f_name.clone()
-                };
-                loc_lines.push(Line::from(Span::styled(format!("  • {}", display_p), Style::default().fg(theme.text_bright))));
+                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
+                    f_name,
+                    max_p_len,
+                    Style::default().fg(theme.text_bright),
+                    true,
+                    None,
+                ));
+                loc_lines.push(Line::from(line_spans));
             }
             if app.live.changes_local.len() > 2 {
                 loc_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_local.len() - 2), Style::default().fg(theme.text_muted))));
@@ -270,29 +293,32 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
                     "deleted" | "supprimé" | "supprime" => ("● Deleted", theme.red),
                     _ => ("● Modified", theme.yellow),
                 };
-                let display_p = if d.path.chars().count() > max_p_len {
-                    let skip = d.path.chars().count() - max_p_len + 1;
-                    format!("…{}", d.path.chars().skip(skip).collect::<String>())
-                } else {
-                    d.path.clone()
-                };
-                rem_lines.push(Line::from(vec![
-                    Span::styled(format!("  • {} ", display_p), Style::default().fg(theme.text_bright)),
-                    Span::styled(badge_text, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)),
-                ]));
+                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
+                    &d.path,
+                    max_p_len,
+                    Style::default().fg(theme.text_bright),
+                    true,
+                    None,
+                ));
+                line_spans.push(Span::styled(" ", Style::default()));
+                line_spans.push(Span::styled(badge_text, Style::default().fg(badge_color).add_modifier(Modifier::BOLD)));
+                rem_lines.push(Line::from(line_spans));
             }
             if app.live.changes_remote_details.len() > 2 {
                 rem_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_remote_details.len() - 2), Style::default().fg(theme.text_muted))));
             }
         } else {
             for f_name in app.live.changes_remote.iter().take(2) {
-                let display_p = if f_name.chars().count() > max_p_len {
-                    let skip = f_name.chars().count() - max_p_len + 1;
-                    format!("…{}", f_name.chars().skip(skip).collect::<String>())
-                } else {
-                    f_name.clone()
-                };
-                rem_lines.push(Line::from(Span::styled(format!("  • {}", display_p), Style::default().fg(theme.text_bright))));
+                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
+                    f_name,
+                    max_p_len,
+                    Style::default().fg(theme.text_bright),
+                    true,
+                    None,
+                ));
+                rem_lines.push(Line::from(line_spans));
             }
             if app.live.changes_remote.len() > 2 {
                 rem_lines.push(Line::from(Span::styled(format!("  (+{} other(s))", app.live.changes_remote.len() - 2), Style::default().fg(theme.text_muted))));
@@ -302,13 +328,13 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
     }
 }
 
-fn format_active_file_spans<'a>(
-    af: &'a crate::monitor::parser::ActiveFile,
+fn format_active_file_spans(
+    af: &crate::monitor::parser::ActiveFile,
     theme: &ThemePalette,
     max_width: u16,
     other_count: usize,
     graph_style: crate::config::GraphStyleChoice,
-) -> Vec<Span<'a>> {
+) -> Vec<Span<'static>> {
     let pct = af.pct.min(100);
     let bar_len = 14usize;
     let filled_len = (pct as usize * bar_len) / 100;
@@ -333,25 +359,27 @@ fn format_active_file_spans<'a>(
     let fixed_width = 12 + (bar_len + 2) + pct_text.chars().count() + other_suffix.chars().count();
     let avail_for_name = (max_width as usize).saturating_sub(fixed_width).max(8);
 
-    let display_name = if af.name.chars().count() > avail_for_name {
-        let skip = af.name.chars().count() - avail_for_name + 1;
-        format!("…{}", af.name.chars().skip(skip).collect::<String>())
-    } else {
-        af.name.clone()
-    };
+    let name_spans = crate::ui::theme::truncate_with_fade_spans(
+        &af.name,
+        avail_for_name,
+        Style::default().fg(theme.text_bright),
+        true,
+        None,
+    );
 
     let filled_str: String = fill_char.repeat(filled_len);
     let empty_str: String = "·".repeat(bar_len.saturating_sub(filled_len));
 
     let mut spans = vec![
         Span::styled("  ⚡ Active: ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{} ", display_name), Style::default().fg(theme.text_bright)),
-        Span::styled("[", Style::default().fg(theme.border)),
-        Span::styled(filled_str, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled(empty_str, Style::default().fg(theme.separator)),
-        Span::styled("]", Style::default().fg(theme.border)),
-        Span::styled(pct_text, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ];
+    spans.extend(name_spans);
+    spans.push(Span::styled(" ", Style::default()));
+    spans.push(Span::styled("[", Style::default().fg(theme.border)));
+    spans.push(Span::styled(filled_str, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+    spans.push(Span::styled(empty_str, Style::default().fg(theme.separator)));
+    spans.push(Span::styled("]", Style::default().fg(theme.border)));
+    spans.push(Span::styled(pct_text, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
     if !other_suffix.is_empty() {
         spans.push(Span::styled(other_suffix, Style::default().fg(theme.text_muted)));
     }
