@@ -110,8 +110,8 @@ pub fn compute_active_modal_area(modal: &Modal, screen: Rect) -> Option<Rect> {
         Modal::Files => Some(centered_rect(80, 75, screen)),
         Modal::Filters => Some(centered_rect(82, 74, screen)),
         Modal::HistoryDetails(_) => Some(centered_rect(78, 74, screen)),
-        Modal::DryRun => Some(centered_rect(82, 80, screen)),
-        Modal::ConfirmSync | Modal::ConfirmDryRun => Some(centered_rect(58, 25, screen)),
+        Modal::DryRun => Some(centered_rect(82, 85, screen)),
+        Modal::ConfirmSync => Some(centered_rect(58, 25, screen)),
         Modal::ConfirmResync => Some(centered_rect(60, 30, screen)),
         Modal::ConfirmCancel | Modal::ConfirmDelete(_) => Some(centered_rect(55, 25, screen)),
         Modal::Help => {

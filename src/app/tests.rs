@@ -435,9 +435,9 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::None);
 
-        // 2. Appuyer sur 'd' -> ouvre la confirmation de dry-run
+        // 2. Appuyer sur 'd' -> ouvre la modal DryRun directement
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
-        assert_eq!(app.modal, Modal::ConfirmDryRun);
+        assert_eq!(app.modal, Modal::DryRun);
 
         // Esc annule
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -455,7 +455,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.modal = Modal::None;
 
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
-        assert_eq!(app.modal, Modal::ConfirmDryRun);
+        assert_eq!(app.modal, Modal::DryRun);
         app.modal = Modal::None;
 
         app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
@@ -2329,12 +2329,12 @@ use crate::monitor::history::{PastRun, RunStatus};
         let backend = TestBackend::new(120, 40);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        // 1. Initially, pressing 'd' opens ConfirmDryRun
+        // 1. Initially, pressing 'd' opens DryRun directly
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
-        assert_eq!(app.modal, Modal::ConfirmDryRun);
+        assert_eq!(app.modal, Modal::DryRun);
 
-        // 2. Start dry-run: modal becomes DryRun and dry_run_running is true
-        app.start_dry_run();
+        // 2. Start dry-run: pressing Enter inside DryRun starts dry_run
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::DryRun);
         assert!(app.dry_run_running);
 
@@ -2343,7 +2343,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.modal, Modal::None);
         assert!(app.dry_run_running);
 
-        // 4. On dashboard, pressing 'd' must REOPEN DryRun modal, NOT ConfirmDryRun!
+        // 4. On dashboard, pressing 'd' must REOPEN DryRun modal!
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::DryRun);
 
@@ -2387,10 +2387,10 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         assert_eq!(app.dry_run_scroll, 0);
 
-        // 11. When finished, pressing 'd' from dashboard opens ConfirmDryRun for a fresh run
+        // 11. When finished, pressing 'd' from dashboard opens DryRun modal directly
         app.modal = Modal::None;
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
-        assert_eq!(app.modal, Modal::ConfirmDryRun);
+        assert_eq!(app.modal, Modal::DryRun);
     }
 
     #[test]

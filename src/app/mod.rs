@@ -61,7 +61,6 @@ pub enum Modal {
     Filters,
     DryRun,
     ConfirmSync,
-    ConfirmDryRun,
     ConfirmResync,
     ConfirmCancel,
     ConfirmDelete(String),

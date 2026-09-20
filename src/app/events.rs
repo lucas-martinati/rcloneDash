@@ -243,11 +243,7 @@ impl App {
                 Action::None
             }
             HitAction::ButtonDryRun => {
-                self.modal = if self.dry_run_running {
-                    Modal::DryRun
-                } else {
-                    Modal::ConfirmDryRun
-                };
+                self.modal = Modal::DryRun;
                 Action::None
             }
             HitAction::ButtonFiles => {
@@ -596,7 +592,6 @@ impl App {
             return match &self.modal {
                 Modal::Menu => self.handle_key_menu(&key),
                 Modal::ConfirmSync => self.handle_key_confirm_sync(&key),
-                Modal::ConfirmDryRun => self.handle_key_confirm_dry_run(&key),
                 Modal::ConfirmResync => self.handle_key_confirm_resync(&key),
                 Modal::ConfirmCancel => self.handle_key_confirm_cancel(&key),
                 Modal::ConfirmDelete(rel) => {
@@ -989,19 +984,6 @@ impl App {
                     Ok(_) => self.set_toast("✔ Forced sync initiated..."),
                     Err(e) => self.set_toast(format!("✗ Error: {}", e)),
                 }
-            }
-            KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
-                self.modal = Modal::None;
-            }
-            _ => {}
-        }
-        Action::None
-    }
-
-    fn handle_key_confirm_dry_run(&mut self, key: &KeyEvent) -> Action {
-        match key.code {
-            KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
-                self.start_dry_run();
             }
             KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
                 self.modal = Modal::None;
@@ -1418,7 +1400,7 @@ impl App {
             KeyCode::Esc | KeyCode::Char('q') => {
                 self.modal = Modal::None;
             }
-            KeyCode::Char('r') => {
+            KeyCode::Char('r') | KeyCode::Enter => {
                 if !self.dry_run_running {
                     self.start_dry_run();
                 }
@@ -1595,11 +1577,7 @@ impl App {
                 return Action::None;
             }
             KeyCode::Char('d') => {
-                if self.dry_run_running {
-                    self.modal = Modal::DryRun;
-                } else {
-                    self.modal = Modal::ConfirmDryRun;
-                }
+                self.modal = Modal::DryRun;
                 return Action::None;
             }
             KeyCode::Char('f') => {
