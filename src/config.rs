@@ -412,6 +412,7 @@ pub enum SettingId {
     TimerInterval,
     CloudSafetyNet,
     BandwidthLimit,
+    StatsInterval,
     LocalDirectory,
     RemoteStorage,
     ResyncAction,
@@ -425,7 +426,6 @@ pub enum SettingId {
     MidPanelOrder,
     BorderStyle,
     GraphStyle,
-    StatsInterval,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -459,24 +459,24 @@ impl SettingId {
             (0, 0) => Some(Self::TimerInterval),
             (0, 1) => Some(Self::CloudSafetyNet),
             (0, 2) => Some(Self::BandwidthLimit),
-            (0, 3) => Some(Self::LocalDirectory),
-            (0, 4) => Some(Self::RemoteStorage),
-            (0, 5) => Some(Self::ResyncAction),
-            (0, 6) => Some(Self::LogJournalAction),
-            (0, 7) => Some(Self::GoogleClientId),
-            (0, 8) => Some(Self::GoogleClientSecret),
+            (0, 3) => Some(Self::StatsInterval),
+            (0, 4) => Some(Self::LocalDirectory),
+            (0, 5) => Some(Self::RemoteStorage),
+            (0, 6) => Some(Self::ResyncAction),
+            (0, 7) => Some(Self::LogJournalAction),
+            (0, 8) => Some(Self::GoogleClientId),
+            (0, 9) => Some(Self::GoogleClientSecret),
             (1, 0) => Some(Self::ColorTheme),
             (1, 1) => Some(Self::ContainerLayout),
             (1, 2) => Some(Self::MidPanelOrder),
             (1, 3) => Some(Self::BorderStyle),
             (1, 4) => Some(Self::GraphStyle),
-            (1, 5) => Some(Self::StatsInterval),
             _ => None,
         }
     }
 
     pub fn tab_count(tab: usize) -> usize {
-        if tab == 0 { 9 } else { 6 }
+        if tab == 0 { 10 } else { 5 }
     }
 
     pub fn label(&self) -> &'static str {

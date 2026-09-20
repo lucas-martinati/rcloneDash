@@ -344,8 +344,8 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.config.stats_interval, "2s");
 
         // Cycle via settings
-        app.settings_tab = 1;
-        app.settings_selected_idx = 5; // Rclone stats interval
+        app.settings_tab = 0;
+        app.settings_selected_idx = 3; // Rclone stats interval
         app.cycle_setting(true);
         assert_eq!(app.config.stats_interval, "3s");
     }
@@ -589,7 +589,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         let mut app = App::new();
         app.modal = Modal::Settings;
         app.settings_tab = 0;
-        app.settings_selected_idx = 5; // Resynchronisation complète
+        app.settings_selected_idx = 6; // Resynchronisation complète
 
         // Pressing Enter must open ConfirmResync
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -602,7 +602,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         // Rouvrir et tester avec Flèche Droite
         app.modal = Modal::Settings;
         app.settings_tab = 0;
-        app.settings_selected_idx = 5;
+        app.settings_selected_idx = 6;
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
         assert_eq!(app.modal, Modal::ConfirmResync);
     }
@@ -712,7 +712,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         let mut app = App::new();
         app.modal = Modal::Settings;
         app.settings_tab = 0;
-        app.settings_selected_idx = 3; // Local directory
+        app.settings_selected_idx = 4; // Local directory
         app.config.local_dir = "/home/user/drive".to_string();
 
         // Press Enter to enter editing mode
@@ -738,14 +738,14 @@ use crate::monitor::history::{PastRun, RunStatus};
         // Enter editing with 'e', modify and validate with Enter
         app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
         assert!(app.is_editing_setting());
-        app.edit_state = EditState::Setting { tab: 0, index: 3, buffer: "/home/new/path".to_string(), cursor: 14 };
+        app.edit_state = EditState::Setting { tab: 0, index: 4, buffer: "/home/new/path".to_string(), cursor: 14 };
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(!app.is_editing_setting());
         assert_eq!(app.config.local_dir, "/home/new/path");
 
-        // Test sur le remote (option 4) : par exemple "GoogleDrive:"
+        // Test sur le remote (option 5) : par exemple "GoogleDrive:"
         app.settings_tab = 0;
-        app.settings_selected_idx = 4;
+        app.settings_selected_idx = 5;
         app.config.remote = "GoogleDrive:".to_string();
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)); // Flèche droite active l'édition
         assert!(app.is_editing_setting());
@@ -762,7 +762,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         let mut app = App::new();
         app.modal = Modal::Settings;
         app.settings_tab = 0;
-        app.settings_selected_idx = 3; // LocalDirectory
+        app.settings_selected_idx = 4; // LocalDirectory
         app.start_editing_setting();
         assert!(app.is_editing_setting());
 
@@ -816,9 +816,9 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.modal = Modal::Settings;
         app.settings_tab = 0;
 
-        // Option 7: GoogleClientId
-        app.settings_selected_idx = 7;
-        assert_eq!(config::SettingId::from_tab_and_idx(0, 7), Some(config::SettingId::GoogleClientId));
+        // Option 8: GoogleClientId
+        app.settings_selected_idx = 8;
+        assert_eq!(config::SettingId::from_tab_and_idx(0, 8), Some(config::SettingId::GoogleClientId));
         assert!(config::SettingId::GoogleClientId.is_text_input());
 
         // Press Enter to start editing
@@ -833,9 +833,9 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(!app.is_editing_setting());
 
-        // Option 8: GoogleClientSecret
-        app.settings_selected_idx = 8;
-        assert_eq!(config::SettingId::from_tab_and_idx(0, 8), Some(config::SettingId::GoogleClientSecret));
+        // Option 9: GoogleClientSecret
+        app.settings_selected_idx = 9;
+        assert_eq!(config::SettingId::from_tab_and_idx(0, 9), Some(config::SettingId::GoogleClientSecret));
         assert!(config::SettingId::GoogleClientSecret.is_text_input());
 
         // Press 'e' to start editing
@@ -1319,10 +1319,10 @@ use crate::monitor::history::{PastRun, RunStatus};
         });
         assert_eq!(app.log_filter, LogFilter::Problems);
 
-        // Setting 6 opens full logs
+        // Setting 7 opens full logs
         app.modal = Modal::Settings;
         app.settings_tab = 0;
-        app.settings_selected_idx = 6;
+        app.settings_selected_idx = 7;
         let action = app.handle_key(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
@@ -1790,8 +1790,8 @@ use crate::monitor::history::{PastRun, RunStatus};
     async fn test_settings_modal_height_adaptation_and_no_overflow() {
         let mut app = App::new();
         app.modal = Modal::Settings;
-        app.settings_tab = 1;
-        app.settings_selected_idx = 5; // Rclone stats interval
+        app.settings_tab = 0;
+        app.settings_selected_idx = 3; // Rclone stats interval
 
         // 1. Écran de taille moyenne (100x30) : logo masqué pour laisser 25 lignes à la modale
         let backend = TestBackend::new(100, 30);
@@ -1941,7 +1941,7 @@ use crate::monitor::history::{PastRun, RunStatus};
         let mut app = App::new();
         app.modal = Modal::Settings;
         app.settings_tab = 0;
-        app.settings_selected_idx = 8; // GoogleClientSecret
+        app.settings_selected_idx = 9; // GoogleClientSecret
 
         // Set credentials so that secret is configured ("••••••••••••")
         let _ = config::write_rclone_credentials(&app.config.remote, "test-client-id", "test-client-secret-12345");

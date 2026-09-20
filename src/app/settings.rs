@@ -149,12 +149,20 @@ impl App {
                     let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
                     self.config.bwlimit = if options[next] == "Disabled" { None } else { Some(options[next].to_string()) };
                 }
-                5 => {
+                3 => {
+                    let options = STATS_INTERVAL_OPTIONS;
+                    let cur = self.config.stats_interval.as_str();
+                    let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
+                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
+                    self.config.stats_interval = options[next].to_string();
+                    self.set_toast(format!("Rclone stats: {}", self.config.stats_interval));
+                }
+                6 => {
                     self.modal = Modal::ConfirmResync;
                 }
                 _ => {}
             }
-            if self.settings_selected_idx <= 2 {
+            if self.settings_selected_idx <= 3 {
                 self.save_current_settings();
             }
         } else {
@@ -200,14 +208,6 @@ impl App {
                         self.config.graph_style.prev()
                     };
                     self.set_toast(format!("Graph style: {}", self.config.graph_style.name()));
-                }
-                5 => {
-                    let options = STATS_INTERVAL_OPTIONS;
-                    let cur = self.config.stats_interval.as_str();
-                    let pos = options.iter().position(|&o| o == cur).unwrap_or(0);
-                    let next = if forward { (pos + 1) % options.len() } else { (pos + options.len() - 1) % options.len() };
-                    self.config.stats_interval = options[next].to_string();
-                    self.set_toast(format!("Rclone stats: {}", self.config.stats_interval));
                 }
                 _ => {}
             }

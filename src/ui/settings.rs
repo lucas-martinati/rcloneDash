@@ -217,6 +217,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             (SettingId::TimerInterval.label(), app.config.timer_interval.clone()),
             (SettingId::CloudSafetyNet.label(), full_sync_display),
             (SettingId::BandwidthLimit.label(), app.config.bwlimit.as_deref().unwrap_or("Disabled").to_string()),
+            (SettingId::StatsInterval.label(), app.config.stats_interval.clone()),
             (SettingId::LocalDirectory.label(), app.config.local_dir.clone()),
             (SettingId::RemoteStorage.label(), app.config.remote.clone()),
             (SettingId::ResyncAction.label(), "Run (--resync)".to_string()),
@@ -231,7 +232,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             (SettingId::MidPanelOrder.label(), app.config.mid_panel_order.name().to_string()),
             (SettingId::BorderStyle.label(), app.config.border_style.name().to_string()),
             (SettingId::GraphStyle.label(), app.config.graph_style.name().to_string()),
-            (SettingId::StatsInterval.label(), app.config.stats_interval.clone()),
         ]
     };
 
