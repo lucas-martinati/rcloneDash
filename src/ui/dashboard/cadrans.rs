@@ -299,28 +299,12 @@ pub fn render_metrics_box(
         Span::styled(next_sync_str, Style::default().fg(theme.text_bright)),
     ];
 
-    // 2. Dynamic transfer speed
-    let speed = if !app.live.transfer.speed.is_empty() && app.live.transfer.speed != "0 B/s" {
-        app.live.transfer.speed.clone()
-    } else if let Some((_, af)) = app.live.active_files.iter().find(|(_, f)| !f.speed.is_empty()) {
-        af.speed.clone()
-    } else {
-        "0 B/s".to_string()
-    };
-    let speed_label = if is_active { "live" } else { "last transfer" };
-
-    let line2_spans = vec![
-        Span::styled("Speed:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{:<13}", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("({})", speed_label), Style::default().fg(theme.text_muted)),
-    ];
-
-    // 3. Today statistics: successful syncs, errors, conflicts
+    // 2. Today statistics: successful syncs, errors, conflicts
     let (ok_today, err_today) = app.runs_today_stats();
     let conflicts = app.conflicts_today_stats();
-    let line3_spans = vec![
-        Span::styled("Today:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(" {} successful sync(s)", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+    let line2_spans = vec![
+        Span::styled("Today:     ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} successful sync(s)", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
         Span::styled(" · ", Style::default().fg(theme.border)),
         Span::styled(
             format!("{} err.", err_today),
@@ -333,7 +317,7 @@ pub fn render_metrics_box(
         ),
     ];
 
-    // 4. 7-day reliability calculation & solid progress bar
+    // 3. 7-day reliability calculation & solid progress bar
     let (rate, _) = app.calculate_success_rate();
     let bar_width = 8usize.min((inner.width.saturating_sub(48) / 2) as usize);
     let rel_color = if rate >= 90.0 {
@@ -345,33 +329,31 @@ pub fn render_metrics_box(
     };
     let rel_bar = crate::ui::sparkline::render_solid_bar(rate, bar_width, rel_color, app.config.graph_style, theme);
 
-    let mut line4_spans = vec![
+    let mut line3_spans = vec![
         Span::styled("Reliability: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
-    line4_spans.extend(rel_bar.clone());
-    line4_spans.push(Span::styled(
+    line3_spans.extend(rel_bar.clone());
+    line3_spans.push(Span::styled(
         format!(" {:>3.0}% success rate (7 days)", rate),
         Style::default().fg(rel_color).add_modifier(Modifier::BOLD),
     ));
 
     let mut lines = vec![Line::from(line1_spans)];
-    if inner.height >= 4 {
+    if inner.height >= 3 {
         lines.push(Line::from(line2_spans));
         lines.push(Line::from(line3_spans));
-        lines.push(Line::from(line4_spans));
-    } else {
+    } else if inner.height >= 2 {
         let mut line2_compact = vec![
-            Span::styled("Speed: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("{:<8} ", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("Today: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{} ok ", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled("│ Rel: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         ];
         line2_compact.extend(rel_bar);
         line2_compact.push(Span::styled(
-            format!(" {:>3.0}% (7d)", rate),
+            format!(" {:>3.0}%", rate),
             Style::default().fg(rel_color).add_modifier(Modifier::BOLD),
         ));
         lines.push(Line::from(line2_compact));
-        lines.push(Line::from(line3_spans));
     }
 
     let p = Paragraph::new(lines);

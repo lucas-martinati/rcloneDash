@@ -22,6 +22,15 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
 
     let mut line_spans = Vec::new();
 
+    let fill_char = match app.config.graph_style {
+        crate::config::GraphStyleChoice::Braille => "⣿",
+        crate::config::GraphStyleChoice::Blocks => "█",
+    };
+    let (beam_low, beam_mid, beam_high) = match app.config.graph_style {
+        crate::config::GraphStyleChoice::Braille => ("⣤", "⣶", "⣿"),
+        crate::config::GraphStyleChoice::Blocks => ("▒", "▓", "█"),
+    };
+
     if is_syncing {
         let live_pct = app.live.overall_progress_pct();
 
@@ -59,9 +68,9 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
                 for i in 0..bar_w {
                     if i < filled {
-                        line_spans.push(Span::styled("█", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+                        line_spans.push(Span::styled(fill_char, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
                     } else {
-                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
@@ -114,14 +123,14 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                     if pos >= start && pos < head {
                         let rel = pos - start;
                         if rel == 0 || rel == (beam_len as isize - 1) {
-                            line_spans.push(Span::styled("▒", Style::default().fg(theme.green)));
+                            line_spans.push(Span::styled(beam_low, Style::default().fg(theme.green)));
                         } else if rel == 1 || rel == (beam_len as isize - 2) {
-                            line_spans.push(Span::styled("▓", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+                            line_spans.push(Span::styled(beam_mid, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
                         } else {
-                            line_spans.push(Span::styled("█", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
+                            line_spans.push(Span::styled(beam_high, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
                         }
                     } else {
-                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
@@ -173,9 +182,9 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
                 for i in 0..bar_w {
                     if i < filled {
-                        line_spans.push(Span::styled("█", Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
+                        line_spans.push(Span::styled(fill_char, Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
                     } else {
-                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
@@ -193,9 +202,9 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 line_spans.push(Span::styled("[", Style::default().fg(theme.border)));
                 for i in 0..bar_w {
                     if i < filled {
-                        line_spans.push(Span::styled("█", Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
+                        line_spans.push(Span::styled(fill_char, Style::default().fg(bar_color).add_modifier(Modifier::BOLD)));
                     } else {
-                        line_spans.push(Span::styled("░", Style::default().fg(theme.border)));
+                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));

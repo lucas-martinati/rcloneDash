@@ -165,7 +165,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
     let diff_chunk = if has_active_file && inner.height >= 5 {
         if let Some(af) = active_file {
             let other_count = app.live.active_files.len().saturating_sub(1);
-            let af_spans = format_active_file_spans(af, theme, inner.width, other_count);
+            let af_spans = format_active_file_spans(af, theme, inner.width, other_count, app.config.graph_style);
             f.render_widget(Paragraph::new(Line::from(af_spans)), v_chunks[2]);
         }
         v_chunks[3]
@@ -307,14 +307,20 @@ fn format_active_file_spans<'a>(
     theme: &ThemePalette,
     max_width: u16,
     other_count: usize,
+    graph_style: crate::config::GraphStyleChoice,
 ) -> Vec<Span<'a>> {
     let pct = af.pct.min(100);
     let bar_len = 14usize;
     let filled_len = (pct as usize * bar_len) / 100;
     let empty_len = bar_len.saturating_sub(filled_len);
 
-    let filled_str: String = "█".repeat(filled_len);
-    let empty_str: String = "░".repeat(empty_len);
+    let fill_char = match graph_style {
+        crate::config::GraphStyleChoice::Braille => "⣿",
+        crate::config::GraphStyleChoice::Blocks => "█",
+    };
+
+    let filled_str: String = fill_char.repeat(filled_len);
+    let empty_str: String = "·".repeat(empty_len);
 
     let speed_suffix = if !af.speed.is_empty() {
         format!(" ({})", af.speed)
@@ -344,7 +350,7 @@ fn format_active_file_spans<'a>(
         Span::styled(format!("{} ", display_name), Style::default().fg(theme.text_bright)),
         Span::styled("[", Style::default().fg(theme.border)),
         Span::styled(filled_str, Style::default().fg(theme.green)),
-        Span::styled(empty_str, Style::default().fg(theme.border)),
+        Span::styled(empty_str, Style::default().fg(theme.separator)),
         Span::styled("]", Style::default().fg(theme.border)),
         Span::styled(pct_text, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ];

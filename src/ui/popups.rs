@@ -386,16 +386,6 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
 
     let summary = DryRunSummary::from_logs(&app.dry_run_logs);
 
-    let status_str = if app.dry_run_running {
-        "⏳ Simulation in progress..."
-    } else if app.dry_run_logs.is_empty() {
-        "○ Ready to simulate"
-    } else if summary.has_errors {
-        "⚠ Finished with errors"
-    } else {
-        "✔ Simulation completed"
-    };
-
     let total_lines = app.dry_run_logs.len();
 
     // Approximate log height for outer scroll arrows/counter
@@ -423,9 +413,6 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         ModalContainerConfig {
             title_prefix: "🛡 Dry-Run Simulation",
             title_color: Some(theme.cyan),
-            title_extra: Some(vec![
-                Span::styled(format!(" │ {} ", status_str), Style::default().fg(theme.cyan)),
-            ]),
             nav_arrows: Some(NavArrowsConfig {
                 label: "scroll",
                 up_active: scroll > 0,
@@ -445,9 +432,15 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
     }
 
     // Split inner into:
-    // 1. Summary Card (5 lines if height >= 14, else 3 lines)
+    // 1. Summary Card (4 lines when ready/not started, 5 lines if running/completed and height >= 14, else 3 lines)
     // 2. Execution Logs (remainder)
-    let summary_height = if inner.height >= 14 { 5 } else { 3 };
+    let summary_height = if app.dry_run_logs.is_empty() && !app.dry_run_running {
+        4
+    } else if inner.height >= 14 {
+        5
+    } else {
+        3
+    };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([

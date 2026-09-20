@@ -2209,11 +2209,22 @@ use crate::monitor::history::{PastRun, RunStatus};
         let backend = TestBackend::new(100, 1);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        // 1. Idle mode with countdown
+        // 1. Idle mode with countdown (Blocks)
+        app.config.graph_style = crate::config::GraphStyleChoice::Blocks;
         app.service_info.timer_left = "3m 45s".to_string();
         terminal.draw(|f| {
             render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: 100, height: 1 });
         }).unwrap();
+        let buffer_blocks: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        assert!(buffer_blocks.contains('█') || buffer_blocks.contains('·'));
+
+        // 1b. Idle mode with countdown (Braille)
+        app.config.graph_style = crate::config::GraphStyleChoice::Braille;
+        terminal.draw(|f| {
+            render_pulse_line(f, &app, &theme, Rect { x: 0, y: 0, width: 100, height: 1 });
+        }).unwrap();
+        let buffer_braille: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        assert!(buffer_braille.contains('⣿') || buffer_braille.contains('·'));
 
         // 2. Idle mode with disabled timer
         app.service_info.timer_left = "Disabled".to_string();
