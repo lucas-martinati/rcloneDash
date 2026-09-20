@@ -2113,6 +2113,18 @@ use crate::monitor::history::{PastRun, RunStatus};
             }
         }).collect();
 
+        // Vérifier que le logo complet (83 caractères) n'est pas tronqué et contient la lettre 'H'
+        let buffer = terminal.backend().buffer();
+        let rendered_text: String = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered_text.contains("██╗  ██╗"), "Le logo ne doit pas être tronqué sur le dashboard vide (la lettre H doit être complète)");
+
         assert!(toggle_actions.contains(&1));
         assert!(toggle_actions.contains(&2));
         assert!(toggle_actions.contains(&3));

@@ -268,7 +268,7 @@ pub fn render_empty_dashboard(
     use ratatui::layout::Alignment;
 
     let is_wide = area.width >= 86;
-    let logo_w: u16 = 78.min(area.width);
+    let logo_w: u16 = if is_wide { 86.min(area.width) } else { 83.min(area.width) };
     let logo_h: u16 = if is_wide { 6 } else { 5 };
     let total_h: u16 = logo_h + 11;
     let block_w = logo_w.max(34);
