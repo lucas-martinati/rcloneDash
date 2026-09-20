@@ -388,7 +388,7 @@ impl DryRunSummary {
                         s.path2_new += 1;
                     } else if ll.contains("file changed") {
                         s.path2_modified += 1;
-                    } else if ll.contains("file was deleted") || ll.contains("file deleted") || ll.contains("queue delete") {
+                    } else if ll.contains("file was deleted") || ll.contains("file deleted") {
                         s.path2_deleted += 1;
                     }
                 } else if is_remote {
@@ -396,7 +396,7 @@ impl DryRunSummary {
                         s.path1_new += 1;
                     } else if ll.contains("file changed") {
                         s.path1_modified += 1;
-                    } else if ll.contains("file was deleted") || ll.contains("file deleted") || ll.contains("queue delete") {
+                    } else if ll.contains("file was deleted") || ll.contains("file deleted") {
                         s.path1_deleted += 1;
                     }
                 }
@@ -476,6 +476,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         .split(inner);
 
     // 1. Render Summary Card
+    f.render_widget(Clear, chunks[0]);
     let summary_block = Block::default()
         .borders(Borders::ALL)
         .border_type(app.border_type())
@@ -488,6 +489,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
 
     let s_inner = summary_block.inner(chunks[0]);
     f.render_widget(summary_block, chunks[0]);
+    f.render_widget(Clear, s_inner);
 
     if s_inner.height > 0 {
         let mut summary_lines = Vec::new();
@@ -559,6 +561,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
     }
 
     // 2. Render Execution Logs
+    f.render_widget(Clear, chunks[1]);
     let logs_block = Block::default()
         .borders(Borders::ALL)
         .border_type(app.border_type())
@@ -571,6 +574,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
 
     let logs_inner = logs_block.inner(chunks[1]);
     f.render_widget(logs_block, chunks[1]);
+    f.render_widget(Clear, logs_inner);
 
     let actual_visible_height = logs_inner.height as usize;
     let actual_max_scroll = total_lines.saturating_sub(actual_visible_height);

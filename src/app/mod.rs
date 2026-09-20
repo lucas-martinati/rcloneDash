@@ -801,24 +801,45 @@ impl App {
         let remote = self.config.remote.clone();
         let local_dir = config::expand_tilde(&self.config.local_dir).to_string_lossy().to_string();
         let filters_path = config::filters_file().to_string_lossy().to_string();
+        let rclone_conf_path = config::rclone_config_file().to_string_lossy().to_string();
 
         let (tx, rx) = std::sync::mpsc::channel();
         self.dry_run_rx = Some(rx);
 
         std::thread::spawn(move || {
-            let output = std::process::Command::new("rclone")
-                .args(["bisync", &remote, &local_dir, "--dry-run", "-v", "--tpslimit", "8", "--filter-from", &filters_path])
-                .output();
+            let mut cmd = std::process::Command::new("rclone");
+            cmd.args([
+                "bisync",
+                &remote,
+                &local_dir,
+                "--dry-run",
+                "-v",
+                "--tpslimit",
+                "8",
+                "--filter-from",
+                &filters_path,
+                "--drive-skip-shortcuts",
+                "--drive-skip-gdocs",
+                "--conflict-resolve",
+                "newer",
+                "--resilient",
+            ]);
+            if std::path::Path::new(&rclone_conf_path).exists() {
+                cmd.args(["--config", &rclone_conf_path]);
+            }
+            let output = cmd.output();
 
             let mut lines = Vec::new();
             match output {
                 Ok(out) => {
                     let s_out = String::from_utf8_lossy(&out.stdout);
                     let s_err = String::from_utf8_lossy(&out.stderr);
-                    for l in s_out.lines().chain(s_err.lines()) {
-                        let trimmed = l.trim();
-                        if !trimmed.is_empty() {
-                            lines.push(trimmed.to_string());
+                    for chunk in s_out.lines().chain(s_err.lines()) {
+                        for raw_line in chunk.split('\r') {
+                            let clean = crate::monitor::streamer::strip_ansi(raw_line).trim().to_string();
+                            if !clean.is_empty() {
+                                lines.push(clean);
+                            }
                         }
                     }
                     if lines.is_empty() {
