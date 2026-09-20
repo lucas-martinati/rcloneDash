@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, HitAction, Hitbox};
+use crate::ui::container::centered_fixed_rect;
 use crate::ui::theme::ThemePalette;
 
 // Standard ANSI Shadow logo for RCLONEDASH
@@ -198,15 +199,4 @@ fn render_ascii_button(
 
     let p = Paragraph::new(p_lines);
     f.render_widget(p, area);
-}
-
-pub fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
-    let x = r.x + r.width.saturating_sub(width) / 2;
-    let y = r.y + r.height.saturating_sub(height) / 2;
-    Rect {
-        x,
-        y,
-        width: width.min(r.width),
-        height: height.min(r.height),
-    }
 }
