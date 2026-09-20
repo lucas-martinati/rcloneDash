@@ -63,9 +63,21 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         container_area
     };
 
-    let bg = app.border_glyphs();
-    let total_opts = app.settings_items_count();
-    let cur_opt = (app.settings_selected_idx + 1).min(total_opts);
+    use crate::config::{SettingCategory, SettingId};
+
+    // Settings data based on active tab
+    let current_cat = SettingCategory::ALL.get(app.settings_tab).copied().unwrap_or(SettingCategory::Rclone);
+    let settings: Vec<(&str, String)> = SettingId::for_category(current_cat)
+        .into_iter()
+        .map(|s| (s.label(), app.setting_value(s)))
+        .collect();
+
+    let total_opts = settings.len();
+    let row_height: u16 = 2; // 1 label line + 1 value line
+    let visible_count = (box_h.saturating_sub(4) as usize / row_height as usize).max(1);
+    let total_pages = total_opts.div_ceil(visible_count);
+    let cur_page = (app.settings_selected_idx / visible_count) + 1;
+    let page_label = format!("page {}/{}", cur_page, total_pages.max(1));
 
     let can_up = total_opts > 1 && app.settings_selected_idx > 0;
     let can_down = total_opts > 1 && app.settings_selected_idx < total_opts.saturating_sub(1);
@@ -103,25 +115,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         ]
     };
 
-    // Tab bar title in outer block: tab→   [1 rclone]    2ui
-    let mut title_extra = vec![
-        Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(theme.red)),
-        Span::styled("Tab", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-        Span::styled(" ⇆ ", Style::default().fg(Color::White)),
-    ];
-    for (i, cat) in config::SettingCategory::ALL.iter().enumerate() {
-        if i > 0 {
-            title_extra.push(Span::styled("   ", Style::default().fg(theme.border)));
-        }
-        let is_active = i == app.settings_tab;
-        let label = format!("{}{}", i + 1, cat.short_name());
-        if is_active {
-            title_extra.push(Span::styled(format!("[{}]", label), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
-        } else {
-            title_extra.push(Span::styled(format!(" {} ", label), Style::default().fg(theme.text_muted)));
-        }
-    }
-
     let inner = render_modal_container(
         f,
         app,
@@ -130,14 +123,14 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         ModalContainerConfig {
             title_prefix: "settings",
             title_color: Some(theme.red),
-            title_extra: Some(title_extra),
+            title_extra: None,
             nav_arrows: Some(NavArrowsConfig {
-                label: "select",
+                label: &page_label,
                 up_active: can_up,
                 down_active: can_down,
             }),
             action_shortcuts: Some(vec![mid_cmd]),
-            counter: Some((cur_opt, total_opts)),
+            counter: None,
             border_color: theme.red,
             show_close_button: true,
             ..Default::default()
@@ -145,39 +138,73 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         hitboxes,
     );
 
-    // Hitbox for "Tab ⇆" (after "settings ┐┌" -> area.x + 12)
-    hitboxes.push(Hitbox {
-        rect: Rect {
-            x: area.x + 12,
-            y: area.y,
-            width: 6,
-            height: 1,
-        },
-        action: HitAction::SettingsTab((app.settings_tab + 1) % config::SettingCategory::ALL.len()),
-    });
-    // Dynamic hitboxes for individual tabs
-    let mut tab_x = area.x + 18;
+    if inner.height < 6 || inner.width < 40 {
+        return;
+    }
+
+    let tab_y = inner.y;
+    let divider_y = inner.y + 1;
+    let content_area = Rect {
+        x: inner.x,
+        y: inner.y + 2,
+        width: inner.width,
+        height: inner.height.saturating_sub(2),
+    };
+
+    // 1. Render tab bar row at top of inner area: tab→   [rclone]    2ui (btop++ style)
+    let mut tab_spans = vec![
+        Span::raw(" "),
+        Span::styled("tab→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::raw("   "),
+    ];
+    let mut tab_x = inner.x + 8;
     for (i, cat) in config::SettingCategory::ALL.iter().enumerate() {
-        let label = format!("{}{}", i + 1, cat.short_name());
-        let tab_len = (label.chars().count() + 2) as u16;
+        if i > 0 {
+            tab_spans.push(Span::raw("    "));
+            tab_x += 4;
+        }
+        let is_active = i == app.settings_tab;
+        let short_name = cat.short_name();
+        let num = superscript_digit(i + 1);
+        let tab_len = if is_active {
+            tab_spans.push(Span::styled("[", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+            tab_spans.push(Span::styled(num, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+            tab_spans.push(Span::styled(short_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
+            tab_spans.push(Span::styled("]", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+            (2 + num.chars().count() + short_name.chars().count()) as u16
+        } else {
+            tab_spans.push(Span::styled(num, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+            tab_spans.push(Span::styled(short_name, Style::default().fg(Color::Rgb(220, 222, 230))));
+            (num.chars().count() + short_name.chars().count()) as u16
+        };
+
         hitboxes.push(Hitbox {
             rect: Rect {
                 x: tab_x,
-                y: area.y,
+                y: tab_y,
                 width: tab_len,
                 height: 1,
             },
             action: HitAction::SettingsTab(i),
         });
-        tab_x += tab_len + 3; // +3 for spacing "   "
+        tab_x += tab_len;
     }
 
-    if inner.height < 4 || inner.width < 40 {
-        return;
-    }
+    // Hitbox for "tab→" prefix to cycle tabs
+    hitboxes.push(Hitbox {
+        rect: Rect {
+            x: inner.x + 1,
+            y: tab_y,
+            width: 5,
+            height: 1,
+        },
+        action: HitAction::SettingsTab((app.settings_tab + 1) % config::SettingCategory::ALL.len()),
+    });
 
-    // Direct horizontal split for the two columns
-    let left_col_w = 30u16.min(inner.width.saturating_sub(20));
+    f.render_widget(Paragraph::new(Line::from(tab_spans)), Rect { x: inner.x, y: tab_y, width: inner.width, height: 1 });
+
+    // 2. Direct horizontal split for the two columns under the divider
+    let left_col_w = 34u16.min(content_area.width.saturating_sub(24));
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -185,36 +212,62 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             Constraint::Length(1),
             Constraint::Min(20),
         ])
-        .split(inner);
+        .split(content_area);
 
     let left_area = cols[0];
     let sep_area = cols[1];
     let right_area = cols[2];
 
-    // Vertical separator
-    let sep_lines: Vec<Line> = (0..inner.height)
-        .map(|_| Line::from(Span::styled("│", Style::default().fg(theme.border))))
+    // 3. Render horizontal divider line: ├──────────┬──────────┤ (btop++ style)
+    let (h_char, v_char, cross_top, cross_bot, cross_left, cross_right) = match app.config.border_style {
+        config::BorderStyleChoice::Double => ("═", "║", "╦", "╩", "╠", "╣"),
+        config::BorderStyleChoice::Thick => ("━", "┃", "┳", "┻", "┣", "┫"),
+        _ => ("─", "│", "┬", "┴", "├", "┤"),
+    };
+
+    // Left junction on outer box border
+    f.render_widget(
+        Paragraph::new(cross_left).style(Style::default().fg(theme.red)),
+        Rect { x: area.x, y: divider_y, width: 1, height: 1 },
+    );
+
+    // Horizontal divider inside inner with T-junction at column separator
+    let left_w = (sep_area.x.saturating_sub(inner.x)) as usize;
+    let right_w = ((inner.x + inner.width).saturating_sub(sep_area.x + 1)) as usize;
+    let div_line = Line::from(vec![
+        Span::styled(h_char.repeat(left_w), Style::default().fg(theme.red)),
+        Span::styled(cross_top, Style::default().fg(theme.red)),
+        Span::styled(h_char.repeat(right_w), Style::default().fg(theme.red)),
+    ]);
+    f.render_widget(Paragraph::new(div_line), Rect { x: inner.x, y: divider_y, width: inner.width, height: 1 });
+
+    // Right junction on outer box border
+    f.render_widget(
+        Paragraph::new(cross_right).style(Style::default().fg(theme.red)),
+        Rect { x: area.x + area.width.saturating_sub(1), y: divider_y, width: 1, height: 1 },
+    );
+
+    // Bottom T-junction on bottom border
+    f.render_widget(
+        Paragraph::new(cross_bot).style(Style::default().fg(theme.red)),
+        Rect { x: sep_area.x, y: area.y + area.height.saturating_sub(1), width: 1, height: 1 },
+    );
+
+    // Vertical separator down the middle
+    let sep_lines: Vec<Line> = (0..content_area.height)
+        .map(|_| Line::from(Span::styled(v_char, Style::default().fg(theme.red))))
         .collect();
     f.render_widget(Paragraph::new(sep_lines), sep_area);
 
-    use crate::config::{SettingCategory, SettingId};
-
-    // Settings data based on active tab
-    let current_cat = SettingCategory::ALL.get(app.settings_tab).copied().unwrap_or(SettingCategory::Rclone);
-    let settings: Vec<(&str, String)> = SettingId::for_category(current_cat)
-        .into_iter()
-        .map(|s| (s.label(), app.setting_value(s)))
-        .collect();
-
     // Render left column with smooth scrolling
     let mut left_lines = Vec::new();
-    let row_height: u16 = 2; // 1 label line + 1 value line
-    let visible_count = (left_area.height as usize / row_height as usize).max(1);
     let scroll_offset = if app.settings_selected_idx >= visible_count {
         app.settings_selected_idx - visible_count + 1
     } else {
         0
     };
+
+    let highlight_bg = Color::Rgb(95, 30, 30); // btop++ dark red / maroon banner
 
     for (visible_pos, i) in (scroll_offset..settings.len()).take(visible_count).enumerate() {
         let (label, val) = &settings[i];
@@ -248,11 +301,25 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         let setting_kind = setting_opt.map(|s| s.kind()).unwrap_or(config::SettingKind::Cycle);
 
         if is_selected {
-            // Highlight background banner (deep red/brown #5A2222)
-            let highlight_bg = Color::Rgb(90, 32, 32);
+            // Choice counter (e.g. " 1/8") for cycle options in btop++ style
+            let cur_choice_info = if let Some(choices) = setting_opt.and_then(|s| s.choices()) {
+                if !choices.is_empty() {
+                    let norm_cur = val.trim().to_lowercase();
+                    let pos = choices.iter().position(|c| {
+                        let norm_c = c.trim().to_lowercase();
+                        norm_c == norm_cur || (c == "Disabled" && (norm_cur.is_empty() || norm_cur == "disabled"))
+                    }).unwrap_or(0);
+                    format!(" {}/{}", pos + 1, choices.len())
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
 
+            let label_with_count = format!("{}{}", label, cur_choice_info);
             let line1 = Line::from(vec![
-                Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("{:^width$}", label_with_count, width = w), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
             ]);
 
             let inner_w = w.saturating_sub(4);
@@ -261,20 +328,35 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 let visible = format_scrolled_input_with_cursor(buf, app.edit_cursor(), inner_w);
                 let edit_centered = format!("{:^width$}", visible, width = inner_w);
                 Line::from(vec![
-                    Span::styled(format!("[{}]", edit_centered), Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
+                    Span::styled("[ ", Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
+                    Span::styled(edit_centered, Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
+                    Span::styled(" ]", Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
                 ])
             } else {
                 let truncated = truncate_chars(val, inner_w);
                 let val_centered = format!("{:^width$}", truncated, width = inner_w);
                 match setting_kind {
-                    config::SettingKind::TextInput | config::SettingKind::Action => {
-                        Line::from(vec![
-                            Span::styled(format!("↵ {} ↵", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                        ])
-                    }
                     config::SettingKind::Cycle => {
                         Line::from(vec![
-                            Span::styled(format!("← {} →", val_centered), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled("←", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(" ", Style::default().bg(highlight_bg)),
+                            Span::styled(val_centered, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(" ", Style::default().bg(highlight_bg)),
+                            Span::styled("→", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                        ])
+                    }
+                    config::SettingKind::TextInput => {
+                        Line::from(vec![
+                            Span::styled("  ", Style::default().bg(highlight_bg)),
+                            Span::styled(val_centered, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled("  ", Style::default().bg(highlight_bg)),
+                        ])
+                    }
+                    config::SettingKind::Action => {
+                        Line::from(vec![
+                            Span::styled("↵ ", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(val_centered, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(" ↵", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                         ])
                     }
                 }
@@ -285,7 +367,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         } else {
             let truncated = truncate_chars(val, w);
             let line1 = Line::from(vec![
-                Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::Rgb(220, 222, 230))),
+                Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::White)),
             ]);
             let line2 = Line::from(vec![
                 Span::styled(format!("{:^width$}", truncated, width = w), Style::default().fg(Color::Rgb(165, 170, 185))),
@@ -397,8 +479,14 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         height: right_area.height,
     };
 
+    let formatted_title = if desc_title.ends_with('.') {
+        desc_title.to_string()
+    } else {
+        format!("{}.", desc_title)
+    };
+
     let mut desc_lines = vec![
-        Line::from(Span::styled(desc_title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(formatted_title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
         Line::from(""),
     ];
 
@@ -567,6 +655,21 @@ pub fn format_scrolled_input_with_cursor(buf: &str, cursor_pos: usize, max_w: us
             res.push('…');
         }
         res
+    }
+}
+
+fn superscript_digit(n: usize) -> &'static str {
+    match n {
+        1 => "¹",
+        2 => "²",
+        3 => "³",
+        4 => "⁴",
+        5 => "⁵",
+        6 => "⁶",
+        7 => "⁷",
+        8 => "⁸",
+        9 => "⁹",
+        _ => "",
     }
 }
 

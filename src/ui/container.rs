@@ -10,8 +10,8 @@ use crate::app::{App, HitAction, Hitbox, Modal};
 use crate::ui::theme::ThemePalette;
 
 #[derive(Clone, Copy, Debug)]
-pub struct NavArrowsConfig {
-    pub label: &'static str,
+pub struct NavArrowsConfig<'a> {
+    pub label: &'a str,
     pub up_active: bool,
     pub down_active: bool,
 }
@@ -20,7 +20,7 @@ pub struct ModalContainerConfig<'a> {
     pub title_prefix: &'a str,
     pub title_color: Option<Color>,
     pub title_extra: Option<Vec<Span<'a>>>,
-    pub nav_arrows: Option<NavArrowsConfig>,
+    pub nav_arrows: Option<NavArrowsConfig<'a>>,
     pub action_shortcuts: Option<Vec<Vec<Span<'a>>>>,
     pub bottom_shortcuts: Option<Line<'a>>,
     pub counter: Option<(usize, usize)>, // (current 1-based, total)

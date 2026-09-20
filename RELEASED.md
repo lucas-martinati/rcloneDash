@@ -1,5 +1,28 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.2] - Refonte UI Settings (btop++ style), Factorisation & Raccourcis Exposants
+
+Cette version apporte une refonte visuelle majeure du panneau des paramètres inspirée par l'ergonomie et l'esthétique de **btop++**, ainsi qu'une factorisation en profondeur de l'architecture des réglages.
+
+---
+
+### 🌟 Nouveautés et Améliorations
+
+#### 1. 🎨 Refonte de la Modale Settings (Style btop++)
+- **Ligne de catégories dédiée & intégrée** : la barre des onglets prend place directement à l'intérieur du conteneur (`tab→ [¹rclone]    ²ui`), séparée du contenu par une ligne horizontale complète avec de véritables jonctions en grille (`├────────────┬────────────┤`).
+- **Raccourcis en exposant** : les numéros de bascule rapide d'onglet sont désormais affichés en exposants (`¹`, `²`), en parfaite cohérence avec les cadrans du tableau de bord.
+- **Bannière pleine largeur & compteur d'options** : l'élément actif dispose d'un fond bordeaux/marron `#5F1E1E` sur toute la colonne de gauche, avec affichage dynamique du compteur d'options (ex. `Color theme 1/8`, `Auto-Sync Interval 4/7`).
+- **Flèches calées aux extrémités** : les flèches `←` et `→` sont positionnées aux bords gauche et droit de la bannière avec la valeur sélectionnée centrée entre elles.
+- **Indicateur de pagination intégré** : affichage de `↑ page 1/2 ↓` dans la bordure inférieure sous la colonne des réglages avec activation colorée des flèches si le défilement est possible.
+
+#### 2. ⚙️ Factorisation Complète de l'Architecture des Paramètres
+- **Enums canoniques & sources uniques de vérité** : introduction de `SettingCategory` et structuration de `SettingId::ALL` et `SettingId::for_category()` pour éliminer toute duplication d'index ou de comptage en dur.
+- **Formattage centralisé** : factorisation de `app.setting_value(setting)` assurant la stricte cohérence entre la colonne de sélection et le panneau de documentation.
+- **Boîte de description générique** : remplacement des blocs de match répétés par un dispatch unifié des options cycliques.
+- **Sécurité UTF-8** : découpage sécurisé par caractères (`char`) et non plus par octets bruts pour l'ID Google OAuth afin d'éliminer tout risque de panic sur des caractères multi-octets.
+
+---
+
 ## [v1.0.1] - Auto-Update, Centralisation des Paramètres & Optimisations UI
 
 Cette version de maintenance et d'évolution apporte l'auto-updater intégré pour rcloneDash afin de simplifier toutes les futures mises à jour, ainsi que des améliorations significatives sur la gestion des paramètres, le défilement et la propreté du code.
