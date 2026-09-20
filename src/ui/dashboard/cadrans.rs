@@ -179,7 +179,7 @@ pub fn render_disks_cloud_box(
     } else {
         let line3_compact = vec![
             Span::styled("Folder:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("{} ", &app.config.local_dir), Style::default().fg(theme.text_bright)),
+            Span::styled(format!("{} ", app.config.local_dir), Style::default().fg(theme.text_bright)),
             Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
             Span::styled(" │ Safety: ", Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),

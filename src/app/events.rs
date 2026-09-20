@@ -813,14 +813,12 @@ impl App {
                                         }
                                     }
                                 }
-                                FirstRunField::ClientSecretInput => {
-                                    if state.client_secret_cursor > 0 {
-                                        let mut chars: Vec<char> = state.client_secret.chars().collect();
-                                        if state.client_secret_cursor <= chars.len() {
-                                            chars.remove(state.client_secret_cursor - 1);
-                                            state.client_secret = chars.into_iter().collect();
-                                            state.client_secret_cursor -= 1;
-                                        }
+                                FirstRunField::ClientSecretInput if state.client_secret_cursor > 0 => {
+                                    let mut chars: Vec<char> = state.client_secret.chars().collect();
+                                    if state.client_secret_cursor <= chars.len() {
+                                        chars.remove(state.client_secret_cursor - 1);
+                                        state.client_secret = chars.into_iter().collect();
+                                        state.client_secret_cursor -= 1;
                                     }
                                 }
                                 _ => {}
@@ -1065,15 +1063,13 @@ impl App {
                                     }
                                 }
                             }
-                            KeyCode::Char(c) => {
-                                if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                                    if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
-                                        let mut chars: Vec<char> = buffer.chars().collect();
-                                        let cur = (*cursor).min(chars.len());
-                                        chars.insert(cur, c);
-                                        *buffer = chars.into_iter().collect();
-                                        *cursor = cur + 1;
-                                    }
+                            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                if let EditState::Setting { buffer, cursor, .. } = &mut self.edit_state {
+                                    let mut chars: Vec<char> = buffer.chars().collect();
+                                    let cur = (*cursor).min(chars.len());
+                                    chars.insert(cur, c);
+                                    *buffer = chars.into_iter().collect();
+                                    *cursor = cur + 1;
                                 }
                             }
                             _ => {}
@@ -1329,11 +1325,9 @@ impl App {
                             self.selected_filter_idx = 0;
                             self.filter_scroll_offset = 0;
                         }
-                        KeyCode::End => {
-                            if !self.filters.is_empty() {
-                                self.selected_filter_idx = self.filters.len() - 1;
-                                self.ensure_filter_visible(vp);
-                            }
+                        KeyCode::End if !self.filters.is_empty() => {
+                            self.selected_filter_idx = self.filters.len() - 1;
+                            self.ensure_filter_visible(vp);
                         }
                         _ => {}
                     }
@@ -1449,10 +1443,8 @@ impl App {
                         KeyCode::Char('o') => {
                             self.modal = Modal::Settings;
                         }
-                        KeyCode::Char('y') | KeyCode::Char('c') => {
-                            if has_errors || files_len > 0 {
-                                self.copy_history_errors(run_idx_val);
-                            }
+                        KeyCode::Char('y') | KeyCode::Char('c') if has_errors || files_len > 0 => {
+                            self.copy_history_errors(run_idx_val);
                         }
                         _ => {}
                     }
@@ -1776,17 +1768,13 @@ impl App {
                     }
                 }
             }
-            KeyCode::Left => {
-                if self.focused_panel == FocusedPanel::Logs {
-                    self.set_log_filter(self.log_filter.prev());
-                    return Action::None;
-                }
+            KeyCode::Left if self.focused_panel == FocusedPanel::Logs => {
+                self.set_log_filter(self.log_filter.prev());
+                return Action::None;
             }
-            KeyCode::Right => {
-                if self.focused_panel == FocusedPanel::Logs {
-                    self.set_log_filter(self.log_filter.next());
-                    return Action::None;
-                }
+            KeyCode::Right if self.focused_panel == FocusedPanel::Logs => {
+                self.set_log_filter(self.log_filter.next());
+                return Action::None;
             }
             _ => {}
         }

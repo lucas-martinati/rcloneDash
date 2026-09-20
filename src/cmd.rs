@@ -7,25 +7,34 @@ pub fn open_path(path: &Path) -> Result<(), String> {
         return Err(format!("Path does not exist: {:?}", path));
     }
 
-    let res = Command::new("xdg-open")
-        .arg(path)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+    #[cfg(test)]
+    {
+        let _ = path;
+        Ok(())
+    }
 
-    match res {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            // Fallback to gio open if xdg-open fails
-            Command::new("gio")
-                .args(["open", path.to_str().unwrap_or("")])
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .map(|_| ())
-                .map_err(|e| format!("Failed to open path: {}", e))
+    #[cfg(not(test))]
+    {
+        let res = Command::new("xdg-open")
+            .arg(path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+
+        match res {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                // Fallback to gio open if xdg-open fails
+                Command::new("gio")
+                    .args(["open", path.to_str().unwrap_or("")])
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|e| format!("Failed to open path: {}", e))
+            }
         }
     }
 }
