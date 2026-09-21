@@ -28,6 +28,14 @@ Cette version apporte des notifications de bureau interactives en cas d'échec d
 #### 4. ⏱️ Option de suspension du Timer (« Never »)
 - **Pause indéfinie du timer** : ajout de l'option `never` dans les paramètres d'intervalle de timer pour suspendre totalement la synchronisation périodique automatique sans désactiver manuellement les services.
 
+#### 5. 🛠️ Harmonisation de l'Installation & Élimination des Doublons
+- **Gestion intelligente paquet `.deb` vs installation utilisateur** : `rclonedash-setup` (dans le `.deb`) configure les services sans dupliquer le binaire dans `~/.local/bin` ni le lanceur dans `~/.local/share/applications`.
+- **Auto-Updater ciblé (`rclonedash --update`)** : met à jour directement le paquet `.deb` via `apt` s'il est installé au niveau système (`/usr/bin`), ou l'archive utilisateur dans `~/.local/bin`, garantissant une installation propre et sans version fantôme.
+- **Nettoyage automatique des résidus** : détection et purge automatique des anciens binaires obsolètes dans `~/.cargo/bin` et `/usr/bin`.
+
+#### 6. 🖥️ Correctif Visuel du Dashboard Vide
+- **Affichage complet du logo ASCII** : élargissement de la boîte d'affichage du dashboard vide (de 78 à 86 colonnes) pour éviter la troncature de la lettre « H » de `LOGO_RCLONEDASH`.
+
 ---
 
 ## [v1.0.2] - Refonte UI Settings (btop++ style), Factorisation & Raccourcis Exposants
