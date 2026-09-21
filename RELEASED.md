@@ -1,5 +1,32 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.32] - Découplage des Logs via --use-json-log & Architecture d'Événements Typés
+
+Cette version découple entièrement RcloneDash du format de log textuel de rclone grâce à l'intégration de `--use-json-log` (Go `slog`), introduit une architecture d'événements typés universelle (`SyncEvent`, `FileAction`), assainit l'historique et les détails de synchronisation en excluant les répertoires, et fiabilise le calcul de la durée des synchronisations passées.
+
+---
+
+### 🌟 Nouveautés et Améliorations
+
+#### 1. 📋 Découplage des Logs rclone via `--use-json-log` (slog)
+- **Format structuré officiel** : activation de l'option `--use-json-log` dans le script de garde du bisync. Les informations de transfert ne dépendent plus de regex fragiles sur stdout.
+- **Désérialisation native Serde** : extraction automatique et typée des fichiers synchronisés (`object`), statistiques de transfert (`stats`), métriques de progression (`transferring`) et erreurs (`errors`).
+- **Rétrocompatibilité totale** : conservation transparente du parseur textuel hérité pour les anciens logs et les messages système non-JSON (fallback automatique).
+
+#### 2. ⚡ Architecture d'Événements Typés (`events.rs`)
+- **Modèle universel `SyncEvent`** : découplage entre la couche d'acquisition des logs et l'interface utilisateur grâce à des événements normalisés (`SyncStarted`, `PhaseChanged`, `StatsUpdated`, `FileSynced`, `DiffFound`, `ResyncRequired`, `SyncCompleted`).
+- **Enum `FileAction` unifié** : typage strict des actions de fichiers (`New`, `Modified`, `Deleted`, `Copied`) avec `Display` et `as_str()` comme source unique de vérité.
+
+#### 3. 📁 Assainissement de l'Historique & Détails de Synchronisation
+- **Filtrage des répertoires** : exclusion des opérations de métadonnées sur les répertoires (`Set directory modification time`) pour ne conserver que les véritables fichiers dans l'historique et la modale *Run Details*.
+- **Comptage exact** : élimination des faux positifs dans les compteurs de fichiers modifiés.
+
+#### 4. ⏱️ Correction du Calcul de Durée (`duration`)
+- **Durée propre sans résidus** : élimination du bloc d'extraction hérité qui capturait les retours à la ligne échappés (`\n\n"`) issus du JSON. La durée provient désormais directement du champ numérique `elapsedTime` ou de la regex textuelle assainie.
+- **Suppression du double parsing** : suppression de l'appel redondant `parse_synced_file` dans le module d'historique.
+
+---
+
 ## [v1.0.31] - Notifications Interactives, Icône Vectorielle Officielle & Harmonisation Système
 
 Cette version apporte des notifications de bureau interactives en cas d'échec de synchronisation avec ouverture directe du TUI au clic, une nouvelle identité visuelle avec l'icône vectorielle officielle **Dual-Sync**, l'intégration complète du raccourci de bureau (`.desktop`), un système de mise à jour exhaustif préservant les données utilisateurs, et l'option « Jamais » pour suspendre le timer de synchronisation automatique.
