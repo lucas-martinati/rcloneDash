@@ -280,7 +280,6 @@ APP_DIR="$HOME/.local/share/applications"
 mkdir -p "$APP_DIR"
 if [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
     BIN_PATH="$INSTALL_BIN_DIR/rclonedash"
-    [ -x "/usr/bin/rclonedash" ] && BIN_PATH="/usr/bin/rclonedash"
     sed -e "s|__BIN__|$BIN_PATH|g" "$TEMPLATE_DIR/rclonedash.desktop.template" > "$APP_DIR/rclonedash.desktop"
     chmod +x "$APP_DIR/rclonedash.desktop"
     ok "Desktop entry installed at $APP_DIR/rclonedash.desktop"

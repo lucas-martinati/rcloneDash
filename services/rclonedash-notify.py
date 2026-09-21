@@ -8,14 +8,14 @@ import shutil
 import subprocess
 
 def get_rclonedash_bin():
-    # Check PATH first
-    b = shutil.which("rclonedash")
-    if b:
-        return b
-    # Check ~/.local/bin
+    # Check ~/.local/bin first (standard user installation and updates)
     local_b = os.path.expanduser("~/.local/bin/rclonedash")
     if os.path.isfile(local_b) and os.access(local_b, os.X_OK):
         return local_b
+    # Check PATH
+    b = shutil.which("rclonedash")
+    if b:
+        return b
     # Check ~/.cargo/bin
     cargo_b = os.path.expanduser("~/.cargo/bin/rclonedash")
     if os.path.isfile(cargo_b) and os.access(cargo_b, os.X_OK):
