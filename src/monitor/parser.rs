@@ -407,6 +407,10 @@ pub fn format_log_line_for_display(line: &str) -> Vec<String> {
             // A. Fichier synchronisé (ex: "Documents/rapport.pdf: Copied (new)")
             if let Some(obj) = json_log.object {
                 let msg = json_log.msg.as_deref().unwrap_or("");
+                let msg_lower = msg.to_lowercase();
+                if msg_lower.contains("directory") || msg_lower.contains("setmodtime") {
+                    return Vec::new();
+                }
                 result.push(format!("{}: {}", obj, msg));
                 return result;
             }
@@ -431,6 +435,10 @@ pub fn format_log_line_for_display(line: &str) -> Vec<String> {
             if let Some(msg) = json_log.msg.as_deref() {
                 let clean = strip_ansi(msg);
                 let clean_trim = clean.trim();
+                let clean_lower = clean_trim.to_lowercase();
+                if clean_lower.contains("directory modification time") || clean_lower.contains("setmodtime") {
+                    return Vec::new();
+                }
                 if !clean_trim.is_empty() {
                     result.push(clean_trim.to_string());
                     return result;
@@ -443,6 +451,10 @@ pub fn format_log_line_for_display(line: &str) -> Vec<String> {
 
     // Ligne texte brute non-JSON (ou JSON invalide) : nettoyée des codes ANSI
     let clean = strip_ansi(trimmed);
+    let clean_lower = clean.to_lowercase();
+    if clean_lower.contains("set directory modification time") || clean_lower.contains("setmodtime") {
+        return Vec::new();
+    }
     let lines: Vec<String> = clean
         .lines()
         .map(|l| l.trim().to_string())
@@ -528,29 +540,42 @@ fn parse_json_event(log: RcloneJsonLog) -> Vec<SyncEvent> {
     // B. Fichier synchronisé
     if let Some(obj) = log.object {
         let msg = log.msg.as_deref().unwrap_or("");
-        let action = if msg.contains("Copied (new)") {
-            FileAction::New
-        } else if msg.contains("Deleted") {
-            FileAction::Deleted
-        } else {
-            FileAction::Modified
-        };
+        let msg_lower = msg.to_lowercase();
 
-        let time = if let Some(t_str) = log.time.as_deref() {
-            if let Some(pos) = t_str.find('T') {
-                t_str[pos + 1..].chars().take(8).collect()
+        // Ignorer les opérations de métadonnées sur les répertoires
+        if !msg_lower.contains("directory") && !msg_lower.contains("setmodtime") {
+            let action = if msg.contains("Copied (new)") {
+                Some(FileAction::New)
+            } else if msg.contains("Deleted") {
+                Some(FileAction::Deleted)
+            } else if msg.contains("Copied (replaced existing)")
+                || msg.contains("Updated file")
+                || msg.contains("Updated modification time")
+                || msg.contains("file changed")
+            {
+                Some(FileAction::Modified)
             } else {
-                chrono::Local::now().format("%H:%M:%S").to_string()
-            }
-        } else {
-            chrono::Local::now().format("%H:%M:%S").to_string()
-        };
+                None
+            };
 
-        events.push(SyncEvent::FileSynced(SyncedFile {
-            path: obj,
-            action,
-            time,
-        }));
+            if let Some(action) = action {
+                let time = if let Some(t_str) = log.time.as_deref() {
+                    if let Some(pos) = t_str.find('T') {
+                        t_str[pos + 1..].chars().take(8).collect()
+                    } else {
+                        chrono::Local::now().format("%H:%M:%S").to_string()
+                    }
+                } else {
+                    chrono::Local::now().format("%H:%M:%S").to_string()
+                };
+
+                events.push(SyncEvent::FileSynced(SyncedFile {
+                    path: obj,
+                    action,
+                    time,
+                }));
+            }
+        }
     }
 
     // C. Messages informatifs / phases / diffs
@@ -808,6 +833,16 @@ mod tests {
             }
             _ => panic!("Expected FileSynced event"),
         }
+    }
+
+    #[test]
+    fn test_parse_json_log_ignores_directory_modtime() {
+        let raw_json = r#"{"time":"2026-09-21T09:40:47.395205362+02:00","level":"info","msg":"Set directory modification time (using SetModTime)","object":"Cours/BUT_Info_S3"}"#;
+        let events = parse_log_line(raw_json);
+        assert!(events.is_empty(), "Directory modification time must NOT be treated as a synced file");
+
+        let display_lines = format_log_line_for_display(raw_json);
+        assert!(display_lines.is_empty(), "Directory modification time must NOT be displayed in logs");
     }
 
     #[test]
