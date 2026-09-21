@@ -36,13 +36,38 @@ export async function refresh() {
 }
 
 /* ═══════════════════════════════════════════════════
-   ACTIONS SYNC
+   ACTIONS SYNC — via modales de confirmation
+   (composants existants : .modal-overlay/.show, .btn, toasts)
    ═══════════════════════════════════════════════════ */
+export function openSyncModal() {
+  document.getElementById('sync-modal')?.classList.add('show');
+}
+export function closeSyncModal() {
+  document.getElementById('sync-modal')?.classList.remove('show');
+}
+export async function confirmSync() {
+  closeSyncModal();
+  await doSync();
+}
+
+export function openResyncModal() {
+  document.getElementById('resync-modal')?.classList.add('show');
+}
+export function closeResyncModal() {
+  document.getElementById('resync-modal')?.classList.remove('show');
+}
+export async function confirmResync() {
+  closeResyncModal();
+  await doResync();
+}
+
 export async function doSync() {
   let b = document.getElementById('bsync');
   let lbl = document.getElementById('bsync-lbl');
-  b.disabled = true;
-  lbl.textContent = 'Démarrage…';
+  let c = document.getElementById('sync-confirm-btn');
+  if (b) b.disabled = true;
+  if (c) c.disabled = true;
+  if (lbl) lbl.textContent = 'Démarrage…';
   try {
     let r = await fetch('/api/trigger', { method: 'POST' });
     let d = await r.json();
@@ -55,8 +80,9 @@ export async function doSync() {
     toast('Serveur injoignable — synchronisation non lancée', 'err');
   }
   setTimeout(function () {
-    b.disabled = false;
-    lbl.textContent = 'Synchroniser';
+    if (b) b.disabled = false;
+    if (c) c.disabled = false;
+    if (lbl) lbl.textContent = 'Synchroniser';
   }, 3000);
   setTimeout(refresh, 1500);
 }
@@ -80,18 +106,15 @@ export async function cancelSync() {
 }
 
 export async function doResync() {
-  if (
-    !confirm(
-      'Voulez-vous lancer une resynchronisation complète (--resync) ?\n\nCette opération reconstruit la base de comparaison locale et distante en conservant les fichiers les plus récents (--resync-mode newer).'
-    )
-  ) {
-    return;
-  }
   let bAlert = document.getElementById('btn-alert-resync');
+  let bSet = document.getElementById('btn-settings-resync');
+  let c = document.getElementById('resync-confirm-btn');
+  let prevAlert = bAlert ? bAlert.innerHTML : '';
   if (bAlert) {
     bAlert.disabled = true;
-    bAlert.textContent = 'En cours…';
   }
+  if (bSet) bSet.disabled = true;
+  if (c) c.disabled = true;
   try {
     let r = await fetch('/api/resync', { method: 'POST' });
     let d = await r.json();
@@ -105,8 +128,10 @@ export async function doResync() {
   } finally {
     if (bAlert) {
       bAlert.disabled = false;
-      bAlert.textContent = 'Resynchroniser';
+      bAlert.innerHTML = prevAlert;
     }
+    if (bSet) bSet.disabled = false;
+    if (c) c.disabled = false;
   }
   setTimeout(refresh, 1500);
 }

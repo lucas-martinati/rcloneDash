@@ -1,4 +1,5 @@
 use super::*;
+use crate::ui::keys::{KeyAction, KeybindingRegistry};
 
 impl App {
     pub fn dismiss_active_modal(&mut self) {
@@ -1639,11 +1640,21 @@ impl App {
                 self.modal = Modal::Help;
                 return Action::None;
             }
-            KeyCode::Char('s') => {
+            KeyCode::Char(c)
+                if Some(c)
+                    == KeybindingRegistry::get_key_str(KeyAction::ForceSync)
+                        .chars()
+                        .next() =>
+            {
                 self.modal = Modal::ConfirmSync;
                 return Action::None;
             }
-            KeyCode::Char('r') => {
+            KeyCode::Char(c)
+                if Some(c)
+                    == KeybindingRegistry::get_key_str(KeyAction::Resync)
+                        .chars()
+                        .next() =>
+            {
                 self.modal = Modal::ConfirmResync;
                 return Action::None;
             }

@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, HitAction, Hitbox};
-use crate::ui::keys::KeybindingRegistry;
+use crate::ui::keys::{KeyAction, KeybindingRegistry};
 use crate::ui::theme::ThemePalette;
 
 pub fn render_footer(
@@ -20,7 +20,11 @@ pub fn render_footer(
     let sync_or_cancel = if app.is_syncing() {
         ("c", "cancel", HitAction::ButtonCancel)
     } else {
-        ("s", "sync", HitAction::ButtonSync)
+        (
+            KeybindingRegistry::get_key_str(KeyAction::ForceSync),
+            "sync",
+            HitAction::ButtonSync,
+        )
     };
 
     let items = [

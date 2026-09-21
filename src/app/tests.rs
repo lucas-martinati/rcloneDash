@@ -969,6 +969,8 @@ use crate::monitor::history::{PastRun, RunStatus};
         use crate::ui::theme::ThemeChoice;
 
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Files), "b");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::ForceSync), "s");
+        assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Resync), "r");
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::DecTickRate), "-");
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::IncTickRate), "+");
         assert_eq!(KeybindingRegistry::get_key_str(KeyAction::Validate), "Enter");

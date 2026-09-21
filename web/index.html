@@ -36,7 +36,7 @@
       <div class="sp"></div>
       <span id="ts" class="ts-lbl" title="Dernière mise à jour des données"></span>
       <div id="spin" class="spin" aria-hidden="true"></div>
-      <button class="btn" id="bsync" onclick="doSync()" title="Lancer une synchronisation maintenant">
+      <button class="btn" id="bsync" onclick="openSyncModal()" title="Lancer une synchronisation maintenant">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
           stroke-linecap="round">
           <polyline points="23 4 23 10 17 10" />
@@ -123,7 +123,7 @@
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
         <span class="alert-msg" id="alert-msg"></span>
-        <button class="btn btn-danger" id="btn-alert-resync" style="display:none; padding:4px 10px; font-size:11.5px; height:auto; flex-shrink:0; white-space:nowrap;" onclick="doResync()" title="Reconstruire les index de synchronisation">
+        <button class="btn btn-danger" id="btn-alert-resync" style="display:none; padding:4px 10px; font-size:11.5px; height:auto; flex-shrink:0; white-space:nowrap;" onclick="openResyncModal()" title="Reconstruire les index de synchronisation">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:4px;">
             <polyline points="23 4 23 10 17 10" />
             <polyline points="1 20 1 14 7 14" />
@@ -467,12 +467,21 @@
             <div class="set-field-label">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               Resynchronisation complète (--resync)
+              <span class="badge warn" style="margin-left:auto">opération longue</span>
             </div>
-            <div class="set-field-hint">En cas d'erreur critique de bisync ou de base de synchronisation locale/cloud corrompue, cette action reconstruit les index de listing en comparant le dossier local et Google Drive (en conservant les versions les plus récentes : <code>--resync-mode newer</code>).</div>
-            <div style="margin-top: 10px;">
-              <button class="btn btn-g" id="btn-settings-resync" onclick="closeSettingsModal(); doResync();" title="Lancer une resynchronisation avec --resync-mode newer">
+            <div class="del-banner danger" style="margin-top:4px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <div><b>Réservé aux erreurs critiques bisync.</b> Reconstruit les index en comparant le dossier local et Google Drive, en conservant les versions les plus récentes (<code>--resync-mode newer</code>).</div>
+            </div>
+            <div class="set-field-hint">Les fichiers supprimés hors-ligne peuvent être réimportés. Suivez la progression dans le panneau sync, les logs et l'historique.</div>
+            <div class="del-path mono" style="margin-top:6px;">$ rclone bisync --resync --resync-mode newer</div>
+            <div style="margin-top: 10px; display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-danger" id="btn-settings-resync" onclick="closeSettingsModal(); openResyncModal();" title="Lancer une resynchronisation avec --resync-mode newer">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                 Lancer une resynchronisation (--resync)
+              </button>
+              <button class="btn btn-g" onclick="openDryRunModal()" title="Prévisualiser sans rien modifier">
+                Prévisualiser (dry-run)
               </button>
             </div>
           </div>
@@ -798,6 +807,71 @@
             <button class="btn" id="save-filters-btn" onclick="saveFilters()" style="padding: 4px 12px; font-size: 12px; min-height: 28px;" disabled>Enregistrer</button>
           </div>
           <textarea id="filters-text" class="code-input" spellcheck="false" style="border: none; border-radius: 0; background: transparent; padding: 16px; flex: 1; outline: none; box-shadow: none;" oninput="checkFiltersModified()"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation : Force Run (synchronisation immédiate) -->
+  <div id="sync-modal" class="modal-overlay" onclick="if(event.target===this) closeSyncModal()">
+    <div class="modal modal-del" role="dialog" aria-modal="true" aria-label="Lancer une synchronisation">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Lancer une synchronisation ?
+        </div>
+        <button class="modal-close" onclick="closeSyncModal()" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div class="modal-body col">
+        <div class="del-banner ok">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <div><b>Force Run — sans risque.</b> Déclenche immédiatement le même moteur bisync que le service planifié, en mode incrémental (sans reconstruction des index).</div>
+        </div>
+        <div class="del-path mono">~/GoogleDrive ⇄ Google Drive · changements incrémentaux uniquement</div>
+        <div class="modal-hint">La progression s'affiche en direct dans le panneau <b>Synchronisation en cours</b>, les logs et l'historique. Pour réparer des index corrompus, utilisez plutôt la <b>resynchronisation complète</b>.</div>
+        <div class="del-actions">
+          <button class="btn" onclick="closeSyncModal()">Annuler</button>
+          <button class="btn btn-g" id="sync-confirm-btn" onclick="confirmSync()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Lancer la synchronisation
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation : Resync complet (--resync --resync-mode newer) -->
+  <div id="resync-modal" class="modal-overlay" onclick="if(event.target===this) closeResyncModal()">
+    <div class="modal modal-del" role="dialog" aria-modal="true" aria-label="Resynchronisation complète">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Resynchronisation complète ?
+        </div>
+        <button class="modal-close" onclick="closeResyncModal()" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div class="modal-body col">
+        <div class="del-banner danger">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div><b>Opération longue et intrusive.</b> Reconstruit les index locaux et distants pour résoudre une erreur critique bisync, en conservant les fichiers les plus récents (<code>--resync-mode newer</code>).</div>
+        </div>
+        <div class="del-path mono">$ rclone bisync --resync --resync-mode newer</div>
+        <div class="dc-summary">
+          <div class="dc-line warn">• Les listings locaux + distants sont entièrement reparcourus</div>
+          <div class="dc-line ok">• Les versions les plus récentes sont conservées des deux côtés</div>
+          <div class="dc-line danger">• Les fichiers supprimés hors-ligne peuvent être réimportés — vérifiez après coup</div>
+        </div>
+        <div class="modal-hint">Astuce : lancez d'abord une <b>simulation (dry-run)</b> pour prévisualiser les différences sans rien modifier.</div>
+        <div class="del-actions">
+          <button class="btn" onclick="closeResyncModal()">Annuler</button>
+          <button class="btn btn-danger" id="resync-confirm-btn" onclick="confirmResync()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Lancer le resync complet
+          </button>
         </div>
       </div>
     </div>

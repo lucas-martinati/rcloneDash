@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::app::{App, Hitbox, Modal};
 use crate::ui::container::{centered_fixed_rect, centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
-use crate::ui::keys::KeybindingRegistry;
+use crate::ui::keys::{KeyAction, KeybindingRegistry};
 use crate::ui::files::render_files_modal;
 use crate::ui::filters::render_filters_modal;
 use crate::ui::history::render_history_details_modal;
@@ -41,71 +41,11 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             render_dry_run_modal(f, app, theme, hitboxes);
         }
         Modal::ConfirmSync => {
-            let area = centered_rect(58, 25, f.area());
-            let inner = render_modal_container(
-                f,
-                app,
-                theme,
-                area,
-                ModalContainerConfig {
-                    title_prefix: " Synchronization ",
-                    border_color: theme.accent,
-                    show_close_button: true,
-                    ..Default::default()
-                },
-                hitboxes,
-            );
-
-            let text = vec![
-                Line::from(Span::styled("TRIGGER SYNCHRONIZATION NOW?", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
-                Line::from(""),
-                Line::from("This action immediately triggers the rclone-bisync service"),
-                Line::from("to synchronize all local and remote changes."),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled(" [Y / Enter] Confirm ", Style::default().fg(theme.card_bg).bg(theme.green).add_modifier(Modifier::BOLD)),
-                    Span::styled("    ", Style::default()),
-                    Span::styled(" [N / Esc] Cancel ", Style::default().fg(theme.text_bright).bg(theme.border)),
-                ]),
-            ];
-
-            let p = Paragraph::new(text).alignment(Alignment::Center);
-            f.render_widget(p, inner);
+            render_confirm_sync_modal(f, app, theme, hitboxes);
         }
 
         Modal::ConfirmResync => {
-            let area = centered_rect(60, 30, f.area());
-            let inner = render_modal_container(
-                f,
-                app,
-                theme,
-                area,
-                ModalContainerConfig {
-                    title_prefix: " Confirmation required ",
-                    border_color: theme.yellow,
-                    show_close_button: true,
-                    ..Default::default()
-                },
-                hitboxes,
-            );
-
-            let text = vec![
-                Line::from(Span::styled("WARNING: FULL RESYNCHRONIZATION", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
-                Line::from(""),
-                Line::from("This operation will rebuild local and remote listings"),
-                Line::from("with the --resync flag to resolve a conflict or inconsistency."),
-                Line::from(""),
-                Line::from(Span::styled("Do you want to run this command now?", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD))),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled(" [Y] Yes / Confirm ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
-                    Span::styled("    ", Style::default()),
-                    Span::styled(" [N] No / Cancel (Esc) ", Style::default().fg(theme.text_bright).bg(theme.border)),
-                ]),
-            ];
-
-            let p = Paragraph::new(text).alignment(Alignment::Center);
-            f.render_widget(p, inner);
+            render_confirm_resync_modal(f, app, theme, hitboxes);
         }
         Modal::ConfirmCancel => {
             let area = centered_rect(55, 25, f.area());
@@ -228,9 +168,9 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ("q", "Closes active modal / In dashboard: quits app."),
                 ("o", "Shows options / settings panel."),
                 ("F1, ?, h", "Shows this help window."),
-                ("s", "Triggers bisync synchronization (confirmation)."),
+                (KeybindingRegistry::get_key_str(KeyAction::ForceSync), "Triggers bisync synchronization (confirmation)."),
                 ("d", "Runs bisync dry-run simulation (confirmation)."),
-                ("r", "Full resync (--resync) repair mode (confirmation)."),
+                (KeybindingRegistry::get_key_str(KeyAction::Resync), "Full resync (--resync) repair mode (confirmation)."),
                 ("c", "Cancels active synchronization run."),
                 ("b, p", "Opens file browser modal (explorer)."),
                 ("f, /", "In Recent files: search filter."),
@@ -298,88 +238,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
     }
 }
 
-#[derive(Debug, Clone, Default)]
-struct DryRunSummary {
-    path2_new: usize,
-    path2_modified: usize,
-    path2_deleted: usize,
-    path1_new: usize,
-    path1_modified: usize,
-    path1_deleted: usize,
-    checks: usize,
-    elapsed: String,
-    bytes: String,
-    has_errors: bool,
-}
-
-impl DryRunSummary {
-    fn from_logs(logs: &[String]) -> Self {
-        let mut s = Self::default();
-
-        for raw_line in logs {
-            let line = crate::monitor::streamer::strip_ansi(raw_line);
-            let ll = line.to_ascii_lowercase();
-
-            if ll.contains("error:") || ll.contains("fatal:") || ll.contains("error running rclone") {
-                s.has_errors = true;
-            }
-
-            if let Some(pos) = ll.find("checks:") {
-                let rest = &ll[pos + 7..];
-                if let Some(slash_pos) = rest.find('/') {
-                    let done_str = rest[..slash_pos].trim();
-                    if let Ok(c) = done_str.parse::<usize>() {
-                        s.checks = c;
-                    }
-                }
-            }
-
-            if let Some(pos) = ll.find("elapsed time:") {
-                let rest = line[pos + 13..].trim();
-                s.elapsed = rest.to_string();
-            }
-
-            if ll.contains("transferred:") && (ll.contains("b /") || ll.contains("ib /")) {
-                if let Some(pos) = ll.find("transferred:") {
-                    let rest = line[pos + 12..].trim();
-                    if let Some(comma_pos) = rest.find(',') {
-                        s.bytes = rest[..comma_pos].trim().to_string();
-                    }
-                }
-            }
-
-            if ll.contains("path1") || ll.contains("path2") {
-                let is_local = ll.contains("path2:") || ll.contains("- path2");
-                let is_remote = ll.contains("path1:") || ll.contains("- path1");
-
-                if is_local {
-                    if ll.contains("file is new") {
-                        s.path2_new += 1;
-                    } else if ll.contains("file changed") {
-                        s.path2_modified += 1;
-                    } else if ll.contains("file was deleted") || ll.contains("file deleted") {
-                        s.path2_deleted += 1;
-                    }
-                } else if is_remote {
-                    if ll.contains("file is new") {
-                        s.path1_new += 1;
-                    } else if ll.contains("file changed") {
-                        s.path1_modified += 1;
-                    } else if ll.contains("file was deleted") || ll.contains("file deleted") {
-                        s.path1_deleted += 1;
-                    }
-                }
-            }
-        }
-
-        s
-    }
-
-    fn total_changes(&self) -> usize {
-        self.path1_new + self.path1_modified + self.path1_deleted +
-        self.path2_new + self.path2_modified + self.path2_deleted
-    }
-}
+use crate::monitor::DryRunSummary;
 
 fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(82, 85, f.area());
@@ -634,4 +493,287 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             crate::app::ScrollbarTarget::DryRun,
         );
     }
+}
+
+/// Force Run confirmation — réutilise `render_modal_container`, les cartes
+/// `Block` façon dry-run, et `KeybindingRegistry` pour les raccourcis.
+fn render_confirm_sync_modal(
+    f: &mut Frame,
+    app: &App,
+    theme: &ThemePalette,
+    hitboxes: &mut Vec<Hitbox>,
+) {
+    use ratatui::style::Color;
+
+    let screen = f.area();
+    let w = 70.min(screen.width.saturating_sub(2)).max(52);
+    let h = 17.min(screen.height.saturating_sub(2)).max(13);
+    let area = centered_fixed_rect(w, h, screen);
+
+    let mut confirm_spans =
+        KeybindingRegistry::format_shortcut_label("Y / Enter", "confirm", theme.green, Color::White);
+    confirm_spans.insert(0, Span::styled("▶ ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+
+    let inner = render_modal_container(
+        f,
+        app,
+        theme,
+        area,
+        ModalContainerConfig {
+            title_prefix: " ⟳ Force Run ",
+            title_color: Some(theme.accent),
+            action_shortcuts: Some(vec![confirm_spans]),
+            border_color: theme.accent,
+            show_close_button: true,
+            ..Default::default()
+        },
+        hitboxes,
+    );
+
+    if inner.height < 8 || inner.width < 30 {
+        return;
+    }
+
+    // Carte de portée (style carte résumé du dry-run)
+    let card_h = 7u16.min(inner.height.saturating_sub(6)).max(5);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // bannière + sous-titre
+            Constraint::Length(card_h),
+            Constraint::Min(3), // commande + boutons
+        ])
+        .split(inner);
+
+    // 1. Bannière
+    let banner = vec![
+        Line::from(vec![
+            Span::styled("⟳ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "TRIGGER SYNCHRONIZATION NOW?",
+                Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(Span::styled(
+            "Immediate bisync run — same engine as the scheduled service.",
+            Style::default().fg(theme.text_muted),
+        )),
+    ];
+    f.render_widget(Paragraph::new(banner).alignment(Alignment::Center), chunks[0]);
+
+    // 2. Carte portée
+    f.render_widget(Clear, chunks[1]);
+    let card = Block::default()
+        .borders(Borders::ALL)
+        .border_type(app.border_type())
+        .border_style(Style::default().fg(theme.border))
+        .title(Line::from(vec![
+            Span::styled(" 📦 ", Style::default().fg(theme.accent)),
+            Span::styled("Scope", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+            Span::styled(" ", Style::default()),
+        ]));
+    let card_inner = card.inner(chunks[1]);
+    f.render_widget(card, chunks[1]);
+    f.render_widget(Clear, card_inner);
+
+    if card_inner.height >= 3 {
+        let max_w = card_inner.width as usize;
+        let raw_scope = format!("{}  ⇄  {}", app.config.local_dir, app.config.remote);
+        let mut scope_spans = vec![
+            Span::styled("💻 Local ⇄ ☁ Remote: ", Style::default().fg(theme.text_muted)),
+        ];
+        scope_spans.extend(crate::ui::theme::truncate_with_fade_spans(
+            &raw_scope,
+            max_w.saturating_sub(22).max(10),
+            Style::default().fg(theme.text_bright),
+            true,
+            None,
+        ));
+        let mut card_lines = vec![
+            Line::from(scope_spans),
+            Line::from(vec![
+                Span::styled("  • ", Style::default().fg(theme.accent)),
+                Span::styled("Mode: ", Style::default().fg(theme.text_muted)),
+                Span::styled("immediate run, incremental changes only", Style::default().fg(theme.text_bright)),
+            ]),
+            Line::from({
+                let mut spans = vec![
+                    Span::styled("  • ", Style::default().fg(theme.green)),
+                    Span::styled("Safe: ", Style::default().fg(theme.text_muted)),
+                    Span::styled("no listing rebuild — press", Style::default().fg(theme.text_muted)),
+                ];
+                spans.extend(KeybindingRegistry::format_key_badge(
+                    KeybindingRegistry::get_key_str(KeyAction::Resync),
+                    theme,
+                ));
+                spans.push(Span::styled("for repairs", Style::default().fg(theme.text_muted)));
+                spans
+            }),
+        ];
+        if card_inner.height >= 5 {
+            card_lines.push(Line::from(vec![
+                Span::styled("  • ", Style::default().fg(theme.text_muted)),
+                Span::styled("Progress visible live in the sync panel + logs", Style::default().fg(theme.text_muted)),
+            ]));
+        }
+        f.render_widget(Paragraph::new(card_lines), card_inner);
+    }
+
+    // 3. Commande + boutons d'action
+    let actions = vec![
+        Line::from(vec![
+            Span::styled("marker: ", Style::default().fg(theme.text_muted)),
+            Span::styled(".force-sync", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("  → guard launches bisync unconditionally", Style::default().fg(theme.text_muted)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(" [Y / Enter] Lancer ", Style::default().fg(theme.card_bg).bg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled("    ", Style::default()),
+            Span::styled(" [N / Esc] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+        ]),
+    ];
+    f.render_widget(Paragraph::new(actions).alignment(Alignment::Center), chunks[2]);
+}
+
+/// Resync complet — même système de composants, accent danger (jaune/rouge).
+fn render_confirm_resync_modal(
+    f: &mut Frame,
+    app: &App,
+    theme: &ThemePalette,
+    hitboxes: &mut Vec<Hitbox>,
+) {
+    use ratatui::style::Color;
+
+    let screen = f.area();
+    let w = 74.min(screen.width.saturating_sub(2)).max(54);
+    let h = 21.min(screen.height.saturating_sub(2)).max(14);
+    let area = centered_fixed_rect(w, h, screen);
+
+    let mut confirm_spans =
+        KeybindingRegistry::format_shortcut_label("Y / Enter", "resync", theme.red, Color::White);
+    confirm_spans.insert(0, Span::styled("⚠ ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+
+    let inner = render_modal_container(
+        f,
+        app,
+        theme,
+        area,
+        ModalContainerConfig {
+            title_prefix: " ⚠ Resync complet ",
+            title_color: Some(theme.yellow),
+            action_shortcuts: Some(vec![confirm_spans]),
+            border_color: theme.yellow,
+            show_close_button: true,
+            ..Default::default()
+        },
+        hitboxes,
+    );
+
+    if inner.height < 9 || inner.width < 32 {
+        return;
+    }
+
+    let card_h = 8u16.min(inner.height.saturating_sub(7)).max(6);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // bannière + sous-titre
+            Constraint::Length(card_h),
+            Constraint::Min(4),
+        ])
+        .split(inner);
+
+    // 1. Bannière danger
+    let banner = vec![
+        Line::from(vec![
+            Span::styled("⚠ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "WARNING: FULL RESYNCHRONIZATION",
+                Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(Span::styled(
+            "Rebuilds sync listings to resolve critical bisync errors.",
+            Style::default().fg(theme.text_muted),
+        )),
+    ];
+    f.render_widget(Paragraph::new(banner).alignment(Alignment::Center), chunks[0]);
+
+    // 2. Carte impacts (même pattern que la carte résumé dry-run)
+    f.render_widget(Clear, chunks[1]);
+    let card = Block::default()
+        .borders(Borders::ALL)
+        .border_type(app.border_type())
+        .border_style(Style::default().fg(theme.yellow))
+        .title(Line::from(vec![
+            Span::styled(" ⚠ ", Style::default().fg(theme.yellow)),
+            Span::styled("Impacts", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+            Span::styled(" ", Style::default()),
+        ]));
+    let card_inner = card.inner(chunks[1]);
+    f.render_widget(card, chunks[1]);
+    f.render_widget(Clear, card_inner);
+
+    if card_inner.height >= 4 {
+        let max_w = card_inner.width as usize;
+        let raw_scope = format!("{}  ⇄  {}", app.config.local_dir, app.config.remote);
+        let mut scope_spans = vec![
+            Span::styled("💻 Local ⇄ ☁ Remote: ", Style::default().fg(theme.text_muted)),
+        ];
+        scope_spans.extend(crate::ui::theme::truncate_with_fade_spans(
+            &raw_scope,
+            max_w.saturating_sub(22).max(10),
+            Style::default().fg(theme.text_bright),
+            true,
+            None,
+        ));
+        let mut card_lines = vec![
+            Line::from(scope_spans),
+            Line::from(vec![
+                Span::styled("  • ", Style::default().fg(theme.yellow)),
+                Span::styled("Rebuilds local + remote listings (", Style::default().fg(theme.text_bright)),
+                Span::styled("--resync", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                Span::styled(")", Style::default().fg(theme.text_bright)),
+            ]),
+            Line::from(vec![
+                Span::styled("  • ", Style::default().fg(theme.green)),
+                Span::styled("Keeps newest versions (", Style::default().fg(theme.text_bright)),
+                Span::styled("--resync-mode newer", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+                Span::styled(")", Style::default().fg(theme.text_bright)),
+            ]),
+            Line::from(vec![
+                Span::styled("  • ", Style::default().fg(theme.text_muted)),
+                Span::styled("Long operation — files deleted offline may be reimported", Style::default().fg(theme.text_muted)),
+            ]),
+        ];
+        if card_inner.height >= 6 {
+            card_lines.push(Line::from(vec![
+                Span::styled("  • ", Style::default().fg(theme.text_muted)),
+                Span::styled("Follow progress in sync panel, logs & history", Style::default().fg(theme.text_muted)),
+            ]));
+        }
+        f.render_widget(Paragraph::new(card_lines), card_inner);
+    }
+
+    // 3. Commande + question + boutons
+    let actions = vec![
+        Line::from(vec![
+            Span::styled("$ ", Style::default().fg(theme.text_muted)),
+            Span::styled(
+                "rclone bisync --resync --resync-mode newer",
+                Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(Span::styled(
+            "Do you want to run this command now?",
+            Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled(" [Y / Enter] Resync ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled("    ", Style::default()),
+            Span::styled(" [N / Esc] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+        ]),
+    ];
+    f.render_widget(Paragraph::new(actions).alignment(Alignment::Center), chunks[2]);
 }

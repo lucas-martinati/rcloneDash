@@ -5,6 +5,8 @@ use crate::ui::theme::ThemePalette;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyAction {
     Files,
+    ForceSync,
+    Resync,
     DecTickRate,
     IncTickRate,
     Validate,
@@ -18,6 +20,8 @@ impl KeybindingRegistry {
     pub fn get_key_str(action: KeyAction) -> &'static str {
         match action {
             KeyAction::Files => "b",
+            KeyAction::ForceSync => "s",
+            KeyAction::Resync => "r",
             KeyAction::DecTickRate => "-",
             KeyAction::IncTickRate => "+",
             KeyAction::Validate => "Enter",
