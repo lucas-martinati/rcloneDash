@@ -1,4 +1,3 @@
-use std::path::Path;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Clone)]
@@ -173,6 +172,10 @@ pub async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
         return Ok(None);
     }
 
+    let is_system_pkg = std::env::current_exe()
+        .map(|p| p.starts_with("/usr/bin"))
+        .unwrap_or(false);
+
     // Identify best download asset URL and its size
     let mut download_url = None;
     let mut asset_size = None;
@@ -183,7 +186,12 @@ pub async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
                 asset.get("browser_download_url").and_then(|v| v.as_str())
             ) {
                 let size = asset.get("size").and_then(|v| v.as_u64());
-                if name.ends_with("linux-x86_64.tar.gz") {
+                let matches_target = if is_system_pkg {
+                    name.ends_with(".deb")
+                } else {
+                    name.ends_with("linux-x86_64.tar.gz")
+                };
+                if matches_target {
                     download_url = Some(url.to_string());
                     asset_size = size;
                     break;
@@ -213,15 +221,15 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("Could not determine executable path: {}", e))?;
 
-    let exe_dir = current_exe.parent()
-        .unwrap_or_else(|| Path::new("."));
-
     let pid = std::process::id();
+    let is_deb = info.download_url.ends_with(".deb");
     let is_archive = info.download_url.ends_with(".tar.gz");
-    let tmp_dest = if is_archive {
-        exe_dir.join(format!(".rclonedash-update-{}.tar.gz", pid))
+    let tmp_dest = if is_deb {
+        std::env::temp_dir().join(format!("rclonedash-update-{}.deb", pid))
+    } else if is_archive {
+        std::env::temp_dir().join(format!(".rclonedash-update-{}.tar.gz", pid))
     } else {
-        exe_dir.join(format!(".rclonedash-update-{}", pid))
+        std::env::temp_dir().join(format!(".rclonedash-update-{}", pid))
     };
 
     println!("  {}  Downloading rcloneDash {}...", style.bold_cyan("◇"), style.bold(&format!("v{}", info.latest_version)));
@@ -287,7 +295,32 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
 
     println!("  │");
 
-    if is_archive {
+    if is_deb {
+        println!("  {}  Updating system Debian package (/usr/bin/rclonedash)...", style.bold_cyan("◇"));
+        let (cmd, args) = if unsafe { libc::geteuid() } == 0 {
+            ("apt", vec!["install", "-y", "--reinstall", tmp_dest.to_str().unwrap_or("")])
+        } else {
+            ("sudo", vec!["apt", "install", "-y", "--reinstall", tmp_dest.to_str().unwrap_or("")])
+        };
+
+        let status = tokio::process::Command::new(cmd)
+            .args(args)
+            .status()
+            .await;
+
+        let _ = tokio::fs::remove_file(&tmp_dest).await;
+
+        match status {
+            Ok(st) if st.success() => {
+                println!("  │  Debian package updated successfully");
+                Ok(())
+            }
+            _ => Err(format!(
+                "Failed to update Debian package with sudo apt.\nTo update manually, run:\n    sudo apt install --reinstall {:?}",
+                tmp_dest
+            )),
+        }
+    } else if is_archive {
         let extract_dir = std::env::temp_dir().join(format!(".rclonedash-update-{}", pid));
         let _ = tokio::fs::create_dir_all(&extract_dir).await;
 

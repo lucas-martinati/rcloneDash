@@ -43,6 +43,7 @@ assets = [
     ["services/gdrive-filters.txt", "usr/share/rclonedash/gdrive-filters.txt", "644"],
     ["services/rclonedash-notify.py", "usr/share/rclonedash/rclonedash-notify.py", "755"],
     ["services/rclonedash.desktop.template", "usr/share/rclonedash/rclonedash.desktop.template", "644"],
+    ["services/rclonedash.desktop", "usr/share/applications/rclonedash.desktop", "644"],
     ["services/rclonedash.svg", "usr/share/icons/hicolor/scalable/apps/rclonedash.svg", "644"],
     ["README.md", "usr/share/doc/rclonedash/README.md", "644"],
 ]

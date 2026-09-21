@@ -46,6 +46,21 @@ if [ -f "$HOME/.local/bin/rclonedash" ]; then
     ok "Binary ~/.local/bin/rclonedash removed"
 fi
 
+if [ -f "$HOME/.cargo/bin/rclonedash" ]; then
+    rm -f "$HOME/.cargo/bin/rclonedash"
+    ok "Legacy binary ~/.cargo/bin/rclonedash removed"
+fi
+
+if [ -f "/usr/bin/rclonedash" ]; then
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo rm -f "/usr/bin/rclonedash" "/usr/bin/rclonedash-setup" "/usr/share/applications/rclonedash.desktop" 2>/dev/null || true
+        ok "Stale system binary /usr/bin/rclonedash removed"
+    else
+        warn "A system-wide binary exists at /usr/bin/rclonedash."
+        detail "To completely remove it, run: sudo apt remove rclonedash (or sudo rm -f /usr/bin/rclonedash)"
+    fi
+fi
+
 # 4. Remove desktop launcher and application icon
 if [ -f "$HOME/.local/share/applications/rclonedash.desktop" ]; then
     rm -f "$HOME/.local/share/applications/rclonedash.desktop"

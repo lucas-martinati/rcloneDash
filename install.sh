@@ -204,33 +204,72 @@ fi
 # --------------------------------------------------------------------------- #
 step 1 "Installing RcloneDash TUI binary"
 
-BIN_SRC=""
-if [ -f "$SCRIPT_DIR/rclonedash" ] && [ -x "$SCRIPT_DIR/rclonedash" ]; then
-    BIN_SRC="$SCRIPT_DIR/rclonedash"
-elif [ -f "$SCRIPT_DIR/target/release/rclonedash" ] && [ -x "$SCRIPT_DIR/target/release/rclonedash" ]; then
-    BIN_SRC="$SCRIPT_DIR/target/release/rclonedash"
-elif [ -x "/usr/bin/rclonedash" ]; then
-    BIN_SRC="/usr/bin/rclonedash"
-elif command -v cargo >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/Cargo.toml" ]; then
-    info "Compiling release binary with Cargo (LTO optimizations enabled)..."
-    (cd "$SCRIPT_DIR" && cargo build --release >> "$LOG_FILE" 2>&1)
-    BIN_SRC="$SCRIPT_DIR/target/release/rclonedash"
+IS_SYSTEM_SETUP=0
+if [ "$(basename "$0")" = "rclonedash-setup" ] || [ -f "/usr/bin/rclonedash-setup" -a -f "/usr/bin/rclonedash" -a ! -f "$SCRIPT_DIR/Cargo.toml" -a ! -f "$SCRIPT_DIR/target/release/rclonedash" -a ! -f "$SCRIPT_DIR/rclonedash" ]; then
+    IS_SYSTEM_SETUP=1
 fi
 
-if [ -z "$BIN_SRC" ] || [ ! -f "$BIN_SRC" ]; then
-    err "Unable to locate or compile the rclonedash binary."
-    detail "If compiling from source, make sure Rust/Cargo is installed (cargo build --release)."
-    detail "If using a release archive, verify that the 'rclonedash' file is present."
-    exit 1
-fi
-
-INSTALL_BIN_DIR="$HOME/.local/bin"
-if [ "$BIN_SRC" = "/usr/bin/rclonedash" ]; then
-    ok "System binary detected at /usr/bin/rclonedash"
+if [ "$IS_SYSTEM_SETUP" -eq 1 ]; then
+    if [ -x "/usr/bin/rclonedash" ]; then
+        ok "Using system binary /usr/bin/rclonedash (Debian package)"
+        BIN_PATH="/usr/bin/rclonedash"
+        # Clean up any stale duplicate in ~/.local/bin or ~/.cargo/bin
+        if [ -f "$HOME/.local/bin/rclonedash" ]; then
+            rm -f "$HOME/.local/bin/rclonedash" 2>/dev/null || true
+            info "Removed duplicate binary ~/.local/bin/rclonedash"
+        fi
+        if [ -f "$HOME/.cargo/bin/rclonedash" ]; then
+            rm -f "$HOME/.cargo/bin/rclonedash" 2>/dev/null || true
+            info "Removed duplicate binary ~/.cargo/bin/rclonedash"
+        fi
+    else
+        err "System binary /usr/bin/rclonedash not found. Reinstall the package via: sudo apt install ./rclonedash*.deb"
+        exit 1
+    fi
 else
+    BIN_SRC=""
+    if [ -f "$SCRIPT_DIR/rclonedash" ] && [ -x "$SCRIPT_DIR/rclonedash" ]; then
+        BIN_SRC="$SCRIPT_DIR/rclonedash"
+    elif [ -f "$SCRIPT_DIR/target/release/rclonedash" ] && [ -x "$SCRIPT_DIR/target/release/rclonedash" ]; then
+        BIN_SRC="$SCRIPT_DIR/target/release/rclonedash"
+    elif command -v cargo >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/Cargo.toml" ]; then
+        info "Compiling release binary with Cargo (LTO optimizations enabled)..."
+        (cd "$SCRIPT_DIR" && cargo build --release >> "$LOG_FILE" 2>&1)
+        BIN_SRC="$SCRIPT_DIR/target/release/rclonedash"
+    fi
+
+    if [ -z "$BIN_SRC" ] || [ ! -f "$BIN_SRC" ]; then
+        err "Unable to locate or compile the rclonedash binary."
+        detail "If compiling from source, make sure Rust/Cargo is installed (cargo build --release)."
+        detail "If using a release archive, verify that the 'rclonedash' file is present."
+        exit 1
+    fi
+
+    INSTALL_BIN_DIR="$HOME/.local/bin"
     mkdir -p "$INSTALL_BIN_DIR"
     install -m 755 "$BIN_SRC" "$INSTALL_BIN_DIR/rclonedash"
     ok "Binary installed to $INSTALL_BIN_DIR/rclonedash"
+    BIN_PATH="$INSTALL_BIN_DIR/rclonedash"
+
+    # Guarantee zero version mismatch: detect and clean up any stale duplicates on the system
+    if [ -f "/usr/bin/rclonedash" ]; then
+        warn "A stale duplicate system binary was detected at /usr/bin/rclonedash!"
+        if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            info "Cleaning up old system binary and desktop entry with sudo..."
+            sudo rm -f "/usr/bin/rclonedash" "/usr/bin/rclonedash-setup" "/usr/share/applications/rclonedash.desktop" 2>/dev/null || true
+            ok "Stale system binary removed"
+        elif command -v dpkg >/dev/null 2>&1 && dpkg -s rclonedash >/dev/null 2>&1; then
+            detail "To avoid version conflicts, purge the old system package via: sudo apt remove rclonedash"
+        else
+            detail "To avoid version conflicts, remove the old file via: sudo rm -f /usr/bin/rclonedash"
+        fi
+    fi
+
+    # Clean up stale ~/.cargo/bin duplicate if present
+    if [ -f "$HOME/.cargo/bin/rclonedash" ]; then
+        info "Cleaning up old ~/.cargo/bin/rclonedash duplicate..."
+        rm -f "$HOME/.cargo/bin/rclonedash" 2>/dev/null || true
+    fi
 
     # PATH verification
     if [[ ":$PATH:" != *":$INSTALL_BIN_DIR:"* ]]; then
@@ -264,30 +303,40 @@ if [ -f "$TEMPLATE_DIR/rclonedash-notify.py" ]; then
     ok "Notification helper installed at $DATA_DIR/rclonedash-notify.py"
 fi
 
-# Install application icon
-ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
-mkdir -p "$ICON_DIR"
-if [ -f "$TEMPLATE_DIR/rclonedash.svg" ]; then
-    cp "$TEMPLATE_DIR/rclonedash.svg" "$ICON_DIR/rclonedash.svg"
-    ok "Application icon installed at $ICON_DIR/rclonedash.svg"
-    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-        gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >> "$LOG_FILE" 2>&1 || true
+if [ "$IS_SYSTEM_SETUP" -eq 1 ]; then
+    # In system package mode, the desktop entry and icon are already in /usr/share/...
+    # Clean up any duplicate ~/.local/share/applications/rclonedash.desktop if it was previously created
+    if [ -f "$HOME/.local/share/applications/rclonedash.desktop" ]; then
+        rm -f "$HOME/.local/share/applications/rclonedash.desktop"
+        info "Removed duplicate desktop launcher in ~/.local/share/applications"
     fi
-fi
-
-# Install desktop file for application launcher and notification integration
-APP_DIR="$HOME/.local/share/applications"
-mkdir -p "$APP_DIR"
-if [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
-    BIN_PATH="$INSTALL_BIN_DIR/rclonedash"
-    sed -e "s|__BIN__|$BIN_PATH|g" "$TEMPLATE_DIR/rclonedash.desktop.template" > "$APP_DIR/rclonedash.desktop"
-    chmod +x "$APP_DIR/rclonedash.desktop"
-    ok "Desktop entry installed at $APP_DIR/rclonedash.desktop"
-    if command -v update-desktop-database >/dev/null 2>&1; then
-        update-desktop-database "$APP_DIR" >> "$LOG_FILE" 2>&1 || true
-    fi
+    ok "System desktop launcher active (/usr/share/applications/rclonedash.desktop)"
+    ok "System application icon active (/usr/share/icons/hicolor/scalable/apps/rclonedash.svg)"
 else
-    info "Desktop template not found — skipping .desktop file installation"
+    # Install application icon
+    ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+    mkdir -p "$ICON_DIR"
+    if [ -f "$TEMPLATE_DIR/rclonedash.svg" ]; then
+        cp "$TEMPLATE_DIR/rclonedash.svg" "$ICON_DIR/rclonedash.svg"
+        ok "Application icon installed at $ICON_DIR/rclonedash.svg"
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >> "$LOG_FILE" 2>&1 || true
+        fi
+    fi
+
+    # Install desktop file for application launcher and notification integration
+    APP_DIR="$HOME/.local/share/applications"
+    mkdir -p "$APP_DIR"
+    if [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
+        sed -e "s|__BIN__|$BIN_PATH|g" "$TEMPLATE_DIR/rclonedash.desktop.template" > "$APP_DIR/rclonedash.desktop"
+        chmod +x "$APP_DIR/rclonedash.desktop"
+        ok "Desktop entry installed at $APP_DIR/rclonedash.desktop"
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database "$APP_DIR" >> "$LOG_FILE" 2>&1 || true
+        fi
+    else
+        info "Desktop template not found — skipping .desktop file installation"
+    fi
 fi
 
 # --------------------------------------------------------------------------- #
