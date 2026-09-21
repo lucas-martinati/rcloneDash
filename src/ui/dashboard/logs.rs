@@ -279,18 +279,86 @@ pub fn wrap_text(text: &str, first_max: usize, cont_max: usize) -> Vec<String> {
     lines
 }
 
+/// Extrait un horodatage en début de ligne de log s'il est présent.
+/// Supporte les formats ISO (YYYY-MM-DD...), date standard (YYYY/MM/DD...) et heure seule (HH:MM:SS...).
+pub fn split_log_timestamp(line: &str) -> Option<(&str, &str)> {
+    let bytes = line.as_bytes();
+    let len = bytes.len();
+
+    // 1. Format ISO ou date standard: "YYYY-MM-DD HH:MM:SS" ou "YYYY/MM/DD HH:MM:SS" (au moins 19 chars)
+    if len >= 19 {
+        let is_year = bytes[0..4].iter().all(|b| b.is_ascii_digit());
+        let sep1 = bytes[4];
+        let sep2 = bytes[7];
+        let is_month = bytes[5].is_ascii_digit() && bytes[6].is_ascii_digit();
+        let is_day = bytes[8].is_ascii_digit() && bytes[9].is_ascii_digit();
+        let sep3 = bytes[10];
+        let is_hour = bytes[11].is_ascii_digit() && bytes[12].is_ascii_digit();
+        let is_min = bytes[14].is_ascii_digit() && bytes[15].is_ascii_digit();
+        let is_sec = bytes[17].is_ascii_digit() && bytes[18].is_ascii_digit();
+
+        if is_year
+            && (sep1 == b'-' || sep1 == b'/')
+            && (sep2 == b'-' || sep2 == b'/')
+            && is_month
+            && is_day
+            && (sep3 == b' ' || sep3 == b'T')
+            && is_hour
+            && bytes[13] == b':'
+            && is_min
+            && bytes[16] == b':'
+            && is_sec
+        {
+            let mut end_ts = 19;
+            while end_ts < len && bytes[end_ts] != b' ' && bytes[end_ts] != b'\t' {
+                end_ts += 1;
+            }
+            let mut start_rest = end_ts;
+            while start_rest < len && (bytes[start_rest] == b' ' || bytes[start_rest] == b'\t') {
+                start_rest += 1;
+            }
+            return Some((&line[..end_ts], &line[start_rest..]));
+        }
+    }
+
+    // 2. Format court: "HH:MM:SS" (au moins 8 chars)
+    if len >= 8
+        && bytes[0].is_ascii_digit()
+        && bytes[1].is_ascii_digit()
+        && bytes[2] == b':'
+        && bytes[3].is_ascii_digit()
+        && bytes[4].is_ascii_digit()
+        && bytes[5] == b':'
+        && bytes[6].is_ascii_digit()
+        && bytes[7].is_ascii_digit()
+    {
+        let mut end_ts = 8;
+        while end_ts < len && (bytes[end_ts].is_ascii_digit() || bytes[end_ts] == b'.' || bytes[end_ts] == b'+' || bytes[end_ts] == b'-') {
+            end_ts += 1;
+        }
+        if end_ts == len || bytes[end_ts] == b' ' || bytes[end_ts] == b'\t' {
+            let mut start_rest = end_ts;
+            while start_rest < len && (bytes[start_rest] == b' ' || bytes[start_rest] == b'\t') {
+                start_rest += 1;
+            }
+            return Some((&line[..end_ts], &line[start_rest..]));
+        }
+    }
+
+    None
+}
+
 /// Counts total wrapped lines for a single log line.
 pub fn count_wrapped_line(line: &str, max_width: usize) -> usize {
     let sanitized = line.replace('\t', "    ");
-    let line = &sanitized;
-    if line.len() > 25 && line.chars().nth(4) == Some('-') && line.chars().nth(7) == Some('-') {
-        let rest = &line[25..];
-        let rest_first = max_width.saturating_sub(25);
+    if let Some((ts, rest)) = split_log_timestamp(&sanitized) {
+        let ts_len = ts.chars().count() + 2;
+        let rest_first = max_width.saturating_sub(ts_len);
         let cont = max_width.saturating_sub(4);
         wrap_text(rest, rest_first, cont).len()
     } else {
         let cont = max_width.saturating_sub(4);
-        wrap_text(line, max_width, cont).len()
+        wrap_text(&sanitized, max_width, cont).len()
     }
 }
 
@@ -305,66 +373,153 @@ pub fn count_wrapped_log_lines(lines: &std::collections::VecDeque<String>, filte
     total
 }
 
+/// Colorise intelligemment une portion de log (hors timestamp) selon son contenu sémantique.
+fn colorize_log_part(part: &str, theme: &ThemePalette) -> Vec<Span<'static>> {
+    let ll = part.to_lowercase();
+
+    // 1. Erreur critique
+    if ll.contains("error") || ll.contains("failed") || ll.contains("fatal") || ll.contains("critical") {
+        return vec![Span::styled(
+            part.to_string(),
+            Style::default().fg(theme.red).add_modifier(Modifier::BOLD),
+        )];
+    }
+
+    // 2. Succès bisync
+    if ll.contains("bisync successful") {
+        return vec![Span::styled(
+            part.to_string(),
+            Style::default().fg(theme.green).add_modifier(Modifier::BOLD),
+        )];
+    }
+
+    // 3. Fichier synchronisé avec action à la fin (ex: "path/file.txt: Copied (new)")
+    if let Some(colon_pos) = part.rfind(':') {
+        let after_colon = part[colon_pos + 1..].trim();
+        let after_lower = after_colon.to_lowercase();
+        let action_style = if after_lower.contains("copied (new)") {
+            Some(Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
+        } else if after_lower.contains("copied (replaced") || after_lower.contains("updated file") || after_lower.contains("updated mod") {
+            Some(Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+        } else if after_lower.contains("deleted") {
+            Some(Style::default().fg(theme.red).add_modifier(Modifier::BOLD))
+        } else {
+            None
+        };
+
+        if let Some(act_style) = action_style {
+            let before = &part[..colon_pos + 1];
+            return vec![
+                Span::styled(before.to_string(), Style::default().fg(theme.text_bright)),
+                Span::styled(format!(" {}", after_colon), act_style),
+            ];
+        }
+    }
+
+    // 4. Ligne avec préfixe de niveau rclone (ex: "INFO  : message")
+    for (prefix, col, bold) in [
+        ("INFO  :", theme.cyan, false),
+        ("INFO:", theme.cyan, false),
+        ("NOTICE:", theme.yellow, false),
+        ("WARN  :", theme.yellow, true),
+        ("WARNING:", theme.yellow, true),
+        ("DEBUG :", theme.text_muted, false),
+        ("DEBUG:", theme.text_muted, false),
+    ] {
+        if let Some(after) = part.strip_prefix(prefix) {
+            let mut p_style = Style::default().fg(col);
+            if bold {
+                p_style = p_style.add_modifier(Modifier::BOLD);
+            }
+            return vec![
+                Span::styled(prefix.to_string(), p_style),
+                Span::styled(after.to_string(), Style::default().fg(theme.text_bright)),
+            ];
+        }
+    }
+
+    // 5. Différentiels bisync (ex: "- Path1 File is new - path")
+    if (part.starts_with("- Path1") || part.starts_with("- Path2") || part.starts_with("Path1:") || part.starts_with("Path2:"))
+        && (ll.contains("file is new") || ll.contains("file changed") || ll.contains("file was deleted") || ll.contains("file deleted") || ll.contains("queue copy"))
+    {
+        let (act_str, act_style) = if ll.contains("file is new") {
+            ("File is new", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
+        } else if ll.contains("file changed") {
+            ("File changed", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+        } else if ll.contains("file was deleted") || ll.contains("file deleted") {
+            ("File deleted", Style::default().fg(theme.red).add_modifier(Modifier::BOLD))
+        } else {
+            ("Queue copy", Style::default().fg(theme.green))
+        };
+
+        if let Some(pos) = part.to_lowercase().find(&act_str.to_lowercase()) {
+            let before = &part[..pos];
+            let after = &part[pos + act_str.len()..];
+            return vec![
+                Span::styled(before.to_string(), Style::default().fg(theme.cyan)),
+                Span::styled(part[pos..pos + act_str.len()].to_string(), act_style),
+                Span::styled(after.to_string(), Style::default().fg(theme.text_bright)),
+            ];
+        }
+    }
+
+    // 6. Stats de transfert (Transferred:, Checks:, Elapsed time:)
+    if ll.starts_with("transferred:") || ll.starts_with("checks:") || ll.starts_with("elapsed time:") {
+        if let Some(colon_pos) = part.find(':') {
+            let label = &part[..colon_pos + 1];
+            let value = &part[colon_pos + 1..];
+            return vec![
+                Span::styled(label.to_string(), Style::default().fg(theme.cyan)),
+                Span::styled(value.to_string(), Style::default().fg(theme.text_bright)),
+            ];
+        }
+        return vec![Span::styled(part.to_string(), Style::default().fg(theme.cyan))];
+    }
+
+    // 7. Avertissement générique
+    if ll.contains("warning") || ll.contains("warn") {
+        return vec![Span::styled(part.to_string(), Style::default().fg(theme.yellow))];
+    }
+
+    // 8. Défaut : texte clair standard
+    vec![Span::styled(part.to_string(), Style::default().fg(theme.text_bright))]
+}
+
 /// Wraps and colorizes a single log line according to log level and message content.
 pub fn wrap_and_colorize_log_line(line: &str, max_width: usize, theme: &ThemePalette) -> Vec<Line<'static>> {
     let sanitized = line.replace('\t', "    ");
-    let line = &sanitized;
-    let ll = line.to_lowercase();
 
-    let (prefix_color, is_bold) = if ll.contains("error") || ll.contains("failed") || ll.contains("critical") {
-        (theme.red, true)
-    } else if ll.contains("notice") || ll.contains("warning") || ll.contains("warn") {
-        (theme.yellow, false)
-    } else if ll.contains("bisync successful") || ll.contains("copied (new)") {
-        (theme.green, true)
-    } else if ll.contains("transferred:") || ll.contains("checks:") {
-        (theme.cyan, false)
-    } else {
-        (theme.text_bright, false)
-    };
-
-    let mut style = Style::default().fg(prefix_color);
-    if is_bold {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-
-    if line.len() > 25 && line.chars().nth(4) == Some('-') && line.chars().nth(7) == Some('-') {
-        let ts = &line[..25];
-        let rest = &line[25..];
-        let rest_first_limit = max_width.saturating_sub(25);
+    if let Some((ts, rest)) = split_log_timestamp(&sanitized) {
+        let ts_len = ts.chars().count() + 2;
+        let rest_first_limit = max_width.saturating_sub(ts_len);
         let cont_limit = max_width.saturating_sub(4);
 
         let wrapped = wrap_text(rest, rest_first_limit, cont_limit);
         let mut lines = Vec::with_capacity(wrapped.len());
 
         for (i, part) in wrapped.into_iter().enumerate() {
+            let mut spans = Vec::new();
             if i == 0 {
-                lines.push(Line::from(vec![
-                    Span::styled(ts.to_string(), Style::default().fg(theme.text_muted)),
-                    Span::styled(part, style),
-                ]));
+                spans.push(Span::styled(format!("{}  ", ts), Style::default().fg(theme.text_muted)));
             } else {
-                lines.push(Line::from(vec![
-                    Span::styled("  ↳ ".to_string(), Style::default().fg(theme.text_muted)),
-                    Span::styled(part, style),
-                ]));
+                spans.push(Span::styled("  ↳ ".to_string(), Style::default().fg(theme.text_muted)));
             }
+            spans.extend(colorize_log_part(&part, theme));
+            lines.push(Line::from(spans));
         }
         lines
     } else {
         let cont_limit = max_width.saturating_sub(4);
-        let wrapped = wrap_text(line, max_width, cont_limit);
+        let wrapped = wrap_text(&sanitized, max_width, cont_limit);
         let mut lines = Vec::with_capacity(wrapped.len());
 
         for (i, part) in wrapped.into_iter().enumerate() {
-            if i == 0 {
-                lines.push(Line::from(vec![Span::styled(part, style)]));
-            } else {
-                lines.push(Line::from(vec![
-                    Span::styled("  ↳ ".to_string(), Style::default().fg(theme.text_muted)),
-                    Span::styled(part, style),
-                ]));
+            let mut spans = Vec::new();
+            if i > 0 {
+                spans.push(Span::styled("  ↳ ".to_string(), Style::default().fg(theme.text_muted)));
             }
+            spans.extend(colorize_log_part(&part, theme));
+            lines.push(Line::from(spans));
         }
         lines
     }

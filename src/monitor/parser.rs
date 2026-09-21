@@ -404,6 +404,20 @@ pub fn format_log_line_for_display(line: &str) -> Vec<String> {
         if let Ok(json_log) = serde_json::from_str::<RcloneJsonLog>(json_part) {
             let mut result = Vec::new();
 
+            let time_prefix = if let Some(t_str) = json_log.time.as_deref() {
+                if t_str.len() >= 19 && (t_str.chars().nth(10) == Some('T') || t_str.chars().nth(10) == Some(' ')) {
+                    let d = &t_str[..10];
+                    let t = &t_str[11..19];
+                    format!("{} {}  ", d, t)
+                } else if !t_str.is_empty() {
+                    format!("{}  ", t_str)
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
             // A. Fichier synchronisé (ex: "Documents/rapport.pdf: Copied (new)")
             if let Some(obj) = json_log.object {
                 let msg = json_log.msg.as_deref().unwrap_or("");
@@ -411,7 +425,7 @@ pub fn format_log_line_for_display(line: &str) -> Vec<String> {
                 if msg_lower.contains("directory") || msg_lower.contains("setmodtime") {
                     return Vec::new();
                 }
-                result.push(format!("{}: {}", obj, msg));
+                result.push(format!("{}{}: {}", time_prefix, obj, msg));
                 return result;
             }
 
@@ -440,7 +454,7 @@ pub fn format_log_line_for_display(line: &str) -> Vec<String> {
                     return Vec::new();
                 }
                 if !clean_trim.is_empty() {
-                    result.push(clean_trim.to_string());
+                    result.push(format!("{}{}", time_prefix, clean_trim));
                     return result;
                 }
             }
@@ -753,13 +767,13 @@ mod tests {
         let l2 = r#"INFO  : {"time":"2026-09-21T09:45:45.000000000+02:00","level":"info","msg":"Copied (new)","object":"folder/file.txt"}"#;
         let res2 = format_log_line_for_display(l2);
         assert_eq!(res2.len(), 1);
-        assert_eq!(res2[0], "folder/file.txt: Copied (new)");
+        assert_eq!(res2[0], "2026-09-21 09:45:45  folder/file.txt: Copied (new)");
 
         // Ligne informative standard
         let l3 = r#"INFO  : {"time":"2026-09-21T09:45:46.000000000+02:00","level":"info","msg":"Building Path1 and Path2 listings"}"#;
         let res3 = format_log_line_for_display(l3);
         assert_eq!(res3.len(), 1);
-        assert_eq!(res3[0], "Building Path1 and Path2 listings");
+        assert_eq!(res3[0], "2026-09-21 09:45:46  Building Path1 and Path2 listings");
 
         // Ligne texte brute
         let l4 = "rclone-bisync.service: Failed with result 'signal'.";
