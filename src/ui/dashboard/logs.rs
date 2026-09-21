@@ -374,7 +374,7 @@ pub fn count_wrapped_log_lines(lines: &std::collections::VecDeque<String>, filte
 }
 
 /// Colorise intelligemment une portion de log (hors timestamp) selon son contenu sémantique.
-fn colorize_log_part(part: &str, theme: &ThemePalette) -> Vec<Span<'static>> {
+pub(crate) fn colorize_log_part(part: &str, theme: &ThemePalette) -> Vec<Span<'static>> {
     let ll = part.to_lowercase();
 
     // 1. Erreur critique

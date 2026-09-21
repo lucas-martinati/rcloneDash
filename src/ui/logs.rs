@@ -1,40 +1,18 @@
 use ratatui::{
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
 };
 
 use crate::ui::theme::ThemePalette;
 
 pub fn colorize_log_line<'a>(line: &'a str, theme: &ThemePalette) -> Line<'a> {
-    let ll = line.to_lowercase();
-
-    let (prefix_color, is_bold) = if ll.contains("error") || ll.contains("failed") || ll.contains("critical") {
-        (theme.red, true)
-    } else if ll.contains("file was deleted") || ll.contains("file deleted") || ll.contains("queue delete") || ll.contains("deleted") {
-        (theme.red, false)
-    } else if ll.contains("notice") || ll.contains("warning") || ll.contains("warn") || ll.contains("file changed") {
-        (theme.yellow, false)
-    } else if ll.contains("bisync successful") || ll.contains("copied") || ll.contains("file is new") || ll.contains("queue copy") {
-        (theme.green, false)
-    } else if ll.contains("transferred:") || ll.contains("checks:") {
-        (theme.accent, false)
+    if let Some((ts, rest)) = crate::ui::dashboard::logs::split_log_timestamp(line) {
+        let mut spans = vec![
+            Span::styled(format!("{}  ", ts), Style::default().fg(theme.text_muted)),
+        ];
+        spans.extend(crate::ui::dashboard::logs::colorize_log_part(rest, theme));
+        Line::from(spans)
     } else {
-        (theme.text_bright, false)
-    };
-
-    let mut style = Style::default().fg(prefix_color);
-    if is_bold {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-
-    if line.len() > 25 && line.chars().nth(4) == Some('-') && line.chars().nth(7) == Some('-') {
-        let ts = &line[..25];
-        let rest = &line[25..];
-        Line::from(vec![
-            Span::styled(ts, Style::default().fg(theme.text_muted)),
-            Span::styled(rest, style),
-        ])
-    } else {
-        Line::from(Span::styled(line, style))
+        Line::from(crate::ui::dashboard::logs::colorize_log_part(line, theme))
     }
 }

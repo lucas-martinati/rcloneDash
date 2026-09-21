@@ -977,14 +977,19 @@ impl App {
         Action::None
     }
 
+    /// Ferme la modale de confirmation et affiche le toast du résultat.
+    fn confirm_result(&mut self, result: Result<(), String>, ok_msg: impl Into<String>) {
+        self.modal = Modal::None;
+        match result {
+            Ok(_) => self.set_toast(ok_msg),
+            Err(e) => self.set_toast(format!("✗ Error: {}", e)),
+        }
+    }
+
     fn handle_key_confirm_sync(&mut self, key: &KeyEvent) -> Action {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
-                self.modal = Modal::None;
-                match systemd::trigger_sync() {
-                    Ok(_) => self.set_toast("✔ Forced sync initiated..."),
-                    Err(e) => self.set_toast(format!("✗ Error: {}", e)),
-                }
+                self.confirm_result(systemd::trigger_sync(), "✔ Forced sync initiated...");
             }
             KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
                 self.modal = Modal::None;
@@ -997,11 +1002,7 @@ impl App {
     fn handle_key_confirm_resync(&mut self, key: &KeyEvent) -> Action {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
-                self.modal = Modal::None;
-                match systemd::trigger_resync() {
-                    Ok(_) => self.set_toast("✔ Full resynchronization initiated (--resync)!"),
-                    Err(e) => self.set_toast(format!("✗ Error: {}", e)),
-                }
+                self.confirm_result(systemd::trigger_resync(), "✔ Full resynchronization initiated (--resync)!");
             }
             KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
                 self.modal = Modal::None;
@@ -1014,11 +1015,7 @@ impl App {
     fn handle_key_confirm_cancel(&mut self, key: &KeyEvent) -> Action {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
-                self.modal = Modal::None;
-                match systemd::cancel_sync() {
-                    Ok(_) => self.set_toast("✔ Active synchronization aborted!"),
-                    Err(e) => self.set_toast(format!("✗ Error: {}", e)),
-                }
+                self.confirm_result(systemd::cancel_sync(), "✔ Active synchronization aborted!");
             }
             KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
                 self.modal = Modal::None;
@@ -1031,20 +1028,42 @@ impl App {
     fn handle_key_confirm_delete(&mut self, rel: &str, key: &KeyEvent) -> Action {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('o') | KeyCode::Enter => {
-                self.modal = Modal::None;
                 let base = config::expand_tilde(&self.config.local_dir);
-                match fs_tree::delete_entry(&base, rel) {
-                    Ok(_) => {
-                        self.set_toast(format!("✔ {} deleted", rel));
-                        self.reload_files();
-                    }
-                    Err(e) => self.set_toast(format!("✗ Error: {}", e)),
+                let res = fs_tree::delete_entry(&base, rel);
+                let ok = res.is_ok();
+                self.confirm_result(res, format!("✔ {} deleted", rel));
+                if ok {
+                    self.reload_files();
                 }
             }
             KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
                 self.modal = Modal::None;
             }
             _ => {}
+        }
+        Action::None
+    }
+
+    /// Active l'option sélectionnée : édition (texte), action ou cycle.
+    /// `cycle_dir` donne le sens du cycle pour les réglages à choix ;
+    /// None = activation simple (touche Enter).
+    fn activate_selected_setting(&mut self, cycle_dir: Option<bool>) -> Action {
+        if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+            match setting.kind() {
+                config::SettingKind::TextInput => {
+                    self.start_editing_setting();
+                }
+                config::SettingKind::Action => {
+                    if setting == config::SettingId::LogJournalAction {
+                        return Action::OpenFullLogs;
+                    } else if setting == config::SettingId::ResyncAction {
+                        self.modal = Modal::ConfirmResync;
+                    }
+                }
+                config::SettingKind::Cycle => {
+                    self.cycle_setting(cycle_dir.unwrap_or(true));
+                }
+            }
         }
         Action::None
     }
@@ -1165,23 +1184,7 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
-                    match setting.kind() {
-                        config::SettingKind::TextInput => {
-                            self.start_editing_setting();
-                        }
-                        config::SettingKind::Action => {
-                            if setting == config::SettingId::LogJournalAction {
-                                return Action::OpenFullLogs;
-                            } else if setting == config::SettingId::ResyncAction {
-                                self.modal = Modal::ConfirmResync;
-                            }
-                        }
-                        config::SettingKind::Cycle => {
-                            self.cycle_setting(true);
-                        }
-                    }
-                }
+                return self.activate_selected_setting(None);
             }
             KeyCode::Char('e') | KeyCode::Char(' ') => {
                 if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
@@ -1193,42 +1196,10 @@ impl App {
                 }
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
-                    match setting.kind() {
-                        config::SettingKind::TextInput => {
-                            self.start_editing_setting();
-                        }
-                        config::SettingKind::Action => {
-                            if setting == config::SettingId::LogJournalAction {
-                                return Action::OpenFullLogs;
-                            } else if setting == config::SettingId::ResyncAction {
-                                self.modal = Modal::ConfirmResync;
-                            }
-                        }
-                        config::SettingKind::Cycle => {
-                            self.cycle_setting(true);
-                        }
-                    }
-                }
+                return self.activate_selected_setting(Some(true));
             }
             KeyCode::Left | KeyCode::Char('h') => {
-                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
-                    match setting.kind() {
-                        config::SettingKind::TextInput => {
-                            self.start_editing_setting();
-                        }
-                        config::SettingKind::Action => {
-                            if setting == config::SettingId::LogJournalAction {
-                                return Action::OpenFullLogs;
-                            } else if setting == config::SettingId::ResyncAction {
-                                self.modal = Modal::ConfirmResync;
-                            }
-                        }
-                        config::SettingKind::Cycle => {
-                            self.cycle_setting(false);
-                        }
-                    }
-                }
+                return self.activate_selected_setting(Some(false));
             }
             _ => {}
         }

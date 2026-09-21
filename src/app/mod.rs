@@ -329,8 +329,13 @@ pub struct App {
     // Dry-Run simulation
     pub dry_run_running: bool,
     pub dry_run_logs: Vec<String>,
+    /// Lignes brutes (nettoyées ANSI) pour le parsing ; `dry_run_logs`
+    /// contient la version mise en forme pour l'affichage. Le résumé
+    /// (DryRunSummary) doit toujours être calculé sur les lignes brutes,
+    /// car le formatage détruit la structure JSON attendue par le parseur.
+    pub dry_run_raw_logs: Vec<String>,
     pub dry_run_scroll: usize,
-    pub dry_run_rx: Option<std::sync::mpsc::Receiver<Vec<String>>>,
+    pub dry_run_rx: Option<std::sync::mpsc::Receiver<(Vec<String>, Vec<String>)>>,
 
     // Interactive item selection
     pub history_selected_file_idx: usize,
@@ -424,6 +429,7 @@ impl App {
 
             dry_run_running: false,
             dry_run_logs: Vec::new(),
+            dry_run_raw_logs: Vec::new(),
             dry_run_scroll: 0,
             dry_run_rx: None,
 
@@ -768,8 +774,9 @@ impl App {
 
         if self.dry_run_running {
             if let Some(rx) = &self.dry_run_rx {
-                if let Ok(lines) = rx.try_recv() {
+                if let Ok((lines, raw_lines)) = rx.try_recv() {
                     self.dry_run_logs = lines;
+                    self.dry_run_raw_logs = raw_lines;
                     self.dry_run_running = false;
                     self.set_toast("✔ Dry-Run simulation completed!");
                 }
@@ -793,6 +800,7 @@ impl App {
             "Executing: rclone bisync --dry-run -v --tpslimit 8".to_string(),
             "This may take a moment...".to_string(),
         ];
+        self.dry_run_raw_logs = Vec::new();
         self.dry_run_scroll = 0;
         self.modal = Modal::DryRun;
         self.set_toast("🛡 Dry-Run simulation started...");
@@ -813,6 +821,7 @@ impl App {
                 &local_dir,
                 "--dry-run",
                 "-v",
+                "--use-json-log",
                 "--tpslimit",
                 "8",
                 "--filter-from",
@@ -829,16 +838,21 @@ impl App {
             let output = cmd.output();
 
             let mut lines = Vec::new();
+            let mut raw_lines = Vec::new();
             match output {
                 Ok(out) => {
                     let s_out = String::from_utf8_lossy(&out.stdout);
                     let s_err = String::from_utf8_lossy(&out.stderr);
                     for chunk in s_out.lines().chain(s_err.lines()) {
                         for raw_line in chunk.split('\r') {
+                            // Copie brute pour DryRunSummary::from_logs (le
+                            // formatage d'affichage détruit le JSON parsable).
                             let clean = crate::monitor::streamer::strip_ansi(raw_line).trim().to_string();
                             if !clean.is_empty() {
-                                lines.push(clean);
+                                raw_lines.push(clean);
                             }
+                            let formatted = crate::monitor::parser::format_log_line_for_display(raw_line);
+                            lines.extend(formatted);
                         }
                     }
                     if lines.is_empty() {
@@ -846,10 +860,12 @@ impl App {
                     }
                 }
                 Err(e) => {
-                    lines.push(format!("Error running rclone: {}", e));
+                    let msg = format!("Error running rclone: {}", e);
+                    raw_lines.push(msg.clone());
+                    lines.push(msg);
                 }
             }
-            let _ = tx.send(lines);
+            let _ = tx.send((lines, raw_lines));
         });
     }
 

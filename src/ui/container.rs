@@ -77,35 +77,71 @@ pub fn centered_fixed_rect(width: u16, height: u16, r: Rect) -> Rect {
     }
 }
 
+/// Dimensions partagées de la modale menu — source unique pour le rendu
+/// (menu.rs) et la zone active clic-outside / scroll.
+pub struct MenuModalDims {
+    pub width: u16,
+    pub height: u16,
+    pub logo_height: u16,
+}
+
+pub fn menu_modal_dims(screen: Rect) -> MenuModalDims {
+    let is_wide = screen.width >= 86;
+    let logo_height: u16 = if is_wide { 6 } else { 5 };
+    MenuModalDims {
+        width: if is_wide { 85.min(screen.width) } else { 66.min(screen.width) },
+        height: (logo_height + 13).min(screen.height),
+        logo_height,
+    }
+}
+
+/// Dimensions partagées de la modale settings — source unique pour le rendu
+/// (settings.rs) et la zone active clic-outside / scroll.
+pub struct SettingsModalDims {
+    pub box_w: u16,
+    pub box_h: u16,
+    pub logo_h: u16,
+    pub show_logo: bool,
+    pub total_h: u16,
+}
+
+pub fn settings_modal_dims(screen: Rect) -> SettingsModalDims {
+    let is_wide = screen.width >= 88;
+    let logo_h: u16 = if is_wide { 6 } else { 5 };
+    let show_logo = screen.height >= 35;
+    let box_w = if screen.width >= 96 {
+        88.min(screen.width.saturating_sub(4))
+    } else if screen.width >= 86 {
+        82.min(screen.width.saturating_sub(2))
+    } else {
+        76.min(screen.width.saturating_sub(2))
+    };
+    let max_avail_h = if show_logo {
+        screen.height.saturating_sub(logo_h + 3)
+    } else {
+        screen.height.saturating_sub(2)
+    };
+    let box_h = 26u16.min(max_avail_h).max(18);
+    SettingsModalDims {
+        box_w,
+        box_h,
+        logo_h,
+        show_logo,
+        total_h: if show_logo { logo_h + 1 + box_h } else { box_h },
+    }
+}
+
 /// Computes the total screen area occupied by an active modal (for click-outside and scroll handling).
 pub fn compute_active_modal_area(modal: &Modal, screen: Rect) -> Option<Rect> {
     match modal {
         Modal::None => None,
         Modal::Menu => {
-            let is_wide = screen.width >= 86;
-            let width = if is_wide { 86.min(screen.width) } else { 72.min(screen.width) };
-            let logo_height: u16 = if is_wide { 6 } else { 5 };
-            let height = (logo_height + 13).min(screen.height);
-            Some(centered_fixed_rect(width, height, screen))
+            let d = menu_modal_dims(screen);
+            Some(centered_fixed_rect(d.width, d.height, screen))
         }
         Modal::Settings => {
-            let is_wide = screen.width >= 88;
-            let logo_h: u16 = if is_wide { 6 } else { 5 };
-            let show_logo = screen.height >= 32;
-            let box_w = if screen.width >= 96 {
-                88.min(screen.width.saturating_sub(4))
-            } else if screen.width >= 86 {
-                82.min(screen.width.saturating_sub(2))
-            } else {
-                76.min(screen.width.saturating_sub(2))
-            };
-            let box_h = if show_logo {
-                23.min(screen.height.saturating_sub(logo_h + 3))
-            } else {
-                23.min(screen.height.saturating_sub(2))
-            };
-            let total_h = if show_logo { logo_h + 1 + box_h } else { box_h };
-            Some(centered_fixed_rect(box_w, total_h, screen))
+            let d = settings_modal_dims(screen);
+            Some(centered_fixed_rect(d.box_w, d.total_h, screen))
         }
         Modal::Files => Some(centered_rect(80, 75, screen)),
         Modal::Filters => Some(centered_rect(82, 74, screen)),

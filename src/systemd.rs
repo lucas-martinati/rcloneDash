@@ -144,7 +144,7 @@ pub fn get_service_info() -> ServiceInfo {
 
     // 3. Cloud safety net (periodic full sync)
     let cfg = config::load_config();
-    if cfg.full_sync_interval == "never" {
+    if cfg.full_sync_interval.eq_ignore_ascii_case("never") {
         info.cloud_safety_net = "Disabled".to_string();
     } else {
         let stamp_path = config::last_full_sync_marker();
@@ -173,12 +173,14 @@ pub fn get_service_info() -> ServiceInfo {
     info
 }
 
-pub fn trigger_sync() -> Result<(), String> {
-    let marker = config::force_sync_marker();
+/// Pose un marqueur puis démarre le service. Si le démarrage échoue, le
+/// marqueur est retiré : sinon il serait rejoué au prochain tick du timer
+/// (sync/resync fantôme).
+fn start_with_marker(marker: &std::path::Path) -> Result<(), String> {
     if let Some(parent) = marker.parent() {
-        let _ = fs::create_dir_all(parent);
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let _ = fs::write(&marker, "");
+    fs::write(marker, "").map_err(|e| e.to_string())?;
 
     let out = Command::new("systemctl")
         .args(["--user", "start", "--no-block", "rclone-bisync.service"])
@@ -188,30 +190,18 @@ pub fn trigger_sync() -> Result<(), String> {
     if out.status.success() {
         Ok(())
     } else {
+        let _ = fs::remove_file(marker);
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
 }
 
+pub fn trigger_sync() -> Result<(), String> {
+    start_with_marker(&config::force_sync_marker())
+}
+
 pub fn trigger_resync() -> Result<(), String> {
-    let resync_marker = config::resync_marker();
-    let force_marker = config::force_sync_marker();
-
-    if let Some(parent) = resync_marker.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let _ = fs::remove_file(&force_marker);
-    let _ = fs::write(&resync_marker, "");
-
-    let out = Command::new("systemctl")
-        .args(["--user", "start", "--no-block", "rclone-bisync.service"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-    }
+    let _ = fs::remove_file(config::force_sync_marker());
+    start_with_marker(&config::resync_marker())
 }
 
 pub fn cancel_sync() -> Result<(), String> {
@@ -221,6 +211,10 @@ pub fn cancel_sync() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     if out.status.success() {
+        // Un trigger annulé avant consommation par la garde ne doit pas
+        // ressusciter au prochain tick.
+        let _ = fs::remove_file(config::force_sync_marker());
+        let _ = fs::remove_file(config::resync_marker());
         Ok(())
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())

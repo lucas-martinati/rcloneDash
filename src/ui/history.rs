@@ -138,7 +138,9 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let has_files = !affected_files.is_empty();
 
     let total_lines = all_lines.len();
-    let visible_height = area.height.saturating_sub(4) as usize;
+    // Le contenu est rendu dans `inner` (area moins les bordures) : synchroniser
+    // la fenêtre visible dessus, sinon on peut scroller 2 lignes dans le vide.
+    let visible_height = area.height.saturating_sub(2) as usize;
     let max_scroll = total_lines.saturating_sub(visible_height);
     let scroll = app.history_details_scroll.min(max_scroll);
 

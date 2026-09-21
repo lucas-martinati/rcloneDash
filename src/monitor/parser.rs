@@ -746,6 +746,113 @@ fn parse_legacy_text_event(line: &str) -> Vec<SyncEvent> {
 }
 
 // =============================================================================
+// Analyse et synthèse Dry-Run
+// =============================================================================
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DryRunSummary {
+    pub path1_new: usize,
+    pub path1_modified: usize,
+    pub path1_deleted: usize,
+    pub path2_new: usize,
+    pub path2_modified: usize,
+    pub path2_deleted: usize,
+    pub checks: usize,
+    pub elapsed: String,
+    pub bytes: String,
+    pub has_errors: bool,
+}
+
+impl DryRunSummary {
+    pub fn from_logs(logs: &[String]) -> Self {
+        let mut s = Self::default();
+        let mut local_diffs: Vec<ModifiedFileDetail> = Vec::new();
+        let mut remote_diffs: Vec<ModifiedFileDetail> = Vec::new();
+
+        for raw_line in logs {
+            let events = parse_log_line(raw_line);
+            for event in events {
+                match event {
+                    SyncEvent::DiffFound { is_local, detail } => {
+                        let target = if is_local { &mut local_diffs } else { &mut remote_diffs };
+                        if let Some(existing) = target.iter_mut().find(|d| d.path == detail.path) {
+                            if detail.action != FileAction::Copied {
+                                existing.action = detail.action;
+                            }
+                        } else {
+                            target.push(detail);
+                        }
+                    }
+                    SyncEvent::StatsUpdated(stats) => {
+                        if stats.checks_done > 0 {
+                            s.checks = s.checks.max(stats.checks_done as usize);
+                        }
+                        if stats.checks_total > 0 {
+                            s.checks = s.checks.max(stats.checks_total as usize);
+                        }
+                        if !stats.elapsed.is_empty() {
+                            s.elapsed = stats.elapsed;
+                        }
+
+                        let is_zero = (stats.bytes_done.is_empty() || stats.bytes_done.eq_ignore_ascii_case("0 b"))
+                            && (stats.bytes_total.is_empty() || stats.bytes_total.eq_ignore_ascii_case("0 b"));
+
+                        if !is_zero {
+                            if !stats.bytes_done.is_empty() && !stats.bytes_total.is_empty() {
+                                s.bytes = format!("{} / {}", stats.bytes_done, stats.bytes_total);
+                            } else if !stats.bytes_done.is_empty() {
+                                s.bytes = stats.bytes_done;
+                            } else if !stats.bytes_total.is_empty() {
+                                s.bytes = stats.bytes_total;
+                            }
+                        } else if s.bytes.is_empty() {
+                            s.bytes = "0 B".to_string();
+                        }
+                    }
+                    SyncEvent::SyncCompleted { success, .. } => {
+                        if !success {
+                            s.has_errors = true;
+                        }
+                    }
+                    SyncEvent::ResyncRequired(_) => {
+                        s.has_errors = true;
+                    }
+                    _ => {}
+                }
+            }
+
+            // Détection de repli pour les erreurs textuelles brutes de rclone
+            let ll = raw_line.to_ascii_lowercase();
+            if ll.contains("error:") || ll.contains("fatal:") || ll.contains("error running rclone") || ll.contains("bisync critical error") {
+                s.has_errors = true;
+            }
+        }
+
+        for diff in local_diffs {
+            match diff.action {
+                FileAction::New | FileAction::Copied => s.path2_new += 1,
+                FileAction::Modified => s.path2_modified += 1,
+                FileAction::Deleted => s.path2_deleted += 1,
+            }
+        }
+        for diff in remote_diffs {
+            match diff.action {
+                FileAction::New | FileAction::Copied => s.path1_new += 1,
+                FileAction::Modified => s.path1_modified += 1,
+                FileAction::Deleted => s.path1_deleted += 1,
+            }
+        }
+
+        s
+    }
+
+    pub fn total_changes(&self) -> usize {
+        self.path1_new + self.path1_modified + self.path1_deleted +
+        self.path2_new + self.path2_modified + self.path2_deleted
+    }
+}
+
+// =============================================================================
 // Tests unitaires
 // =============================================================================
 
@@ -1030,5 +1137,52 @@ mod tests {
         assert!(is_resync_trigger("prior or current is not in sync"));
         assert!(!is_resync_trigger("INFO  : Bisync successful"));
         assert!(!is_resync_trigger(""));
+    }
+
+    #[test]
+    fn test_dry_run_summary_from_text_logs() {
+        let logs = vec![
+            "2026/09/20 18:00:00 INFO  : - Path2    File is new - document.pdf".to_string(),
+            "2026/09/20 18:00:00 INFO  : - Path2    File was deleted - old.txt".to_string(),
+            "2026/09/20 18:00:00 INFO  : - Path1    File is new - remote.png".to_string(),
+            "2026/09/20 18:00:00 INFO  : - Path1    File changed - config.json".to_string(),
+            "2026/09/20 18:00:00 INFO  : - Path2    Queue copy to Path1 - GoogleDrive{hruw5}:/document.pdf".to_string(),
+            "2026/09/20 18:00:00 INFO  : Checks:                150 / 150, 100%".to_string(),
+            "2026/09/20 18:00:00 INFO  : Transferred:   1.234 MiB / 1.234 MiB, 100%".to_string(),
+            "2026/09/20 18:00:00 INFO  : Elapsed time:        2.5s".to_string(),
+            "2026/09/20 18:00:00 INFO  : Bisync successful".to_string(),
+        ];
+
+        let summary = DryRunSummary::from_logs(&logs);
+        assert_eq!(summary.path2_new, 1);
+        assert_eq!(summary.path2_deleted, 1);
+        assert_eq!(summary.path2_modified, 0);
+        assert_eq!(summary.path1_new, 1);
+        assert_eq!(summary.path1_modified, 1);
+        assert_eq!(summary.path1_deleted, 0);
+        assert_eq!(summary.total_changes(), 4);
+        assert_eq!(summary.checks, 150);
+        assert_eq!(summary.elapsed, "2.5s");
+        assert!(summary.bytes.contains("1.234 mib"));
+        assert!(!summary.has_errors);
+    }
+
+    #[test]
+    fn test_dry_run_summary_from_json_logs_and_errors() {
+        let logs = vec![
+            r#"{"time":"2026-09-21T10:45:00.000Z","level":"info","msg":"- Path2    File is new - pic.png"}"#.to_string(),
+            r#"{"time":"2026-09-21T10:45:01.000Z","level":"info","msg":"- Path1    File changed - doc.docx"}"#.to_string(),
+            r#"{"time":"2026-09-21T10:45:02.000Z","level":"notice","msg":"Transferred: 500 B / 500 B\nChecks: 10 / 10\nElapsed time: 1.0s","stats":{"bytes":500,"totalBytes":500,"checks":10,"totalChecks":10,"elapsedTime":1.0}}"#.to_string(),
+            r#"{"time":"2026-09-21T10:45:03.000Z","level":"error","msg":"Bisync critical error: cannot find prior Path1 listings"}"#.to_string(),
+        ];
+
+        let summary = DryRunSummary::from_logs(&logs);
+        assert_eq!(summary.path2_new, 1);
+        assert_eq!(summary.path1_modified, 1);
+        assert_eq!(summary.total_changes(), 2);
+        assert_eq!(summary.checks, 10);
+        assert_eq!(summary.elapsed, "1.0s");
+        assert!(summary.bytes.contains("500 b"));
+        assert!(summary.has_errors);
     }
 }

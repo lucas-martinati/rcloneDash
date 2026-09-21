@@ -2457,9 +2457,11 @@ use crate::monitor::history::{PastRun, RunStatus};
             render_popups(f, &app, &theme, &mut hitboxes);
         }).unwrap();
 
-        // 8. Populate logs with realistic dry-run output (Path1 and Path2 changes)
+        // 8. Populate logs with realistic dry-run output (Path1 and Path2 changes).
+        // Le résumé se calcule sur les lignes brutes, l'affichage sur les
+        // lignes formatées : on renseigne les deux comme le worker.
         app.dry_run_running = false;
-        app.dry_run_logs = vec![
+        app.dry_run_raw_logs = vec![
             "2026/09/20 18:00:00 INFO  : - Path2    File is new - document.pdf".to_string(),
             "2026/09/20 18:00:00 INFO  : - Path2    File was deleted - old.txt".to_string(),
             "2026/09/20 18:00:00 INFO  : - Path1    File is new - remote.png".to_string(),
@@ -2469,6 +2471,7 @@ use crate::monitor::history::{PastRun, RunStatus};
             "2026/09/20 18:00:00 INFO  : Elapsed time:        2.5s".to_string(),
             "2026/09/20 18:00:00 INFO  : Bisync successful".to_string(),
         ];
+        app.dry_run_logs = app.dry_run_raw_logs.clone();
 
         // 9. Render modal with populated summary and logs
         hitboxes.clear();

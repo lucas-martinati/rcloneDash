@@ -34,6 +34,11 @@ impl StreamerState {
     pub fn reset_for_new_sync(&mut self) {
         self.is_syncing = true;
         self.sync_start = Some(Instant::now());
+        // Nouvelle observation : un resync requis ne vaut que pour le run
+        // précédent (l'erreur refera surface si elle persiste). On ne
+        // l'efface volontairement PAS dans mark_finished pour ne pas masquer
+        // une erreur critique du run qui vient de se terminer.
+        self.resync_needed = false;
         self.phase = "1. Listings".to_string();
         self.phase_index = 0;
         self.transfer = TransferStats::default();

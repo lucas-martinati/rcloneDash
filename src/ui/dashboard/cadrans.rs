@@ -187,15 +187,25 @@ pub fn render_disks_cloud_box(
         lines.push(Line::from(line3_spans));
         lines.push(Line::from(line4_spans));
     } else {
-        let line3_compact = vec![
-            Span::styled("Folder:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("{} ", app.config.local_dir), Style::default().fg(theme.text_bright)),
-            Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)),
-            Span::styled(" │ Safety: ", Style::default().fg(theme.text_muted)),
-            Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("│ bw: ", Style::default().fg(theme.text_muted)),
-            Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)),
-        ];
+        // Même en mode compact, le chemin doit être tronqué (fade à gauche
+        // comme la ligne normale) pour ne jamais déborder du cadran.
+        let max_compact_len = (inner.width as usize).saturating_sub(52).max(8);
+        let mut compact_dir =
+            vec![Span::styled("Folder:  ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD))];
+        compact_dir.extend(crate::ui::theme::truncate_with_fade_spans(
+            &app.config.local_dir,
+            max_compact_len,
+            Style::default().fg(theme.text_bright),
+            true,
+            None,
+        ));
+        compact_dir.push(Span::styled(" ", Style::default()));
+        let mut line3_compact = compact_dir;
+        line3_compact.push(Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)));
+        line3_compact.push(Span::styled(" │ Safety: ", Style::default().fg(theme.text_muted)));
+        line3_compact.push(Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+        line3_compact.push(Span::styled("│ bw: ", Style::default().fg(theme.text_muted)));
+        line3_compact.push(Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)));
         lines.push(Line::from(line3_compact));
     }
 

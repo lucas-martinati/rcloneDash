@@ -243,7 +243,9 @@ use crate::monitor::DryRunSummary;
 fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(82, 85, f.area());
 
-    let summary = DryRunSummary::from_logs(&app.dry_run_logs);
+    // Le résumé se calcule sur les lignes brutes (cf. dry_run_raw_logs) :
+    // les lignes d'affichage ont perdu leur structure JSON parsable.
+    let summary = DryRunSummary::from_logs(&app.dry_run_raw_logs);
 
     let total_lines = app.dry_run_logs.len();
 
@@ -628,9 +630,9 @@ fn render_confirm_sync_modal(
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled(" [Y / Enter] Lancer ", Style::default().fg(theme.card_bg).bg(theme.green).add_modifier(Modifier::BOLD)),
+            Span::styled(" [Y / Enter] Launch ", Style::default().fg(theme.card_bg).bg(theme.green).add_modifier(Modifier::BOLD)),
             Span::styled("    ", Style::default()),
-            Span::styled(" [N / Esc] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+            Span::styled(" [N / Esc] Cancel ", Style::default().fg(theme.text_bright).bg(theme.border)),
         ]),
     ];
     f.render_widget(Paragraph::new(actions).alignment(Alignment::Center), chunks[2]);
@@ -660,7 +662,7 @@ fn render_confirm_resync_modal(
         theme,
         area,
         ModalContainerConfig {
-            title_prefix: " ⚠ Resync complet ",
+            title_prefix: " ⚠ Full Resync ",
             title_color: Some(theme.yellow),
             action_shortcuts: Some(vec![confirm_spans]),
             border_color: theme.yellow,
@@ -772,7 +774,7 @@ fn render_confirm_resync_modal(
         Line::from(vec![
             Span::styled(" [Y / Enter] Resync ", Style::default().fg(theme.card_bg).bg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("    ", Style::default()),
-            Span::styled(" [N / Esc] Annuler ", Style::default().fg(theme.text_bright).bg(theme.border)),
+            Span::styled(" [N / Esc] Cancel ", Style::default().fg(theme.text_bright).bg(theme.border)),
         ]),
     ];
     f.render_widget(Paragraph::new(actions).alignment(Alignment::Center), chunks[2]);

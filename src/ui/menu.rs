@@ -75,11 +75,12 @@ const COLORS_NORMAL: [Color; 3] = [
 pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let screen = f.area();
 
-    // Dynamic width: 85 on wide screens, otherwise 66
-    let is_wide = screen.width >= 86;
-    let logo_height: u16 = if is_wide { 6 } else { 5 };
-    let width = if is_wide { 85 } else { 66.min(screen.width) };
-    let height = (logo_height + 13).min(screen.height);
+    // Dimensions partagées avec compute_active_modal_area (clic-outside) :
+    // 85 de large sur écrans larges, sinon 66.
+    let dims = crate::ui::container::menu_modal_dims(screen);
+    let logo_height = dims.logo_height;
+    let width = dims.width;
+    let height = dims.height;
 
     let area = centered_fixed_rect(width, height, screen);
 

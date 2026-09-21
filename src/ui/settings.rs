@@ -12,28 +12,16 @@ use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalCon
 use crate::ui::theme::ThemePalette;
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let screen = f.area();
-    let is_wide = screen.width >= 88;
-    let logo_h: u16 = if is_wide { 6 } else { 5 };
-    // Logo is only displayed if screen height allows the full modal to fit
-    let show_logo = screen.height >= 35;
-    let box_w = if screen.width >= 96 {
-        88.min(screen.width.saturating_sub(4))
-    } else if screen.width >= 86 {
-        82.min(screen.width.saturating_sub(2))
-    } else {
-        76.min(screen.width.saturating_sub(2))
-    };
-
-    // Dynamic height calculation to prevent any overflow
-    let max_avail_h = if show_logo {
-        screen.height.saturating_sub(logo_h + 3)
-    } else {
-        screen.height.saturating_sub(2)
-    };
+    // Dimensions partagées avec compute_active_modal_area (clic-outside/scroll).
+    let dims = crate::ui::container::settings_modal_dims(screen);
+    let box_w = dims.box_w;
     // 26 lines necessary and sufficient to display all options and descriptions without cutoff
-    let box_h = 26u16.min(max_avail_h).max(18);
+    let box_h = dims.box_h;
+    // Logo is only displayed if screen height allows the full modal to fit
+    let show_logo = dims.show_logo;
+    let logo_h = dims.logo_h;
 
-    let total_h = if show_logo { logo_h + 1 + box_h } else { box_h };
+    let total_h = dims.total_h;
     let container_area = centered_fixed_rect(box_w, total_h, screen);
 
     let area = if show_logo {
