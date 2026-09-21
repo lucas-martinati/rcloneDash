@@ -1,3 +1,4 @@
+pub mod events;
 pub mod history;
 pub mod parser;
 pub mod streamer;

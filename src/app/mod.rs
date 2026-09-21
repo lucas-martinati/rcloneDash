@@ -944,7 +944,7 @@ impl App {
         let mut list = Vec::new();
         // 1. Live stream synced files
         for sf in self.live.synced_files.iter().rev() {
-            list.push((sf.action.clone(), sf.path.clone(), String::new(), sf.time.clone()));
+            list.push((sf.action.to_string(), sf.path.clone(), String::new(), sf.time.clone()));
         }
         // 2. Full history synced files (up to 100 files, web parity)
         for run in &self.past_runs {

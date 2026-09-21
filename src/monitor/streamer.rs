@@ -3,16 +3,12 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::RwLock;
-use crate::monitor::parser::{
-    parse_active_file, parse_synced_file, parse_transfer_stats, is_resync_trigger,
-    ActiveFile, SyncedFile, TransferStats,
-};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModifiedFileDetail {
-    pub path: String,
-    pub action: String, // "nouveau", "modifié", "supprimé"
-}
+pub use crate::monitor::events::{
+    ActiveFile, ModifiedFileDetail, SyncEvent, SyncedFile, TransferStats,
+};
+use crate::monitor::parser::{format_log_line_for_display, parse_log_line};
+pub use crate::monitor::parser::strip_ansi;
 
 #[derive(Debug, Clone)]
 pub struct StreamerState {
@@ -85,7 +81,7 @@ impl StreamerState {
                 return file_pct.clamp(1, 99);
             }
         }
-        // 3. Avancement dynamique selon la phase du pipeline bisync (sans saut intempestif sur un fichier actif)
+        // 3. Avancement dynamique selon la phase du pipeline bisync
         match self.phase_index {
             0 => {
                 if let Some(start) = self.sync_start {
@@ -107,6 +103,81 @@ impl StreamerState {
             3 => 70,
             4 => 95,
             _ => 100,
+        }
+    }
+
+    /// Applique un événement universel de synchronisation à l'état du streamer
+    pub fn apply_event(&mut self, event: SyncEvent) {
+        match event {
+            SyncEvent::SyncStarted { .. } => {
+                self.reset_for_new_sync();
+            }
+            SyncEvent::PhaseChanged(phase) => {
+                self.phase = phase.display_name().to_string();
+                self.phase_index = phase.index();
+            }
+            SyncEvent::PathModified { is_local } => {
+                if is_local {
+                    self.path2_modified = true;
+                } else {
+                    self.path1_modified = true;
+                }
+            }
+            SyncEvent::StatsUpdated(stats) => {
+                if !self.is_syncing {
+                    self.reset_for_new_sync();
+                }
+                if !stats.speed.is_empty() {
+                    let speed_val = parse_speed_kibs(&stats.speed);
+                    if speed_val > 0 {
+                        if self.speed_history.len() >= 40 {
+                            self.speed_history.remove(0);
+                        }
+                        self.speed_history.push(speed_val);
+                    }
+                }
+                self.transfer = stats;
+            }
+            SyncEvent::ActiveTransferUpdated(active) => {
+                if !self.is_syncing {
+                    self.reset_for_new_sync();
+                }
+                self.active_files.insert(active.name.clone(), active);
+            }
+            SyncEvent::FileSynced(synced) => {
+                if !self.synced_files.iter().any(|f| f.path == synced.path) {
+                    self.synced_files.push(synced);
+                }
+            }
+            SyncEvent::DiffFound { is_local, detail } => {
+                if is_local {
+                    self.path2_modified = true;
+                    if !self.changes_local.contains(&detail.path) {
+                        self.changes_local.push(detail.path.clone());
+                    }
+                    if let Some(existing) = self.changes_local_details.iter_mut().find(|d| d.path == detail.path) {
+                        existing.action = detail.action;
+                    } else {
+                        self.changes_local_details.push(detail);
+                    }
+                } else {
+                    self.path1_modified = true;
+                    if !self.changes_remote.contains(&detail.path) {
+                        self.changes_remote.push(detail.path.clone());
+                    }
+                    if let Some(existing) = self.changes_remote_details.iter_mut().find(|d| d.path == detail.path) {
+                        existing.action = detail.action;
+                    } else {
+                        self.changes_remote_details.push(detail);
+                    }
+                }
+            }
+            SyncEvent::ResyncRequired(_) => {
+                self.resync_needed = true;
+            }
+            SyncEvent::SyncCompleted { .. } => {
+                self.mark_finished();
+            }
         }
     }
 }
@@ -160,44 +231,6 @@ pub fn get_running_sync_elapsed_seconds() -> Option<u64> {
     None
 }
 
-pub fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            if let Some(&next) = chars.peek() {
-                if next == '[' {
-                    chars.next(); // consume '['
-                    for code in chars.by_ref() {
-                        if (0x40..=0x7E).contains(&(code as u32)) {
-                            break;
-                        }
-                    }
-                } else if next == ']' {
-                    chars.next(); // consume ']'
-                    while let Some(osc) = chars.next() {
-                        if osc == '\x07' || (osc == '\x1b' && chars.peek() == Some(&'\\')) {
-                            if osc == '\x1b' {
-                                chars.next();
-                            }
-                            break;
-                        }
-                    }
-                } else if next == '(' || next == ')' {
-                    chars.next(); // consume '(' or ')'
-                    chars.next(); // consume charset
-                }
-            }
-        } else if c == '\t' {
-            out.push_str("    ");
-        } else if c != '\r' && !c.is_control() {
-            out.push(c);
-        }
-    }
-    out
-}
-
 pub fn spawn_log_streamer() -> SharedStreamer {
     let mut initial_state = StreamerState::default();
     let service = "rclone-bisync.service";
@@ -212,10 +245,12 @@ pub fn spawn_log_streamer() -> SharedStreamer {
             for line in raw_line.split('\r') {
                 let clean = strip_ansi(line).trim().to_string();
                 if !clean.is_empty() {
-                    if initial_state.log_lines.len() >= 500 {
-                        initial_state.log_lines.pop_front();
+                    for disp in format_log_line_for_display(&clean) {
+                        if initial_state.log_lines.len() >= 500 {
+                            initial_state.log_lines.pop_front();
+                        }
+                        initial_state.log_lines.push_back(disp);
                     }
-                    initial_state.log_lines.push_back(clean);
                 }
             }
         }
@@ -284,148 +319,18 @@ pub fn spawn_log_streamer() -> SharedStreamer {
 }
 
 fn parse_stream_line(line: &str, state: &mut StreamerState) {
-    let ll = line.to_lowercase();
-
-    // Ajout à l'historique des logs (tampon circulaire 500 lignes)
-    if state.log_lines.len() >= 500 {
-        state.log_lines.pop_front();
-    }
-    state.log_lines.push_back(line.to_string());
-
-    // Détection début de synchronisation
-    let is_start = (ll.contains("systemd") && (ll.contains("starting") || ll.contains("started")) && ll.contains("rclone-bisync"))
-        || (ll.contains("rclone-bisync-guard") && ll.contains("lancement du bisync"))
-        || ll.contains("rclonedash: lancement du bisync")
-        || ll.contains("synching path1")
-        || ll.contains("bisyncing with")
-        || ll.contains("building path1 and path2 listings");
-
-    if is_start {
-        state.reset_for_new_sync();
-        return;
-    }
-
-    // Détection d'activité sync si is_syncing n'a pas encore été basculé
-    if !state.is_syncing && (
-        ll.contains("transferred:") || ll.contains("checks:") || ll.contains("transferring:")
-        || ll.contains("copying path") || ll.contains("elapsed time:")
-        || ll.contains("building path1 and path2 listings")
-        || ll.contains("checking for diffs")
-    ) {
-        state.reset_for_new_sync();
-    }
-
-    // Détection si un chemin complet est marqué comme modifié
-    if ll.contains("path1 was modified") || ll.contains("path1: path was modified") || ll.contains("differences found on path1") {
-        state.path1_modified = true;
-    }
-    if ll.contains("path2 was modified") || ll.contains("path2: path was modified") || ll.contains("differences found on path2") {
-        state.path2_modified = true;
-    }
-
-    // Détection de la phase du pipeline
-    if ll.contains("updating listings") || ll.contains("updating path") {
-        state.phase = "5. Updating".to_string();
-        state.phase_index = 4;
-    } else if (
-        ll.contains("applying changes")
-        || ll.contains("synching path1 to path2")
-        || ll.contains("synching path2 to path1")
-        || (ll.contains("copying") && !ll.contains("copying path") && !ll.contains("queue copy"))
-        || ll.contains("copied (")
-        || ll.contains("deleted (")
-        || state.transfer.files_done > 0
-        || (state.transfer.files_total > 0 && state.transfer.pct > 0)
-        || !state.active_files.is_empty()
-    ) && state.phase_index < 3 {
-        state.phase = "4. Applying".to_string();
-        state.phase_index = 3;
-    } else if (
-        ll.contains("path2 checking for diffs")
-        || ll.contains("path2: checking")
-        || ll.contains("validating listings for path2")
-        || ll.contains("differences found on path2")
-        || ll.contains("path2 was modified")
-    ) && state.phase_index < 3 {
-        state.phase = "3. Local Diffs".to_string();
-        state.phase_index = 2;
-    } else if (
-        ll.contains("path1 checking for diffs")
-        || ll.contains("path1: checking")
-        || ll.contains("validating listings for path1")
-        || ll.contains("differences found on path1")
-        || ll.contains("path1 was modified")
-    ) && state.phase_index < 2 {
-        state.phase = "2. Remote Diffs".to_string();
-        state.phase_index = 1;
-    }
-
-    // Parsing métriques de transfert
-    parse_transfer_stats(line, &mut state.transfer);
-
-    // Extraction de la vitesse pour le Sparkline
-    if !state.transfer.speed.is_empty() {
-        let speed_val = parse_speed_kibs(&state.transfer.speed);
-        if speed_val > 0 {
-            if state.speed_history.len() >= 40 {
-                state.speed_history.remove(0);
-            }
-            state.speed_history.push(speed_val);
+    // Formatage propre pour affichage dans le panneau des logs
+    for disp in format_log_line_for_display(line) {
+        if state.log_lines.len() >= 500 {
+            state.log_lines.pop_front();
         }
+        state.log_lines.push_back(disp);
     }
 
-    // Fichiers actifs
-    if let Some(active) = parse_active_file(line) {
-        state.active_files.insert(active.name.clone(), active);
-    }
-
-    // Fichier synchronisé
-    if let Some(synced) = parse_synced_file(line) {
-        if !state.synced_files.iter().any(|f| f.path == synced.path) {
-            state.synced_files.push(synced);
-        }
-    }
-
-    // Détection besoin de resync critique
-    if is_resync_trigger(line) {
-        state.resync_needed = true;
-    }
-
-    // Changements détectés Path1 (distant) / Path2 (local) avec détail précis
-    if let Some((is_local, detail)) = parse_diff_file(line) {
-        if is_local {
-            state.path2_modified = true;
-            if !state.changes_local.contains(&detail.path) {
-                state.changes_local.push(detail.path.clone());
-            }
-            if let Some(existing) = state.changes_local_details.iter_mut().find(|d| d.path == detail.path) {
-                existing.action = detail.action;
-            } else {
-                state.changes_local_details.push(detail);
-            }
-        } else {
-            state.path1_modified = true;
-            if !state.changes_remote.contains(&detail.path) {
-                state.changes_remote.push(detail.path.clone());
-            }
-            if let Some(existing) = state.changes_remote_details.iter_mut().find(|d| d.path == detail.path) {
-                existing.action = detail.action;
-            } else {
-                state.changes_remote_details.push(detail);
-            }
-        }
-    }
-
-    // Fin de synchronisation
-    let is_finished = ll.contains("bisync successful")
-        || (ll.contains("systemd") && (ll.contains("finished") || ll.contains("stopped") || ll.contains("deactivated")) && ll.contains("rclone-bisync"))
-        || (ll.contains("rclone-bisync-guard") && ll.contains("aucun changement"))
-        || (ll.contains("systemd") && ll.contains("failed") && ll.contains("rclone-bisync"))
-        || ll.contains("bisync error:")
-        || ll.contains("bisync aborted");
-
-    if is_finished {
-        state.mark_finished();
+    // Consommation des événements normalisés
+    let events = parse_log_line(line);
+    for event in events {
+        state.apply_event(event);
     }
 
     // Nettoyage des fichiers actifs expirés (> 4s)
@@ -433,8 +338,7 @@ fn parse_stream_line(line: &str, state: &mut StreamerState) {
     state.active_files.retain(|_, v| now.duration_since(v.last_seen).as_secs_f32() < 4.0);
 }
 
-fn parse_speed_kibs(speed_str: &str) -> u64 {
-    // Exemples: "1.234 MiB/s", "500 KiB/s", "2.100 GiB/s", "100 B/s"
+pub fn parse_speed_kibs(speed_str: &str) -> u64 {
     let parts: Vec<&str> = speed_str.split_whitespace().collect();
     if parts.is_empty() {
         return 0;
@@ -453,77 +357,20 @@ fn parse_speed_kibs(speed_str: &str) -> u64 {
     }
 }
 
-fn parse_diff_file(raw_line: &str) -> Option<(bool, ModifiedFileDetail)> {
-    let clean_line = strip_ansi(raw_line);
-    let ll = clean_line.to_ascii_lowercase();
-    if !ll.contains("path1") && !ll.contains("path2") {
-        return None;
-    }
-
-    // Must be an actual file change line from rclone bisync
-    let (action, action_str) = if ll.contains("file is new") {
-        ("new".to_string(), "file is new")
-    } else if ll.contains("file changed") {
-        ("modified".to_string(), "file changed")
-    } else if ll.contains("file was deleted") {
-        ("deleted".to_string(), "file was deleted")
-    } else if ll.contains("file deleted") {
-        ("deleted".to_string(), "file deleted")
-    } else if ll.contains("queue copy") {
-        ("copied".to_string(), "queue copy")
-    } else if ll.contains("queue delete") {
-        ("deleted".to_string(), "queue delete")
-    } else {
-        return None;
-    };
-
-    let action_pos = ll.find(action_str)?;
-    let after_action = &clean_line[action_pos + action_str.len()..];
-    let delim_pos = after_action.find(" - ")?;
-    let mut fname = after_action[delim_pos + 3..].trim();
-    if fname.is_empty() {
-        return None;
-    }
-    // Strip remote prefix if any (e.g. GoogleDrive{...}:/)
-    if let Some(colon_pos) = fname.find("}:/") {
-        fname = &fname[colon_pos + 3..];
-    } else if let Some(colon_pos) = fname.find(":/") {
-        fname = &fname[colon_pos + 2..];
-    }
-
-    let fname_lower = fname.to_ascii_lowercase();
-    if fname_lower.contains("path1") || fname_lower.contains("path2") || fname.contains('"') {
-        return None;
-    }
-
-    let is_local = if ll.contains("path2:") || ll.contains("- path2") {
-        true
-    } else if ll.contains("path1:") || ll.contains("- path1") {
-        false
-    } else {
-        ll.contains("path2") && !ll.contains("path1")
-    };
-
-    Some((is_local, ModifiedFileDetail {
-        path: fname.to_string(),
-        action,
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::monitor::events::FileAction;
+    use crate::monitor::parser::parse_diff_file;
 
     #[test]
     fn test_strip_ansi() {
         let raw = "\x1b[34mPath2\x1b[0m \x1b[35m\x1b[31mFile was deleted\x1b[0m\x1b[0m - \x1b[36maaa/song.mp3\x1b[0m\r";
         assert_eq!(strip_ansi(raw), "Path2 File was deleted - aaa/song.mp3");
 
-        // 256-color and RGB codes
         let rgb = "\x1b[38;2;255;100;50mColored\x1b[0m text\x1b[2K\r";
         assert_eq!(strip_ansi(rgb), "Colored text");
 
-        // OSC sequence
         let osc = "\x1b]0;rclone-title\x07Clean text";
         assert_eq!(strip_ansi(osc), "Clean text");
     }
@@ -534,7 +381,7 @@ mod tests {
         let res = parse_diff_file(raw).unwrap();
         assert!(res.0); // is_local
         assert_eq!(res.1.path, "aaa/réveil/AH CA NN PAS DARABES DANS MA FRANCE.mp3");
-        assert_eq!(res.1.action, "deleted");
+        assert_eq!(res.1.action, FileAction::Deleted);
     }
 
     #[test]
@@ -551,65 +398,59 @@ mod tests {
         let res1 = parse_diff_file(l1).unwrap();
         assert!(!res1.0); // Path1 is remote
         assert_eq!(res1.1.path, "installer_wifi_lorraine.py");
-        assert_eq!(res1.1.action, "new");
+        assert_eq!(res1.1.action, FileAction::New);
 
         let l2 = "Path2: file changed - /home/lucas-m54/GoogleDrive/config.json";
         let res2 = parse_diff_file(l2).unwrap();
         assert!(res2.0); // Path2 is local
         assert_eq!(res2.1.path, "/home/lucas-m54/GoogleDrive/config.json");
-        assert_eq!(res2.1.action, "modified");
+        assert_eq!(res2.1.action, FileAction::Modified);
 
         let l3 = "Path1: queue copy to Path2 - notes.txt";
         let res3 = parse_diff_file(l3).unwrap();
         assert!(!res3.0);
         assert_eq!(res3.1.path, "notes.txt");
-        assert_eq!(res3.1.action, "copied");
+        assert_eq!(res3.1.action, FileAction::Copied);
 
         let l4 = "Path2: file was deleted - old_backup.zip";
         let res4 = parse_diff_file(l4).unwrap();
         assert!(res4.0);
         assert_eq!(res4.1.path, "old_backup.zip");
-        assert_eq!(res4.1.action, "deleted");
+        assert_eq!(res4.1.action, FileAction::Deleted);
 
-        // Filename containing dashes inside the name
         let l5 = "- Path2    File is new               - AAAA/réveil/Debout - Leo Succulent.mp3";
         let res5 = parse_diff_file(l5).unwrap();
         assert!(res5.0);
         assert_eq!(res5.1.path, "AAAA/réveil/Debout - Leo Succulent.mp3");
-        assert_eq!(res5.1.action, "new");
+        assert_eq!(res5.1.action, FileAction::New);
 
-        // Remote queue delete with remote prefix
         let l6 = "- Path1    Queue delete              - GoogleDrive{hruw5}:/AAAA/réveil/Debout - Leo Succulent.mp3";
         let res6 = parse_diff_file(l6).unwrap();
         assert!(!res6.0);
         assert_eq!(res6.1.path, "AAAA/réveil/Debout - Leo Succulent.mp3");
-        assert_eq!(res6.1.action, "deleted");
+        assert_eq!(res6.1.action, FileAction::Deleted);
     }
 
     #[test]
     fn test_parse_diff_file_resilience_and_edge_cases() {
-        // Unicode and special characters in path
         let l1 = "- Path2    File is new               - musique/🎉 fête & café - soirée été 2026.mp3";
         let res1 = parse_diff_file(l1).expect("should parse unicode emoji filename");
         assert!(res1.0);
         assert_eq!(res1.1.path, "musique/🎉 fête & café - soirée été 2026.mp3");
-        assert_eq!(res1.1.action, "new");
+        assert_eq!(res1.1.action, FileAction::New);
 
-        // Lowercase path2 and alternative phrasing "file deleted"
         let l2 = "path2: file deleted - archive.tar";
         let res2 = parse_diff_file(l2).expect("should parse lowercase path2 and 'file deleted'");
         assert!(res2.0);
         assert_eq!(res2.1.path, "archive.tar");
-        assert_eq!(res2.1.action, "deleted");
+        assert_eq!(res2.1.action, FileAction::Deleted);
 
-        // Multiple dashes in filename with remote prefix
         let l3 = "Path1: Queue copy to Path2 - remote:/folder - sub - file - name.txt";
         let res3 = parse_diff_file(l3).expect("should parse file with multiple dashes");
         assert!(!res3.0);
         assert_eq!(res3.1.path, "folder - sub - file - name.txt");
-        assert_eq!(res3.1.action, "copied");
+        assert_eq!(res3.1.action, FileAction::Copied);
 
-        // Malformed lines must never panic and return None gracefully
         assert_eq!(parse_diff_file(""), None);
         assert_eq!(parse_diff_file("Path1: file is new"), None);
         assert_eq!(parse_diff_file("Path2: file changed - "), None);
@@ -621,7 +462,6 @@ mod tests {
     fn test_streamer_parse_stream_line_robustness() {
         let mut st = StreamerState::default();
 
-        // Feed various lines including garbage and verify no panics
         parse_stream_line("", &mut st);
         parse_stream_line("   ", &mut st);
         parse_stream_line("DEBUG: random log with no meaning", &mut st);
@@ -629,23 +469,18 @@ mod tests {
         assert!(st.is_syncing);
         assert_eq!(st.phase_index, 0);
 
-        // Path 1 diffs
         parse_stream_line("Path1: checking for diffs", &mut st);
         assert_eq!(st.phase_index, 1);
 
-        // Path 2 diffs
         parse_stream_line("Path2: checking for diffs", &mut st);
         assert_eq!(st.phase_index, 2);
 
-        // Applying changes
         parse_stream_line("Applying changes", &mut st);
         assert_eq!(st.phase_index, 3);
 
-        // Updating listings
         parse_stream_line("Updating listings", &mut st);
         assert_eq!(st.phase_index, 4);
 
-        // Done
         parse_stream_line("Bisync successful", &mut st);
         assert!(!st.is_syncing);
         assert_eq!(st.phase_index, 5);
@@ -661,7 +496,7 @@ mod tests {
         };
         st.changes_local_details.push(ModifiedFileDetail {
             path: "test.txt".to_string(),
-            action: "new".to_string(),
+            action: FileAction::New,
         });
         st.mark_finished();
         assert!(!st.is_syncing);

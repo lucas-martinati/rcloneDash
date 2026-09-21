@@ -1,5 +1,5 @@
 use std::process::Command;
-use crate::monitor::parser::{parse_synced_file, is_resync_trigger};
+use crate::monitor::parser::{is_resync_trigger, parse_log_line, FileAction, SyncEvent, SyncedFile};
 
 #[derive(Debug, Clone)]
 pub struct PastRun {
@@ -83,7 +83,7 @@ pub fn parse_journal_history(journal_text: &str, limit: usize) -> Vec<PastRun> {
             && ll.contains("rclone-bisync");
 
         let is_guard_start = !in_run
-            && ll.contains("rclone-bisync-guard")
+            && (ll.contains("rclone-bisync-guard") || ll.contains("rclonedash"))
             && (ll.contains("lancement du bisync") || ll.contains("aucun changement") || ll.contains("sync ignoré"));
 
         if is_systemd_start || is_guard_start {
@@ -104,7 +104,7 @@ pub fn parse_journal_history(journal_text: &str, limit: usize) -> Vec<PastRun> {
             // End of execution
             let is_finish = (ll.contains("systemd") && (ll.contains("finished") || ll.contains("deactivated")) && ll.contains("rclone-bisync"))
                 || ll.contains("bisync successful")
-                || (ll.contains("rclone-bisync-guard") && (ll.contains("aucun changement") || ll.contains("sync ignoré")));
+                || ((ll.contains("rclone-bisync-guard") || ll.contains("rclonedash")) && (ll.contains("aucun changement") || ll.contains("sync ignoré")));
 
             if is_finish {
                 if let Some(run) = analyze_run(&current_lines, runs.len() + 1) {
@@ -117,10 +117,6 @@ pub fn parse_journal_history(journal_text: &str, limit: usize) -> Vec<PastRun> {
             }
         }
     }
-
-    // Note: If `in_run` is still true at the end of the journal, that run has started
-    // but not finished yet. It is currently in progress and will be displayed by the live
-    // "In progress" row of the dashboard. Do NOT add it to `runs` (PastRun) to avoid duplicate entries.
 
     // Most recent first
     runs.reverse();
@@ -160,29 +156,58 @@ fn analyze_run(lines: &[&str], id: usize) -> Option<PastRun> {
     for line in lines {
         let ll = line.to_lowercase();
 
-        if ll.contains("aucun changement local") || ll.contains("ignoré") || ll.contains("garde légère") {
+        if ll.contains("aucun changement local") || ll.contains("sync ignoré") || ll.contains("garde légère") {
             status = RunStatus::Skipped;
         } else if (ll.contains("error :") || ll.contains("fatal error") || ll.contains("failed") || is_resync_trigger(line)) && !ll.contains("0 errors") {
             status = RunStatus::Failed;
             errors.push(line.to_string());
         }
 
-        if let Some(synced) = parse_synced_file(line) {
-            match synced.action.as_str() {
-                "new" => copied.push(synced.path.clone()),
-                "deleted" => deleted.push(synced.path.clone()),
-                _ => modified.push(synced.path.clone()),
-            }
-            synced_files.push((synced.action, synced.path, time.clone()));
-        }
-
-        if ll.contains("elapsed time:") {
-            if let Some(idx) = line.find("Elapsed time:") {
-                let rest = &line[idx + 13..].trim();
-                let dur: String = rest.chars().take_while(|c| !c.is_whitespace()).collect();
-                if !dur.is_empty() {
-                    duration = dur;
+        let events = parse_log_line(line);
+        for event in events {
+            match event {
+                SyncEvent::FileSynced(SyncedFile { path, action, .. }) => {
+                    match action {
+                        FileAction::New | FileAction::Copied => {
+                            if !copied.contains(&path) {
+                                copied.push(path.clone());
+                            }
+                        }
+                        FileAction::Deleted => {
+                            if !deleted.contains(&path) {
+                                deleted.push(path.clone());
+                            }
+                        }
+                        FileAction::Modified => {
+                            if !modified.contains(&path) {
+                                modified.push(path.clone());
+                            }
+                        }
+                    }
+                    if !synced_files.iter().any(|(_, p, _)| p == &path) {
+                        synced_files.push((action.to_string(), path, time.clone()));
+                    }
                 }
+                SyncEvent::StatsUpdated(st) => {
+                    if !st.elapsed.is_empty() && st.elapsed != "0.0s" {
+                        duration = st.elapsed;
+                    }
+                }
+                SyncEvent::ResyncRequired(err) => {
+                    status = RunStatus::Failed;
+                    if !errors.contains(&err) {
+                        errors.push(err);
+                    }
+                }
+                SyncEvent::SyncCompleted { success: false, error_msg } => {
+                    status = RunStatus::Failed;
+                    if let Some(e) = error_msg {
+                        if !errors.contains(&e) {
+                            errors.push(e);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -206,7 +231,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_journal_history() {
+    fn test_parse_journal_history_legacy_text() {
         let sample_journal = r#"
 2026-09-17T20:10:00+0200 mypc systemd[1]: Starting rclone-bisync.service...
 2026-09-17T20:10:01+0200 mypc rclone-bisync-guard[1234]: Lancement du bisync
@@ -220,11 +245,30 @@ mod tests {
         let runs = parse_journal_history(sample_journal, 10);
         assert_eq!(runs.len(), 1, "Ignored syncs / empty wakeups must be filtered from history");
 
-        // Only actual runs (Success with 1 newly copied file) are preserved
         assert_eq!(runs[0].status, RunStatus::Success);
         assert_eq!(runs[0].files_copied.len(), 1);
         assert_eq!(runs[0].files_copied[0], "Documents/notes.txt");
         assert_eq!(runs[0].duration, "4.2s");
+    }
+
+    #[test]
+    fn test_parse_journal_history_json_logs() {
+        let sample_json_journal = r#"
+2026-09-21T09:40:00+0200 mypc systemd[1]: Starting rclone-bisync.service...
+2026-09-21T09:40:01+0200 mypc rclone-bisync-guard[1234]: RcloneDash: lancement du bisync — changement local
+2026-09-21T09:40:02+0200 mypc rclone[1235]: {"time":"2026-09-21T09:40:02+02:00","level":"info","msg":"Synching Path1 with Path2"}
+2026-09-21T09:40:03+0200 mypc rclone[1235]: {"time":"2026-09-21T09:40:03+02:00","level":"info","msg":"Copied (new)","size":100,"object":"reports/q3.xlsx"}
+2026-09-21T09:40:04+0200 mypc rclone[1235]: {"time":"2026-09-21T09:40:04+02:00","level":"info","msg":"\nTransferred: 100 / 100\nChecks: 2 / 2\nElapsed time:         1.8s\n\n","stats":{"bytes":100,"checks":2,"elapsedTime":1.8,"errors":0,"speed":500.0,"totalBytes":100,"totalChecks":2,"totalTransfers":1,"transfers":1}}
+2026-09-21T09:40:05+0200 mypc rclone[1235]: {"time":"2026-09-21T09:40:05+02:00","level":"info","msg":"Bisync successful"}
+2026-09-21T09:40:06+0200 mypc systemd[1]: Finished rclone-bisync.service.
+"#;
+
+        let runs = parse_journal_history(sample_json_journal, 10);
+        assert_eq!(runs.len(), 1, "Should parse JSON run from journalctl");
+        assert_eq!(runs[0].status, RunStatus::Success);
+        assert_eq!(runs[0].files_copied.len(), 1);
+        assert_eq!(runs[0].files_copied[0], "reports/q3.xlsx");
+        assert_eq!(runs[0].duration, "1.8s");
     }
 
     #[test]
@@ -240,9 +284,7 @@ mod tests {
 "#;
 
         let runs = parse_journal_history(sample_journal, 10);
-        // Only the finished sync from 20:10 should be in history, NOT the currently running sync from 20:30
         assert_eq!(runs.len(), 1, "The ongoing in-progress sync must not appear in past history runs");
         assert_eq!(runs[0].time, "20:10:00");
     }
 }
-

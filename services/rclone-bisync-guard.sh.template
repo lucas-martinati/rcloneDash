@@ -64,6 +64,7 @@ run_bisync() {
         --drive-skip-gdocs \
         --tpslimit 8 \
         -v \
+        --use-json-log \
         --stats "$STATS_INTERVAL" \
         --stats-file-name-length 0 \
         --conflict-resolve newer \

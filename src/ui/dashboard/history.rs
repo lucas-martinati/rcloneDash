@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, FocusedPanel, HitAction, Hitbox};
+use crate::monitor::events::FileAction;
 use crate::monitor::history::RunStatus;
 use crate::ui::theme::ThemePalette;
 
@@ -188,11 +189,11 @@ pub fn render_history_panel(
             } else {
                 "● Scanning".to_string()
             };
-            let copied_count = app.live.synced_files.iter().filter(|f| f.action == "new" || f.action == "copied").count().max(app.live.transfer.files_done as usize);
+            let copied_count = app.live.synced_files.iter().filter(|f| f.action == FileAction::New || f.action == FileAction::Copied).count().max(app.live.transfer.files_done as usize);
             let copied_val = copied_count.to_string();
-            let mod_count = app.live.synced_files.iter().filter(|f| f.action == "modified").count();
+            let mod_count = app.live.synced_files.iter().filter(|f| f.action == FileAction::Modified).count();
             let mod_val = mod_count.to_string();
-            let del_count = app.live.synced_files.iter().filter(|f| f.action == "deleted").count();
+            let del_count = app.live.synced_files.iter().filter(|f| f.action == FileAction::Deleted).count();
             let del_val = del_count.to_string();
             let err_val = "0";
 

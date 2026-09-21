@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::monitor::events::FileAction;
 use crate::ui::theme::ThemePalette;
 
 /// Renders the active synchronization status section with stepper, transfer KPIs, and two-column diffs.
@@ -229,10 +230,10 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
             }
         } else if !app.live.changes_local_details.is_empty() {
             for d in app.live.changes_local_details.iter().take(2) {
-                let (badge_text, badge_color) = match d.action.to_lowercase().as_str() {
-                    "new" | "added" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Added", theme.green),
-                    "deleted" | "supprimé" | "supprime" => ("● Deleted", theme.red),
-                    _ => ("● Modified", theme.yellow),
+                let (badge_text, badge_color) = match d.action {
+                    FileAction::New | FileAction::Copied => ("● Added", theme.green),
+                    FileAction::Deleted => ("● Deleted", theme.red),
+                    FileAction::Modified => ("● Modified", theme.yellow),
                 };
                 let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
                 line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
@@ -288,10 +289,10 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
             }
         } else if !app.live.changes_remote_details.is_empty() {
             for d in app.live.changes_remote_details.iter().take(2) {
-                let (badge_text, badge_color) = match d.action.to_lowercase().as_str() {
-                    "new" | "added" | "ajouté" | "ajoute" | "copié" | "copie" => ("● Added", theme.green),
-                    "deleted" | "supprimé" | "supprime" => ("● Deleted", theme.red),
-                    _ => ("● Modified", theme.yellow),
+                let (badge_text, badge_color) = match d.action {
+                    FileAction::New | FileAction::Copied => ("● Added", theme.green),
+                    FileAction::Deleted => ("● Deleted", theme.red),
+                    FileAction::Modified => ("● Modified", theme.yellow),
                 };
                 let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
                 line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
