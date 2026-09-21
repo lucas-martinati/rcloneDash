@@ -1,8 +1,10 @@
-# RcloneDash (Rust TUI & Web Dashboard)
+# RcloneDash (Rust TUI)
 
 **RcloneDash** est une interface interactive ultra-rapide, élégante et autonome développée en **Rust** (inspirée de `btop++` et `lazygit`), conçue pour surveiller et piloter vos synchronisations bidirectionnelles (`rclone bisync`) en temps réel.
 
-Le projet propose une puissante **interface terminal (TUI)** moderne (< 3 Mo, < 10 Mo de RAM) tout en conservant son **interface Web** historique (dans le dossier `web/`).
+Le projet propose une puissante **interface terminal (TUI)** moderne (< 3 Mo, < 10 Mo de RAM).
+
+> L'ancienne interface Web, non maintenue, est archivée sur la branche `archive/web-dashboard`.
 
 ---
 
@@ -68,41 +70,23 @@ cargo run
 
 ### ⚡ Interface Terminal (Rust TUI)
 
-<!-- Captures d'écran du TUI disponibles dans assets/screenshots/tui/ -->
+<!-- Captures d'écran du TUI disponibles dans assets/screenshots/ -->
 
 | Main Dashboard | Interactive Options & Settings |
 | :---: | :---: |
-| ![Main Dashboard](assets/screenshots/tui/dashboard.png) | ![Settings](assets/screenshots/tui/settings.png) |
+| ![Main Dashboard](assets/screenshots/dashboard.png) | ![Settings](assets/screenshots/settings.png) |
 
 | Live Synchronization & Stepper | History Details & Error/Diff Inspection |
 | :---: | :---: |
-| ![Live Sync](assets/screenshots/tui/live_sync.png) | ![History Details](assets/screenshots/tui/history_details.png) |
+| ![Live Sync](assets/screenshots/live_sync.png) | ![History Details](assets/screenshots/history_details.png) |
 
 | Built-in File Explorer | Exclusion Filters Editor |
 | :---: | :---: |
-| ![File Explorer](assets/screenshots/tui/files.png) | ![Filters](assets/screenshots/tui/filters.png) |
+| ![File Explorer](assets/screenshots/files.png) | ![Filters](assets/screenshots/filters.png) |
 
 | Main Menu |
 | :---: |
-| ![Main Menu](assets/screenshots/tui/menu.png) |
-
----
-
-### 🌐 Interface Web (Dashboard Navigateur)
-
-| Web Dashboard | Web File Explorer & Filters |
-| :---: | :---: |
-| ![Web Dashboard](assets/screenshots/web/dashboard.png) | ![Web File Explorer & Filters](assets/screenshots/web/filters.png) |
-
-| Web Live Sync & Transfers | Web Settings |
-| :---: | :---: |
-| ![Web Live Sync](assets/screenshots/web/live_sync.png) | ![Web Settings](assets/screenshots/web/settings.png) |
-
-*Pour lancer l'interface Web :*
-```bash
-python3 web/rclone-monitor.py
-```
-Puis accédez à [http://localhost:8765](http://localhost:8765).
+| ![Main Menu](assets/screenshots/menu.png) |
 
 ---
 
@@ -181,7 +165,6 @@ Puis accédez à [http://localhost:8765](http://localhost:8765).
 - **Rust** avec le framework **[Ratatui](https://ratatui.rs/)** pour un rendu terminal 60 FPS sans scintillement.
 - **[Tokio](https://tokio.rs/)** pour l'asynchronisme non bloquant du monitoring et des subprocesses.
 - **Systemd User Units** (`rclone-bisync.service` et `rclone-bisync.timer`) pour l'automatisation sans aucun privilège root.
-- **Interface Web optionnelle** : FastAPI / Python (`rclone-monitor.py`) avec frontend Vanilla HTML5/CSS3/ES Modules dans `web/`.
 
 ---
 
