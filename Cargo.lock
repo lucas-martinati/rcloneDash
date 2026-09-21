@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "rclonedash"
-version = "1.0.3"
+version = "1.0.31"
 dependencies = [
  "chrono",
  "crossterm",

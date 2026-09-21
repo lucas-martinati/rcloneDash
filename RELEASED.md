@@ -1,6 +1,6 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
-## [v1.0.3] - Notifications Interactives, Icône Vectorielle Officielle & Mise à Jour Système Globale
+## [v1.0.31] - Notifications Interactives, Icône Vectorielle Officielle & Harmonisation Système
 
 Cette version apporte des notifications de bureau interactives en cas d'échec de synchronisation avec ouverture directe du TUI au clic, une nouvelle identité visuelle avec l'icône vectorielle officielle **Dual-Sync**, l'intégration complète du raccourci de bureau (`.desktop`), un système de mise à jour exhaustif préservant les données utilisateurs, et l'option « Jamais » pour suspendre le timer de synchronisation automatique.
 
