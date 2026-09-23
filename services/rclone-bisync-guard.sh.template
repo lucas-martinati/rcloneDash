@@ -81,45 +81,6 @@ run_bisync() {
     return $rc
 }
 
-open_rclonedash() {
-    local cmd="rclonedash"
-    if ! command -v rclonedash >/dev/null 2>&1; then
-        if [ -x "$HOME/.local/bin/rclonedash" ]; then
-            cmd="$HOME/.local/bin/rclonedash"
-        elif [ -x "$HOME/.cargo/bin/rclonedash" ]; then
-            cmd="$HOME/.cargo/bin/rclonedash"
-        fi
-    fi
-
-    # 1. Essayer le lanceur de bureau
-    if command -v gtk-launch >/dev/null 2>&1 && [ -f "$HOME/.local/share/applications/rclonedash.desktop" ]; then
-        if gtk-launch rclonedash 2>/dev/null; then
-            return 0
-        fi
-    fi
-
-    # 2. Détecter l'émulateur de terminal disponible
-    if command -v ptyxis >/dev/null 2>&1; then
-        ptyxis -- "$cmd" &
-    elif command -v gnome-terminal >/dev/null 2>&1; then
-        gnome-terminal -- "$cmd" &
-    elif command -v konsole >/dev/null 2>&1; then
-        konsole -e "$cmd" &
-    elif command -v alacritty >/dev/null 2>&1; then
-        alacritty -e "$cmd" &
-    elif command -v kitty >/dev/null 2>&1; then
-        kitty "$cmd" &
-    elif command -v xfce4-terminal >/dev/null 2>&1; then
-        xfce4-terminal -e "$cmd" &
-    elif command -v foot >/dev/null 2>&1; then
-        foot "$cmd" &
-    elif command -v x-terminal-emulator >/dev/null 2>&1; then
-        x-terminal-emulator -e "$cmd" &
-    elif command -v xterm >/dev/null 2>&1; then
-        xterm -e "$cmd" &
-    fi
-}
-
 notify_failure() {
     local rc="${1:-1}"
     # Ne pas notifier en cas d'interruption volontaire (SIGTERM = 143, SIGINT = 130)
@@ -133,12 +94,16 @@ notify_failure() {
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         if [ -f "$script_dir/rclonedash-notify.py" ]; then
             notif_script="$script_dir/rclonedash-notify.py"
+        elif [ -f "/usr/share/rclonedash/rclonedash-notify.py" ]; then
+            notif_script="/usr/share/rclonedash/rclonedash-notify.py"
         fi
     fi
 
     if [ -f "$notif_script" ] && command -v python3 >/dev/null 2>&1; then
         if command -v systemd-run >/dev/null 2>&1; then
-            systemd-run --user --quiet --unit="rclonedash-notify-$$-$(date +%s)" python3 "$notif_script" "$rc" 2>/dev/null || \
+            # Remplacement propre d'une notification précédente pour éviter l'empilement
+            systemctl --user stop rclonedash-notify.service 2>/dev/null || true
+            systemd-run --user --quiet --unit="rclonedash-notify" python3 "$notif_script" "$rc" 2>/dev/null || \
                 setsid python3 "$notif_script" "$rc" >/dev/null 2>&1 &
         else
             setsid python3 "$notif_script" "$rc" >/dev/null 2>&1 &
@@ -149,6 +114,7 @@ notify_failure() {
             --icon=rclonedash -u critical -a "RcloneDash" 2>/dev/null || true
     fi
 }
+
 
 is_resync=0
 is_auto_resync=0

@@ -29,6 +29,7 @@ info "Stopping and disabling user systemd services..."
 systemctl --user stop rclone-bisync.timer 2>/dev/null || true
 systemctl --user disable rclone-bisync.timer 2>/dev/null || true
 systemctl --user stop rclone-bisync.service 2>/dev/null || true
+systemctl --user stop rclonedash-notify.service 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/rclone-bisync.service"
 rm -f "$HOME/.config/systemd/user/rclone-bisync.timer"
 systemctl --user daemon-reload 2>/dev/null || true

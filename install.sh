@@ -327,7 +327,14 @@ else
     # Install desktop file for application launcher and notification integration
     APP_DIR="$HOME/.local/share/applications"
     mkdir -p "$APP_DIR"
-    if [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
+    if [ -f "$TEMPLATE_DIR/rclonedash.desktop" ]; then
+        sed -e "s|^Exec=.*|Exec=$BIN_PATH|" "$TEMPLATE_DIR/rclonedash.desktop" > "$APP_DIR/rclonedash.desktop"
+        chmod +x "$APP_DIR/rclonedash.desktop"
+        ok "Desktop entry installed at $APP_DIR/rclonedash.desktop"
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database "$APP_DIR" >> "$LOG_FILE" 2>&1 || true
+        fi
+    elif [ -f "$TEMPLATE_DIR/rclonedash.desktop.template" ]; then
         sed -e "s|__BIN__|$BIN_PATH|g" "$TEMPLATE_DIR/rclonedash.desktop.template" > "$APP_DIR/rclonedash.desktop"
         chmod +x "$APP_DIR/rclonedash.desktop"
         ok "Desktop entry installed at $APP_DIR/rclonedash.desktop"
@@ -335,7 +342,7 @@ else
             update-desktop-database "$APP_DIR" >> "$LOG_FILE" 2>&1 || true
         fi
     else
-        info "Desktop template not found — skipping .desktop file installation"
+        info "Desktop file not found — skipping .desktop file installation"
     fi
 fi
 
