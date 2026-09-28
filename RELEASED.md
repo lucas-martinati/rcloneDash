@@ -1,5 +1,32 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.33] - Généralisation Multi-Provider & Détection du Type de Remote
+
+Cette version affranchit RcloneDash de son centrage historique sur Google Drive : un nouveau module d'introspection (`rclone.rs`) lit le type réel de chaque remote dans `rclone.conf`, et toutes les options spécifiques à Drive (Client ID/Secret, flags `--drive-*`, étape API du wizard) ne sont proposées que pour les remotes `type = drive`. Les remotes S3, Dropbox, SFTP et autres fonctionnent désormais sans options parasites, avec un assistant de premier lancement en 3 étapes et des filtres d'exclusion génériques.
+
+---
+
+### 🌟 Nouveautés et Améliorations
+
+#### 1. 🔍 Détection du Type de Remote (`rclone.rs`)
+- **Introspection de `rclone.conf`** : listage des remotes avec leur type (`drive`, `s3`, `dropbox`...), libellés conviviaux (`MonS3: [s3]`) et prédicats (`is_drive_remote`, `remote_exists`).
+- **Flags Drive conditionnels** : `--drive-skip-shortcuts` / `--drive-skip-gdocs` uniquement pour les remotes Drive, en dry-run comme dans le script de garde systemd (comparaison littérale `awk` via `ENVIRON`, insensible aux caractères spéciaux et aux injections regex).
+
+#### 2. 🧙 Assistant de Premier Lancement en 3 Étapes
+- **Nouvelle étape RemoteSetup** : choix du remote avec badges de type détecté (`[Google Drive ✓]`, `[s3]`, `[unknown]`), persistance immédiate (sauvegarde + recharge) identique au clavier et à la souris via les chemins factorisés `apply_first_run_remote` / `advance_from_remote_continue`.
+- **Étape Google Credentials conditionnelle** : affichée uniquement pour un remote Drive ; sinon le setup se termine directement sans perdre le remote choisi.
+- **Correction clavier/souris** : les deux chemins de sauvegarde partagent désormais une méthode unique (`save_first_run_credentials`), impossible à faire diverger.
+
+#### 3. 📁 Filtres d'Exclusion Génériques (`rclone-filters.txt`)
+- **Renommage** : `gdrive-filters.txt` devient `rclone-filters.txt`, avec fallback legacy en lecture et migration automatique à la première sauvegarde ; l'installateur migre les fichiers existants sans perte.
+- **Template assaini** : suppression des règles personnelles (`Cours/**`) et des exclusions Office (`*.docx`, `*.pptx`) inadaptées hors Drive ; le bloc natif Google (`*.gdoc`...) est conservé et documenté (sans effet hors Drive).
+
+#### 4. 🧹 Zéro Code Mort & Tests Fiabilisés
+- **Suppression du code mort** : aucun `#[allow(dead_code)]` dans le projet (garanti par `#![deny(dead_code)]` et le test garde-fou), chemins clavier/souris factorisés, variables et calculs inutilisés éliminés.
+- **Isolation des tests** : verrou partagé (`config::test_support`) pour les tests écrivant `rclone.conf` / `dash-config.json` du dossier sandboxé (jamais le vrai `~/.config/rclone`), régressions couvertes (persistance du remote clavier, masquage drive-only).
+
+---
+
 ## [v1.0.32] - Découplage des Logs via --use-json-log & Architecture d'Événements Typés
 
 Cette version découple entièrement RcloneDash du format de log textuel de rclone grâce à l'intégration de `--use-json-log` (Go `slog`), introduit une architecture d'événements typés universelle (`SyncEvent`, `FileAction`), assainit l'historique et les détails de synchronisation en excluant les répertoires, et fiabilise le calcul de la durée des synchronisations passées.
