@@ -58,6 +58,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         "Done",
     ];
     let mut stepper_spans = Vec::new();
+    let g = app.glyphs();
     for (i, name) in phases.iter().enumerate() {
         if i > 0 {
             let arrow_color = if i <= app.live.phase_index {
@@ -75,9 +76,9 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
             stepper_spans.push(Span::styled(format!(" {} ", app.glyphs().arrow_right), Style::default().fg(arrow_color)));
         }
         let (icon, style) = if i < app.live.phase_index {
-            ("✓", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
+            (g.done, Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
         } else if i == app.live.phase_index {
-            ("●", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+            (g.dot, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
         } else {
             let step_ahead = i - app.live.phase_index;
             let opacity = match step_ahead {
@@ -87,7 +88,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
                 _ => 0.25,
             };
             let faded_color = crate::ui::theme::color_with_opacity(theme.text_muted, opacity, None);
-            ("○", Style::default().fg(faded_color))
+            (g.dot_open, Style::default().fg(faded_color))
         };
         stepper_spans.push(Span::styled(format!("{} {}", icon, name), style));
     }
@@ -187,7 +188,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
     let diff_chunk = if has_active_file && inner.height >= 5 {
         if let Some(af) = active_file {
             let other_count = app.live.active_files.len().saturating_sub(1);
-            let af_spans = format_active_file_spans(af, theme, inner.width, other_count, app.config.graph_style);
+            let af_spans = format_active_file_spans(af, theme, inner.width, other_count, app.config.graph_style, app.term_caps.ascii);
             f.render_widget(Paragraph::new(Line::from(af_spans)), v_chunks[2]);
         }
         v_chunks[3]
@@ -213,9 +214,9 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         // Left column: Local changes (Path2)
         let is_loc_mod = app.live.path2_modified || !app.live.changes_local_details.is_empty() || !app.live.changes_local.is_empty();
         let loc_status_span = if is_loc_mod {
-            Span::styled("● Modified", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+            Span::styled(format!("{} Modified", g.dot), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
         } else {
-            Span::styled("● No changes", Style::default().fg(theme.text_muted))
+            Span::styled(format!("{} No changes", g.dot), Style::default().fg(theme.text_muted))
         };
         let mut loc_lines = vec![
             Line::from(vec![
@@ -232,11 +233,11 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         } else if !app.live.changes_local_details.is_empty() {
             for d in app.live.changes_local_details.iter().take(2) {
                 let (badge_text, badge_color) = match d.action {
-                    FileAction::New | FileAction::Copied => ("● Added", theme.green),
-                    FileAction::Deleted => ("● Deleted", theme.red),
-                    FileAction::Modified => ("● Modified", theme.yellow),
+                    FileAction::New | FileAction::Copied => (format!("{} Added", g.dot), theme.green),
+                    FileAction::Deleted => (format!("{} Deleted", g.dot), theme.red),
+                    FileAction::Modified => (format!("{} Modified", g.dot), theme.yellow),
                 };
-                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                let mut line_spans = vec![Span::styled(format!("  {} ", g.bullet_idle), Style::default().fg(theme.text_bright))];
                 line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
                     &d.path,
                     max_p_len,
@@ -253,7 +254,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
             }
         } else {
             for f_name in app.live.changes_local.iter().take(2) {
-                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                let mut line_spans = vec![Span::styled(format!("  {} ", g.bullet_idle), Style::default().fg(theme.text_bright))];
                 line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
                     f_name,
                     max_p_len,
@@ -272,9 +273,9 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         // Right column: Remote changes (Path1)
         let is_rem_mod = app.live.path1_modified || !app.live.changes_remote_details.is_empty() || !app.live.changes_remote.is_empty();
         let rem_status_span = if is_rem_mod {
-            Span::styled("● Modified", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
+            Span::styled(format!("{} Modified", g.dot), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))
         } else {
-            Span::styled("● No changes", Style::default().fg(theme.text_muted))
+            Span::styled(format!("{} No changes", g.dot), Style::default().fg(theme.text_muted))
         };
         let mut rem_lines = vec![
             Line::from(vec![
@@ -291,11 +292,11 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         } else if !app.live.changes_remote_details.is_empty() {
             for d in app.live.changes_remote_details.iter().take(2) {
                 let (badge_text, badge_color) = match d.action {
-                    FileAction::New | FileAction::Copied => ("● Added", theme.green),
-                    FileAction::Deleted => ("● Deleted", theme.red),
-                    FileAction::Modified => ("● Modified", theme.yellow),
+                    FileAction::New | FileAction::Copied => (format!("{} Added", g.dot), theme.green),
+                    FileAction::Deleted => (format!("{} Deleted", g.dot), theme.red),
+                    FileAction::Modified => (format!("{} Modified", g.dot), theme.yellow),
                 };
-                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                let mut line_spans = vec![Span::styled(format!("  {} ", g.bullet_idle), Style::default().fg(theme.text_bright))];
                 line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
                     &d.path,
                     max_p_len,
@@ -312,7 +313,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
             }
         } else {
             for f_name in app.live.changes_remote.iter().take(2) {
-                let mut line_spans = vec![Span::styled("  • ", Style::default().fg(theme.text_bright))];
+                let mut line_spans = vec![Span::styled(format!("  {} ", g.bullet_idle), Style::default().fg(theme.text_bright))];
                 line_spans.extend(crate::ui::theme::truncate_with_fade_spans(
                     f_name,
                     max_p_len,
@@ -336,14 +337,20 @@ fn format_active_file_spans(
     max_width: u16,
     other_count: usize,
     graph_style: crate::config::GraphStyleChoice,
+    ascii: bool,
 ) -> Vec<Span<'static>> {
     let pct = af.pct.min(100);
     let bar_len = 14usize;
     let filled_len = (pct as usize * bar_len) / 100;
-    let fill_char = match graph_style {
-        crate::config::GraphStyleChoice::Braille => "⣿",
-        crate::config::GraphStyleChoice::Blocks => "█",
+    let fill_char = if ascii {
+        "#"
+    } else {
+        match graph_style {
+            crate::config::GraphStyleChoice::Braille => "⣿",
+            crate::config::GraphStyleChoice::Blocks => "█",
+        }
     };
+    let empty_char = if ascii { "-" } else { "·" };
 
     let speed_suffix = if !af.speed.is_empty() {
         format!(" ({})", af.speed)
@@ -370,7 +377,7 @@ fn format_active_file_spans(
     );
 
     let filled_str: String = fill_char.repeat(filled_len);
-    let empty_str: String = "·".repeat(bar_len.saturating_sub(filled_len));
+    let empty_str: String = empty_char.repeat(bar_len.saturating_sub(filled_len));
 
     let mut spans = vec![
         Span::styled("  ⚡ Active: ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),

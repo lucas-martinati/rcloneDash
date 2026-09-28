@@ -22,14 +22,24 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
 
     let mut line_spans = Vec::new();
 
-    let fill_char = match app.config.graph_style {
-        crate::config::GraphStyleChoice::Braille => "⣿",
-        crate::config::GraphStyleChoice::Blocks => "█",
+    let ascii = app.term_caps.ascii;
+    let fill_char = if ascii {
+        "#"
+    } else {
+        match app.config.graph_style {
+            crate::config::GraphStyleChoice::Braille => "⣿",
+            crate::config::GraphStyleChoice::Blocks => "█",
+        }
     };
-    let (beam_low, beam_mid, beam_high) = match app.config.graph_style {
-        crate::config::GraphStyleChoice::Braille => ("⣤", "⣶", "⣿"),
-        crate::config::GraphStyleChoice::Blocks => ("▒", "▓", "█"),
+    let (beam_low, beam_mid, beam_high) = if ascii {
+        ("-", "+", "#")
+    } else {
+        match app.config.graph_style {
+            crate::config::GraphStyleChoice::Braille => ("⣤", "⣶", "⣿"),
+            crate::config::GraphStyleChoice::Blocks => ("▒", "▓", "█"),
+        }
     };
+    let empty_char = if ascii { "-" } else { "·" };
 
     if is_syncing {
         let live_pct = app.live.overall_progress_pct();
@@ -73,7 +83,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                     if i < filled {
                         line_spans.push(Span::styled(fill_char, Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
                     } else {
-                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
+                        line_spans.push(Span::styled(empty_char, Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
@@ -154,7 +164,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                         }
                         line_spans.push(Span::styled(char_to_use, style));
                     } else {
-                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
+                        line_spans.push(Span::styled(empty_char, Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
@@ -218,7 +228,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                         };
                         line_spans.push(Span::styled(fill_char, Style::default().fg(slot_color).add_modifier(Modifier::BOLD)));
                     } else {
-                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
+                        line_spans.push(Span::styled(empty_char, Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));
@@ -247,7 +257,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                         };
                         line_spans.push(Span::styled(fill_char, Style::default().fg(slot_color).add_modifier(Modifier::BOLD)));
                     } else {
-                        line_spans.push(Span::styled("·", Style::default().fg(theme.separator)));
+                        line_spans.push(Span::styled(empty_char, Style::default().fg(theme.separator)));
                     }
                 }
                 line_spans.push(Span::styled("]", Style::default().fg(theme.border)));

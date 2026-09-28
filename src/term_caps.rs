@@ -71,17 +71,20 @@ impl TermCaps {
     ///
     /// - `live` is exactly `is_terminal`.
     /// - `color`: piped stdout (not a terminal) has no color capability ->
-    ///   `None`; `NO_COLOR` set -> `None`; `TERM=linux` -> `Ansi16`;
-    ///   `COLORTERM` containing `truecolor`/`24bit` -> `TrueColor`;
-    ///   otherwise `Ansi256`. (An explicit `TtyMode::Off` can still force
-    ///   colors, like `ls --color=always`.)
+    ///   `None`; `NO_COLOR` present and non-empty -> `None`; `TERM=linux`
+    ///   -> `Ansi16`; `COLORTERM` containing `truecolor`/`24bit` ->
+    ///   `TrueColor`; otherwise `Ansi256`. (An explicit `TtyMode::Off` can
+    ///   still force colors, like `ls --color=always`.)
     /// - `ascii`: `TERM=linux`, or the locale (`LC_ALL`, then `LC_CTYPE`,
     ///   then `LANG`) is set to a non-UTF-8 value.
     pub fn detect_from(env: &impl Fn(&str) -> Option<String>, is_terminal: bool) -> Self {
         let term = env("TERM").unwrap_or_default();
         let is_linux_console = term.trim().eq_ignore_ascii_case("linux");
 
-        let color = if !is_terminal || env("NO_COLOR").is_some() {
+        // `NO_COLOR` counts when present and non-empty; an empty value
+        // leaves colors alone.
+        let no_color = env("NO_COLOR").is_some_and(|v| !v.is_empty());
+        let color = if !is_terminal || no_color {
             ColorLevel::None
         } else if is_linux_console {
             ColorLevel::Ansi16
@@ -112,9 +115,11 @@ impl TermCaps {
 
     /// Resolves an explicit [`TtyMode`] on top of detection:
     /// - `Auto`: detection unchanged.
-    /// - `On`: forces `Ansi16` + ASCII (stays in color, like btop++).
+    /// - `On`: caps colors at `Ansi16` + ASCII (stays in color, like btop++),
+    ///   but never re-enables colors a pipe or `NO_COLOR` took away.
     /// - `Off`: forces `TrueColor` (or the detected level if stronger) +
-    ///   Unicode. Animation (`live`) always follows detection.
+    ///   Unicode, even piped — like `ls --color=always`. Animation (`live`)
+    ///   always follows detection.
     pub fn resolve_from(
         mode: TtyMode,
         env: &impl Fn(&str) -> Option<String>,
@@ -124,7 +129,7 @@ impl TermCaps {
         match mode {
             TtyMode::Auto => detected,
             TtyMode::On => Self {
-                color: ColorLevel::Ansi16,
+                color: detected.color.min(ColorLevel::Ansi16),
                 live: detected.live,
                 ascii: true,
             },
@@ -249,23 +254,44 @@ pub const ANSI16_TABLE: [(Color, (u8, u8, u8)); 16] = [
     (Color::White, (255, 255, 255)),
 ];
 
+/// Standard xterm color-cube channel levels, shared by both conversion
+/// directions so round-trips stay consistent.
+const CUBE_LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+
 /// Maps an `Rgb` triplet to the nearest xterm 256-color palette index:
 /// color cube entries 16-231, gray ramp 232-255 for equal components
 /// (pure black → 16, near-white → 231).
 fn rgb_to_ansi256_index(r: u8, g: u8, b: u8) -> u8 {
     if r == g && g == b {
+        // Gray ramp covers 8-238; past its midpoint with white (246) the
+        // cube's white end (231) is closer. Capped so the index can never
+        // overflow past 255 (248 used to compute 232 + 24).
         if r < 8 {
             16
-        } else if r > 248 {
+        } else if r > 246 {
             231
         } else {
             232 + (r - 8) / 10
         }
     } else {
-        // Quantize each channel to 0-5 with rounding.
-        let q = |v: u8| ((v as u16 * 5 + 127) / 255) as u8;
-        16 + 36 * q(r) + 6 * q(g) + q(b)
+        16 + 36 * quantize_channel(r) + 6 * quantize_channel(g) + quantize_channel(b)
     }
+}
+
+/// Quantizes one channel to a color-cube level 0-5 using the real xterm
+/// levels (0, 95, 135, 175, 215, 255), not uniform steps: e.g. 95 lands on
+/// level 1, not 2.
+fn quantize_channel(v: u8) -> u8 {
+    let mut best = 0;
+    let mut best_dist = u16::MAX;
+    for (i, l) in CUBE_LEVELS.iter().enumerate() {
+        let dist = (v as i16 - *l as i16).unsigned_abs();
+        if dist < best_dist {
+            best_dist = dist;
+            best = i as u8;
+        }
+    }
+    best
 }
 
 /// Recovers the RGB triplet behind an xterm 256-color index (standard cube
@@ -274,12 +300,11 @@ fn ansi256_index_to_rgb(idx: u8) -> (u8, u8, u8) {
     match idx {
         0..=15 => ANSI16_TABLE[idx as usize].1,
         16..=231 => {
-            const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
             let i = idx - 16;
             (
-                LEVELS[(i / 36) as usize],
-                LEVELS[((i % 36) / 6) as usize],
-                LEVELS[(i % 6) as usize],
+                CUBE_LEVELS[(i / 36) as usize],
+                CUBE_LEVELS[((i % 36) / 6) as usize],
+                CUBE_LEVELS[(i % 6) as usize],
             )
         }
         _ => {
@@ -335,6 +360,18 @@ pub fn downgrade_color(color: Color, level: ColorLevel) -> Color {
     }
 }
 
+/// Background style for a selected row or banner: `bg` downgraded to
+/// `level`, plus `REVERSED` when colors are off (`NO_COLOR`) so the
+/// selection stays distinguishable from unselected rows.
+pub fn selected_style(bg: Color, level: ColorLevel) -> ratatui::style::Style {
+    use ratatui::style::Modifier;
+    let mut style = ratatui::style::Style::default().bg(downgrade_color(bg, level));
+    if level == ColorLevel::None {
+        style = style.add_modifier(Modifier::REVERSED);
+    }
+    style
+}
+
 /// Centralized glyph set: every Unicode character drawn by the updater or
 /// the dashboard goes through here, so TTY mode can swap in pure-ASCII
 /// fallbacks without touching call sites. The Unicode variants are exactly
@@ -362,6 +399,23 @@ pub struct Glyphs {
     pub tee_bottom: &'static str,
     pub tee_left: &'static str,
     pub tee_right: &'static str,
+    /// Stepper "done" tick (distinct from [`Glyphs::check`]).
+    pub done: &'static str,
+    /// Alternate cross used by history status badges.
+    pub fail: &'static str,
+    /// "Skipped" badge marker.
+    pub skip: &'static str,
+    /// Inline-edit row marker.
+    pub edit: &'static str,
+    /// Filled status dot.
+    pub dot: &'static str,
+    /// Hollow status dot (pending step).
+    pub dot_open: &'static str,
+    /// CLI one-shot decorations (kept identical in Unicode mode).
+    pub rocket: &'static str,
+    pub ok_emoji: &'static str,
+    pub fail_emoji: &'static str,
+    pub warn: &'static str,
 }
 
 impl Glyphs {
@@ -396,6 +450,16 @@ impl Glyphs {
             tee_bottom: "┴",
             tee_left: "├",
             tee_right: "┤",
+            done: "✓",
+            fail: "✗",
+            skip: "⊘",
+            edit: "✎",
+            dot: "●",
+            dot_open: "○",
+            rocket: "🚀",
+            ok_emoji: "✅",
+            fail_emoji: "❌",
+            warn: "⚠️",
         }
     }
 
@@ -426,6 +490,16 @@ impl Glyphs {
             tee_bottom: "+",
             tee_left: "+",
             tee_right: "+",
+            done: "v",
+            fail: "x",
+            skip: "-",
+            edit: ">",
+            dot: "o",
+            dot_open: "-",
+            rocket: "*",
+            ok_emoji: "v",
+            fail_emoji: "x",
+            warn: "!",
         }
     }
 
@@ -459,7 +533,7 @@ impl Glyphs {
     }
 
     /// All drawable fields, for exhaustive tests.
-    pub fn all_fields(&self) -> [&'static str; 21] {
+    pub fn all_fields(&self) -> [&'static str; 31] {
         [
             self.bar_fill,
             self.bar_empty,
@@ -482,6 +556,16 @@ impl Glyphs {
             self.tee_bottom,
             self.tee_left,
             self.tee_right,
+            self.done,
+            self.fail,
+            self.skip,
+            self.edit,
+            self.dot,
+            self.dot_open,
+            self.rocket,
+            self.ok_emoji,
+            self.fail_emoji,
+            self.warn,
         ]
     }
 }
@@ -573,6 +657,15 @@ mod tests {
     }
 
     #[test]
+    fn test_empty_no_color_keeps_colors() {
+        // An empty NO_COLOR does not count: colors follow the terminal.
+        let env = env_of(&[("TERM", "xterm-256color"), ("NO_COLOR", "")]);
+        let caps = TermCaps::detect_from(&env, true);
+        assert_eq!(caps.color, ColorLevel::Ansi256);
+        assert!(caps.live);
+    }
+
+    #[test]
     fn test_c_locale_forces_ascii() {
         let env = env_of(&[("TERM", "xterm-256color"), ("LANG", "C")]);
         let caps = TermCaps::detect_from(&env, true);
@@ -608,6 +701,22 @@ mod tests {
         let caps = TermCaps::resolve_from(TtyMode::On, &env, true);
         assert_eq!(caps.color, ColorLevel::Ansi16);
         assert!(caps.ascii);
+        assert!(caps.live);
+    }
+
+    #[test]
+    fn test_tty_mode_on_never_reenables_colors() {
+        // `on` caps at Ansi16: a pipe or NO_COLOR keeps color at None, so
+        // `cmd --tty-mode=on | tee log` never leaks ANSI into the log.
+        let env = env_of(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")]);
+        let caps = TermCaps::resolve_from(TtyMode::On, &env, false);
+        assert_eq!(caps.color, ColorLevel::None);
+        assert!(!caps.live);
+        assert!(caps.ascii);
+
+        let env = env_of(&[("TERM", "xterm-256color"), ("NO_COLOR", "1")]);
+        let caps = TermCaps::resolve_from(TtyMode::On, &env, true);
+        assert_eq!(caps.color, ColorLevel::None);
         assert!(caps.live);
     }
 
@@ -684,6 +793,41 @@ mod tests {
             downgrade_color(Color::Reset, ColorLevel::Ansi256),
             Color::Reset
         );
+        // Channels snap to the real xterm levels: 95 is exactly level 1.
+        assert_eq!(
+            downgrade_color(Color::Rgb(95, 0, 0), ColorLevel::Ansi256),
+            Color::Indexed(52)
+        );
+    }
+    #[test]
+    fn test_gray_ramp_never_overflows() {
+        // Every gray must land on a valid palette index (16-231 cube ends,
+        // 232-255 ramp). Guards the former 232 + 24 overflow at gray 248.
+        for v in 0..=255u8 {
+            let idx = rgb_to_ansi256_index(v, v, v);
+            assert!((16..=255).contains(&idx), "gray {} -> index {}", v, idx);
+        }
+        assert_eq!(rgb_to_ansi256_index(0, 0, 0), 16);
+        assert_eq!(rgb_to_ansi256_index(7, 7, 7), 16);
+        assert_eq!(rgb_to_ansi256_index(8, 8, 8), 232);
+        assert_eq!(rgb_to_ansi256_index(246, 246, 246), 255);
+        assert_eq!(rgb_to_ansi256_index(247, 247, 247), 231);
+        assert_eq!(rgb_to_ansi256_index(248, 248, 248), 231);
+        assert_eq!(rgb_to_ansi256_index(255, 255, 255), 231);
+    }
+
+    #[test]
+    fn test_selected_style_reversed_without_colors() {
+        use ratatui::style::Modifier;
+        // NO_COLOR: downgraded background plus REVERSED so the selection
+        // stays distinguishable.
+        let s = selected_style(Color::Rgb(95, 30, 30), ColorLevel::None);
+        assert_eq!(s.bg, Some(Color::Reset));
+        assert!(s.add_modifier.contains(Modifier::REVERSED));
+        // Otherwise a plain downgraded background, no extra modifier.
+        let s = selected_style(Color::Rgb(95, 30, 30), ColorLevel::Ansi16);
+        assert!(!s.add_modifier.contains(Modifier::REVERSED));
+        assert!(s.bg.is_some());
     }
 
     #[test]
@@ -758,6 +902,16 @@ mod tests {
         assert_eq!(g.hline, "─");
         assert_eq!(g.corner_tl, "┌");
         assert_eq!(g.corner_bl, "└");
+        assert_eq!(g.done, "✓");
+        assert_eq!(g.fail, "✗");
+        assert_eq!(g.skip, "⊘");
+        assert_eq!(g.edit, "✎");
+        assert_eq!(g.dot, "●");
+        assert_eq!(g.dot_open, "○");
+        assert_eq!(g.rocket, "🚀");
+        assert_eq!(g.ok_emoji, "✅");
+        assert_eq!(g.fail_emoji, "❌");
+        assert_eq!(g.warn, "⚠️");
     }
 
     #[test]
@@ -781,18 +935,14 @@ mod tests {
         use unicode_width::UnicodeWidthStr;
         let uni = Glyphs::unicode();
         let asc = Glyphs::ascii();
-        // Alignment-critical pairs: bars, markers, arrows, lines, corners.
-        // (`spark` ✨ is double-width but only ever ends a line.)
-        for (u, a) in uni
-            .all_fields()
-            .iter()
-            .zip(asc.all_fields().iter())
-            .filter(|(u, _)| **u != "✨")
-        {
+        // Every ASCII fallback is width 1, so alignment-critical pairs keep
+        // their width one-for-one. Double-width Unicode decorations (✨, 🚀,
+        // ⚠️) only ever end a line, where alignment does not matter.
+        for (u, a) in uni.all_fields().iter().zip(asc.all_fields().iter()) {
             assert_eq!(
-                u.width(),
                 a.width(),
-                "ASCII fallback {:?} must keep display width of {:?}",
+                1,
+                "ASCII fallback {:?} must be width 1 (was {:?})",
                 a,
                 u
             );

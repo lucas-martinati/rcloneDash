@@ -498,6 +498,10 @@ impl App {
             last_file_count_check: Instant::now().checked_sub(std::time::Duration::from_secs(70)).unwrap_or_else(Instant::now),
         };
 
+        // Real terminal capabilities in production; deterministic full
+        // capabilities in tests (no `std::env` / `is_terminal()` leakage:
+        // tests set `term_caps` by hand when they need other levels).
+        #[cfg(not(test))]
         app.refresh_term_caps();
 
         #[cfg(not(test))]

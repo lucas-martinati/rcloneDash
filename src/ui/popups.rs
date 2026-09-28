@@ -331,8 +331,8 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
 
         if app.dry_run_logs.is_empty() && !app.dry_run_running {
             // Line 1: Ready status
-            summary_lines.push(Line::from(vec![
-                Span::styled("○ ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+                summary_lines.push(Line::from(vec![
+                    Span::styled(format!("{} ", app.glyphs().dot_open), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
                 Span::styled("Ready to simulate: ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
                 Span::styled("Non-destructive preview without modifying any files.", Style::default().fg(theme.text_bright)),
             ]));
@@ -352,7 +352,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             // Line 1: Overall status banner
             let status_spans = if app.dry_run_running {
                 vec![
-                    Span::styled("● ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", app.glyphs().dot), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     Span::styled("Simulation in progress: ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     Span::styled("rclone bisync --dry-run analyzing differences...", Style::default().fg(theme.text_bright)),
                 ]
@@ -449,17 +449,17 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 ]),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("  • ", Style::default().fg(theme.cyan)),
+                    Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.cyan)),
                     Span::styled("Executes ", Style::default().fg(theme.text_bright)),
                     Span::styled("rclone bisync --dry-run", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     Span::styled(" with your active configuration and filters.", Style::default().fg(theme.text_bright)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  • ", Style::default().fg(theme.cyan)),
+                    Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.cyan)),
                     Span::styled("Compares Local (Path 2) and Remote (Path 1) safely without modifying any files.", Style::default().fg(theme.text_muted)),
                 ]),
                 Line::from(vec![
-                    Span::styled("  • ", Style::default().fg(theme.cyan)),
+                    Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.cyan)),
                     Span::styled("Planned additions, modifications, and deletions will be listed here in real-time.", Style::default().fg(theme.text_muted)),
                 ]),
                 Line::from(""),
@@ -491,7 +491,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             actual_scroll,
             actual_visible_height,
             theme,
-            &app.glyphs(),
+            &app.term_caps,
             hitboxes,
             crate::app::ScrollbarTarget::DryRun,
         );
@@ -595,13 +595,13 @@ fn render_confirm_sync_modal(
         let mut card_lines = vec![
             Line::from(scope_spans),
             Line::from(vec![
-                Span::styled("  • ", Style::default().fg(theme.accent)),
+                Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.accent)),
                 Span::styled("Mode: ", Style::default().fg(theme.text_muted)),
                 Span::styled("immediate run, incremental changes only", Style::default().fg(theme.text_bright)),
             ]),
             Line::from({
                 let mut spans = vec![
-                    Span::styled("  • ", Style::default().fg(theme.green)),
+                    Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.green)),
                     Span::styled("Safe: ", Style::default().fg(theme.text_muted)),
                     Span::styled("no listing rebuild — press", Style::default().fg(theme.text_muted)),
                 ];
@@ -615,7 +615,7 @@ fn render_confirm_sync_modal(
         ];
         if card_inner.height >= 5 {
             card_lines.push(Line::from(vec![
-                Span::styled("  • ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.text_muted)),
                 Span::styled("Progress visible live in the sync panel + logs", Style::default().fg(theme.text_muted)),
             ]));
         }
@@ -734,25 +734,25 @@ fn render_confirm_resync_modal(
         let mut card_lines = vec![
             Line::from(scope_spans),
             Line::from(vec![
-                Span::styled("  • ", Style::default().fg(theme.yellow)),
+                Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.yellow)),
                 Span::styled("Rebuilds local + remote listings (", Style::default().fg(theme.text_bright)),
                 Span::styled("--resync", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 Span::styled(")", Style::default().fg(theme.text_bright)),
             ]),
             Line::from(vec![
-                Span::styled("  • ", Style::default().fg(theme.green)),
+                Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.green)),
                 Span::styled("Keeps newest versions (", Style::default().fg(theme.text_bright)),
                 Span::styled("--resync-mode newer", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                 Span::styled(")", Style::default().fg(theme.text_bright)),
             ]),
             Line::from(vec![
-                Span::styled("  • ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.text_muted)),
                 Span::styled("Long operation — files deleted offline may be reimported", Style::default().fg(theme.text_muted)),
             ]),
         ];
         if card_inner.height >= 6 {
             card_lines.push(Line::from(vec![
-                Span::styled("  • ", Style::default().fg(theme.text_muted)),
+                Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.text_muted)),
                 Span::styled("Follow progress in sync panel, logs & history", Style::default().fg(theme.text_muted)),
             ]));
         }

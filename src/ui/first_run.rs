@@ -43,26 +43,26 @@ pub fn render_first_run_modal(
     let actions: Vec<Vec<Span>> = match state.step {
         FirstRunStep::RcloneCheck => match state.rclone_status {
             RcloneInstallStatus::Installed(_) => vec![
-                KeybindingRegistry::format_shortcut_label("↵", "continue", theme.green, Color::White),
+                KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "continue", theme.green, Color::White),
             ],
             RcloneInstallStatus::Installing => vec![
                 KeybindingRegistry::format_shortcut_label("⏳", "installing...", theme.cyan, Color::White),
             ],
             RcloneInstallStatus::NotInstalled | RcloneInstallStatus::Failed(_) => vec![
-                KeybindingRegistry::format_shortcut_label("↵", "install", theme.cyan, Color::White),
+                KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "install", theme.cyan, Color::White),
                 KeybindingRegistry::format_shortcut_label("Tab", "switch", theme.accent, Color::White),
                 KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.yellow, Color::White),
             ],
         },
         FirstRunStep::RemoteSetup => vec![
             KeybindingRegistry::format_shortcut_label("Tab", "navigate", theme.accent, Color::White),
-            KeybindingRegistry::format_shortcut_label("↵", "continue", theme.green, Color::White),
+            KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "continue", theme.green, Color::White),
             KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.red, Color::White),
         ],
         FirstRunStep::GoogleCredentials => vec![
             KeybindingRegistry::format_shortcut_label("Tab", "navigate", theme.accent, Color::White),
             KeybindingRegistry::format_shortcut_label("Ctrl+V", "paste", theme.cyan, Color::White),
-            KeybindingRegistry::format_shortcut_label("↵", "confirm", theme.green, Color::White),
+            KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "confirm", theme.green, Color::White),
             KeybindingRegistry::format_shortcut_label("?", if state.show_help { "hide guide" } else { "guide" }, theme.yellow, Color::White),
             KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.red, Color::White),
         ],
@@ -126,7 +126,7 @@ fn render_step_rclone(
     let (badge_style, badge_text, desc_lines) = match &state.rclone_status {
         RcloneInstallStatus::Installed(ver) => (
             Style::default().fg(Color::Black).bg(theme.green).add_modifier(Modifier::BOLD),
-            " ✔ RCLONE DETECTED ",
+            format!(" {} RCLONE DETECTED ", app.glyphs().check),
             vec![
                 Line::from(vec![
                     Span::styled("Binary detected: ", Style::default().fg(theme.text_muted)),
@@ -136,7 +136,7 @@ fn render_step_rclone(
         ),
         RcloneInstallStatus::NotInstalled => (
             Style::default().fg(Color::Black).bg(theme.yellow).add_modifier(Modifier::BOLD),
-            " ⚠ RCLONE NOT FOUND ",
+            " ⚠ RCLONE NOT FOUND ".to_string(),
             vec![
                 Line::from(Span::styled("rclone was not found in PATH or ~/.local/bin/rclone.", Style::default().fg(theme.yellow))),
                 Line::from("You can install it automatically right now without sudo privileges."),
@@ -144,14 +144,14 @@ fn render_step_rclone(
         ),
         RcloneInstallStatus::Installing => (
             Style::default().fg(Color::Black).bg(theme.cyan).add_modifier(Modifier::BOLD),
-            " ⏳ INSTALLING RCLONE... ",
+            " ⏳ INSTALLING RCLONE... ".to_string(),
             vec![
                 Line::from(Span::styled("Downloading official precompiled binary to ~/.local/bin/rclone...", Style::default().fg(theme.cyan))),
             ],
         ),
         RcloneInstallStatus::Failed(err) => (
             Style::default().fg(Color::White).bg(theme.red).add_modifier(Modifier::BOLD),
-            " ✗ INSTALLATION FAILED ",
+            format!(" {} INSTALLATION FAILED ", app.glyphs().fail),
             vec![
                 Line::from(Span::styled(err.as_str(), Style::default().fg(theme.red))),
             ],
@@ -308,7 +308,7 @@ fn render_step_remote(
         // Badge du type détecté
         let kind = crate::rclone::remote_type(&state.remote_input);
         let kind_owned: String = match kind.as_deref() {
-            Some("drive") => "  [Google Drive ✓]".to_string(),
+            Some("drive") => format!("  [Google Drive {}]", app.glyphs().done),
             Some(k) => format!("  [{}]", k),
             None => "  [unknown — run `rclone config`?]".to_string(),
         };
@@ -433,8 +433,8 @@ fn render_step_google(
     // 1. Explanatory banner with text wrapping
     let quota_info = vec![
         Line::from(Span::styled("Why use your own Google Cloud Console credentials?", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
-        Line::from("• By default, rclone uses a shared public ID causing 403 Rate Limit errors."),
-        Line::from("• A custom Client ID gives you a dedicated personal quota (1,000 req/100s)."),
+        Line::from(format!("{} By default, rclone uses a shared public ID causing 403 Rate Limit errors.", app.glyphs().bullet_idle)),
+        Line::from(format!("{} A custom Client ID gives you a dedicated personal quota (1,000 req/100s).", app.glyphs().bullet_idle)),
     ];
     f.render_widget(Paragraph::new(quota_info).wrap(Wrap { trim: true }), chunks[0]);
 
@@ -501,7 +501,7 @@ fn render_step_google(
         let text = if is_sec_active {
             crate::ui::settings::format_scrolled_input_with_cursor(&state.client_secret, state.client_secret_cursor, max_w)
         } else {
-            "•".repeat(state.client_secret.chars().count())
+            app.glyphs().bullet_idle.repeat(state.client_secret.chars().count())
         };
         Line::from(Span::styled(text, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)))
     };

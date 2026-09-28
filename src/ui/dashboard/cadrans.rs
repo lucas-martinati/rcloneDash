@@ -86,7 +86,7 @@ pub fn render_disks_cloud_box(
 
     // 1. Local disk stats via statvfs
     let (used_gb, free_gb, total_gb, pct) = app.local_disk_stats();
-    let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, app.config.graph_style, theme);
+    let disk_bar = crate::ui::sparkline::render_gradient_bar(pct, bar_width, app.config.graph_style, theme, app.term_caps.ascii);
     let mut line1_spans = vec![
         Span::styled("Disk:    ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
     ];
@@ -112,7 +112,7 @@ pub fn render_disks_cloud_box(
         let total_tb = q.total_bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
         let free_tb = q.free_bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
         let q_pct = if q.total_bytes > 0 { (q.used_bytes as f64 / q.total_bytes as f64) * 100.0 } else { 0.0 };
-        let cloud_bar = crate::ui::sparkline::render_gradient_bar(q_pct, bar_width, app.config.graph_style, theme);
+        let cloud_bar = crate::ui::sparkline::render_gradient_bar(q_pct, bar_width, app.config.graph_style, theme, app.term_caps.ascii);
         line2_spans.extend(cloud_bar);
         let used_str = if used_mb >= 1024.0 {
             format!("{:.1} GB", used_mb / 1024.0)
@@ -287,13 +287,14 @@ pub fn render_metrics_box(
 
     // 1. Rclone service status & schedules
     let is_active = app.is_syncing();
+    let dot = app.glyphs().dot;
     let (status_dot, status_label, status_col) = if is_active {
-        ("●", "SYNC ACTIVE", theme.green)
+        (dot, "SYNC ACTIVE", theme.green)
     } else {
         match app.service_info.state {
-            crate::systemd::ServiceState::Idle => ("●", "IDLE", theme.cyan),
-            crate::systemd::ServiceState::Failed => ("●", "FAILED", theme.red),
-            _ => ("●", "UNKNOWN", theme.text_muted),
+            crate::systemd::ServiceState::Idle => (dot, "IDLE", theme.cyan),
+            crate::systemd::ServiceState::Failed => (dot, "FAILED", theme.red),
+            _ => (dot, "UNKNOWN", theme.text_muted),
         }
     };
     let last_sync_str = app.past_runs.first()
@@ -348,7 +349,7 @@ pub fn render_metrics_box(
     } else {
         theme.red
     };
-    let rel_bar = crate::ui::sparkline::render_reliability_bar(rate, bar_width, app.config.graph_style, theme);
+    let rel_bar = crate::ui::sparkline::render_reliability_bar(rate, bar_width, app.config.graph_style, theme, app.term_caps.ascii);
 
     let mut line3_spans = vec![
         Span::styled("Reliability: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),

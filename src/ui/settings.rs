@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::config;
+use crate::term_caps::{downgrade_color, ColorLevel};
 use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
@@ -74,19 +75,19 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let mid_cmd: Vec<Span> = if app.is_editing_setting() {
         let mut spans = crate::ui::keys::KeybindingRegistry::format_shortcut_label("Esc", "cancel", theme.red, Color::White);
         spans.push(Span::styled("  ", Style::default()));
-        spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "confirm", theme.green, Color::White));
+        spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "confirm", theme.green, Color::White));
         spans
     } else if let Some(setting) = app.visible_setting_at(app.settings_tab, app.settings_selected_idx) {
         let g = app.term_caps.glyphs();
         match setting.kind() {
             config::SettingKind::TextInput => {
-                crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "edit", theme.red, Color::White)
+                crate::ui::keys::KeybindingRegistry::format_shortcut_label(g.enter, "edit", theme.red, Color::White)
             }
             config::SettingKind::Action => {
                 if setting == config::SettingId::LogJournalAction {
-                    crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "open full log", theme.cyan, Color::White)
+                    crate::ui::keys::KeybindingRegistry::format_shortcut_label(g.enter, "open full log", theme.cyan, Color::White)
                 } else {
-                    crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "launch resync", theme.red, Color::White)
+                    crate::ui::keys::KeybindingRegistry::format_shortcut_label(g.enter, "launch resync", theme.red, Color::White)
                 }
             }
             config::SettingKind::Cycle => {
@@ -211,9 +212,11 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let right_area = cols[2];
 
     // 3. Render horizontal divider line: ├──────────┬──────────┤ (btop++ style)
-    // On ASCII consoles the double/thick junctions do not exist: plain `-`/`|`/`+`.
+    // On ASCII consoles every style collapses to single box drawing, like
+    // the outer border does (BorderType::Plain): junctions stay glued to
+    // matching corners instead of mixing `+` with `│`.
     let (h_char, v_char, cross_top, cross_bot, cross_left, cross_right): (&str, &str, &str, &str, &str, &str) = if app.term_caps.ascii {
-        (g.hline, g.vline, g.tee_top, g.tee_bottom, g.tee_left, g.tee_right)
+        ("─", "│", "┬", "┴", "├", "┤")
     } else {
         match app.config.border_style {
             config::BorderStyleChoice::Double => ("═", "║", "╦", "╩", "╠", "╣"),
@@ -264,7 +267,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         0
     };
 
-    let highlight_bg = Color::Rgb(95, 30, 30); // btop++ dark red / maroon banner
+    let highlight_bg = downgrade_color(Color::Rgb(95, 30, 30), app.term_caps.color); // btop++ dark red / maroon banner
+    let edit_bg = downgrade_color(Color::Rgb(70, 20, 20), app.term_caps.color);
 
     for (visible_pos, i) in (scroll_offset..settings.len()).take(visible_count).enumerate() {
         let (label, val) = &settings[i];
@@ -320,15 +324,15 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             ]);
 
             let inner_w = w.saturating_sub(4);
-            let line2 = if app.is_editing_setting() && setting_kind == config::SettingKind::TextInput {
-                let buf = app.edit_buffer();
-                let visible = format_scrolled_input_with_cursor(buf, app.edit_cursor(), inner_w);
-                let edit_centered = format!("{:^width$}", visible, width = inner_w);
-                Line::from(vec![
-                    Span::styled("[ ", Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
-                    Span::styled(edit_centered, Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
-                    Span::styled(" ]", Style::default().fg(Color::Yellow).bg(Color::Rgb(70, 20, 20)).add_modifier(Modifier::BOLD)),
-                ])
+                let line2 = if app.is_editing_setting() && setting_kind == config::SettingKind::TextInput {
+                    let buf = app.edit_buffer();
+                    let visible = format_scrolled_input_with_cursor(buf, app.edit_cursor(), inner_w);
+                    let edit_centered = format!("{:^width$}", visible, width = inner_w);
+                    Line::from(vec![
+                        Span::styled("[ ", Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
+                        Span::styled(edit_centered, Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
+                        Span::styled(" ]", Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
+                    ])
             } else {
                 let truncated = truncate_chars(val, inner_w);
                 let val_centered = format!("{:^width$}", truncated, width = inner_w);
@@ -361,6 +365,15 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
             left_lines.push(line1);
             left_lines.push(line2);
+            // Without colors the banner background is gone: invert the
+            // selected row so it stays distinguishable (NO_COLOR).
+            if app.term_caps.color == ColorLevel::None {
+                for line in left_lines.iter_mut().rev().take(2) {
+                    for span in line.spans.iter_mut() {
+                        span.style = span.style.add_modifier(Modifier::REVERSED);
+                    }
+                }
+            }
         } else {
             let truncated = truncate_chars(val, w);
             let line1 = Line::from(vec![
@@ -465,7 +478,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         }
         Some(SettingId::GoogleClientSecret) => {
             let (_, google_secret) = config::read_rclone_credentials(&app.config.remote);
-            let cur_display = if google_secret.is_some() { "•••••••••••• (configured)" } else { "(default / unset)" };
+            let cur_display = if google_secret.is_some() { format!("{} (configured)", app.glyphs().bullet_idle.repeat(12)) } else { "(default / unset)".to_string() };
             (
                 SettingId::GoogleClientSecret.desc_title(),
                 format!(
@@ -524,10 +537,13 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         }
     }
 
-    // Smart auto-scroll if display height is heavily constrained
+    // Smart auto-scroll if display height is heavily constrained.
+    // The active option line carries the active bullet span verbatim, which
+    // also covers the hardcoded "Current ..." lines without "(active)".
     let scroll_y = if desc_lines.len() > desc_inner.height as usize {
+        let active_bullet = format!("{} ", g.bullet_active);
         let active_line_idx = desc_lines.iter().position(|l| {
-            l.spans.iter().any(|s| s.content.contains("(active)"))
+            l.spans.iter().any(|s| s.content == active_bullet)
         }).unwrap_or(0);
 
         let max_scroll = (desc_lines.len() - desc_inner.height as usize) as u16;

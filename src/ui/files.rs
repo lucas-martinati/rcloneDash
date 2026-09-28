@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, HitAction, Hitbox};
+use crate::term_caps::selected_style;
 use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::keys::KeybindingRegistry;
 use crate::ui::theme::ThemePalette;
@@ -40,8 +41,8 @@ pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitbox
     let border_color = theme.border_history;
 
     let actions = vec![
-        KeybindingRegistry::format_shortcut_label("←", "parent", theme.red, Color::White),
-        KeybindingRegistry::format_shortcut_label("↵", "open", theme.red, Color::White),
+        KeybindingRegistry::format_shortcut_label(app.glyphs().arrow_left, "parent", theme.red, Color::White),
+        KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "open", theme.red, Color::White),
     ];
 
     let inner_area = render_modal_container(
@@ -132,7 +133,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                 };
 
                 if is_selected {
-                    let highlight_bg = Color::Rgb(90, 32, 32);
+                    let highlight = selected_style(Color::Rgb(90, 32, 32), app.term_caps.color);
                     let type_str = if entry.is_dir { "[DIR] " } else { "[FILE] " };
                     Row::new(vec![
                         Cell::from(Line::from(vec![
@@ -144,7 +145,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                         Cell::from(Span::styled(&entry.mtime, Style::default().fg(Color::White))),
                         Cell::from(Span::styled(status_badge, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
                     ])
-                    .style(Style::default().bg(highlight_bg))
+                    .style(highlight)
                 } else {
                     let name_style = if app.ctrl_mode && !entry.is_dir {
                         Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)
@@ -202,7 +203,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         start_idx,
         visible_height,
         theme,
-        &app.glyphs(),
+        &app.term_caps,
         hitboxes,
         crate::app::ScrollbarTarget::Files,
     );
@@ -245,11 +246,11 @@ fn render_file_actions(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
         Span::styled("Quick actions:", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [→ / Enter] ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" [{} / Enter] ", app.glyphs().arrow_right), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
         Span::styled("Enter / Open", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [← / Backspace] ", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" [{} / Backspace] ", app.glyphs().arrow_left), Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
         Span::styled("Parent folder", Style::default().fg(theme.text_bright)),
     ]));
     lines.push(Line::from(vec![

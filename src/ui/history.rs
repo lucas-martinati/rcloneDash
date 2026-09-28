@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::monitor::history::RunStatus;
+use crate::term_caps::{downgrade_color, selected_style};
 use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 
@@ -47,8 +48,8 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
 
     let (status_str, status_color): (String, _) = match run.status {
         RunStatus::Success => (format!("{} SUCCESS", app.glyphs().check), theme.green),
-        RunStatus::Failed => ("✗ FAILED".to_string(), theme.red),
-        RunStatus::Skipped => ("⊘ SKIPPED (No changes)".to_string(), theme.text_muted),
+        RunStatus::Failed => (format!("{} FAILED", app.glyphs().fail), theme.red),
+        RunStatus::Skipped => (format!("{} SKIPPED (No changes)", app.glyphs().skip), theme.text_muted),
     };
 
     all_lines.push((Line::from(vec![
@@ -103,12 +104,13 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             };
 
             let prefix = if is_selected { format!(" {} ", app.glyphs().bullet_active) } else { "   ".to_string() };
-            let highlight_bg = Color::Rgb(90, 32, 32);
+            let highlight_bg = downgrade_color(Color::Rgb(90, 32, 32), app.term_caps.color);
+            let highlight = selected_style(Color::Rgb(90, 32, 32), app.term_caps.color);
 
             let mut line_spans = if is_selected {
                 vec![
-                    Span::styled(prefix, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!(" {:<11} ", badge_icon), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(prefix, highlight.fg(Color::White).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" {:<11} ", badge_icon), highlight.fg(Color::White).add_modifier(Modifier::BOLD)),
                 ]
             } else {
                 vec![
@@ -147,7 +149,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let mut actions = Vec::new();
 
     if has_files {
-        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "Open", theme.highlight, Color::White));
+        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "Open", theme.highlight, Color::White));
         let mode_label = if app.ctrl_mode { "File" } else { "Folder" };
         actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("Ctrl+X", mode_label, theme.highlight, Color::White));
     }
@@ -233,7 +235,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         scroll,
         visible_height,
         theme,
-        &app.glyphs(),
+        &app.term_caps,
         hitboxes,
         crate::app::ScrollbarTarget::HistoryDetails(run_idx),
     );

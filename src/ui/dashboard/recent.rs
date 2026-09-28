@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, FocusedPanel, HitAction, Hitbox};
+use crate::term_caps::selected_style;
 use crate::ui::theme::ThemePalette;
 
 /// Renders the Recent Files panel displaying recently transferred files with action badges.
@@ -45,7 +46,8 @@ pub fn render_recent_files_panel(
         None => app.recent_scroll_offset.min(max_offset),
     };
 
-    let highlight_bg = Color::Rgb(90, 32, 32);
+    let highlight = selected_style(Color::Rgb(90, 32, 32), app.term_caps.color);
+    let glyphs = app.glyphs();
 
     let rows: Vec<Row> = if files_to_display.is_empty() {
         vec![Row::new(vec![
@@ -64,9 +66,9 @@ pub fn render_recent_files_panel(
                 let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::RecentFiles);
                 let is_selected = !is_dragging && app.recent_selected_idx == Some(real_idx);
                 let (badge_text, badge_color) = match action.as_str() {
-                    "new" => ("● Added", theme.green),
-                    "deleted" => ("● Deleted", theme.red),
-                    _ => ("● Modified", theme.yellow),
+                    "new" => (format!("{} Added", glyphs.dot), theme.green),
+                    "deleted" => (format!("{} Deleted", glyphs.dot), theme.red),
+                    _ => (format!("{} Modified", glyphs.dot), theme.yellow),
                 };
 
                 let path_spans = format_path_spans(path, is_selected, app.ctrl_mode, theme, None);
@@ -83,7 +85,7 @@ pub fn render_recent_files_panel(
                         Cell::from(size_span),
                         Cell::from(time_span),
                     ])
-                    .style(Style::default().bg(highlight_bg))
+                    .style(highlight)
                 } else {
                     let cursor = Span::styled("  ", Style::default());
                     let badge = Span::styled(format!("{} ", badge_text), Style::default().fg(badge_color).add_modifier(Modifier::BOLD));
@@ -135,7 +137,6 @@ pub fn render_recent_files_panel(
     };
 
     let bg = app.border_glyphs();
-    let glyphs = app.glyphs();
     let mut bottom_spans = vec![
         Span::styled(bg.bot_left, Style::default().fg(border_color)),
         Span::styled(glyphs.arrow_up, Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
@@ -143,7 +144,7 @@ pub fn render_recent_files_panel(
         Span::styled(glyphs.arrow_down, Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
     ];
-    bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "open", key_col, opn_col));
+    bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label(glyphs.enter, "open", key_col, opn_col));
     bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(border_color)));
 
     let left_bottom = Line::from(bottom_spans);
@@ -249,7 +250,7 @@ pub fn render_recent_files_panel(
         offset,
         max_show,
         theme,
-        &app.glyphs(),
+        &app.term_caps,
         hitboxes,
         crate::app::ScrollbarTarget::RecentFiles,
     );

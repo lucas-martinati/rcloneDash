@@ -24,7 +24,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::term_caps::Glyphs;
+use crate::term_caps::{downgrade_color, TermCaps};
 use dashboard::render_dashboard;
 use footer::render_footer;
 use popups::render_popups;
@@ -108,7 +108,7 @@ pub fn render_scrollbar_custom(
     pos: usize,
     visible: usize,
     theme: &crate::ui::theme::ThemePalette,
-    glyphs: &Glyphs,
+    caps: &TermCaps,
     hitboxes: &mut Vec<crate::app::Hitbox>,
     target: crate::app::ScrollbarTarget,
 ) {
@@ -117,6 +117,7 @@ pub fn render_scrollbar_custom(
     }
     let track_height = (bot_y - top_y - 1) as usize;
     let buf = f.buffer_mut();
+    let glyphs = caps.glyphs();
 
     // Up arrow
     buf.set_string(scroll_x, top_y, glyphs.arrow_up, Style::default().fg(theme.text_muted));
@@ -137,7 +138,10 @@ pub fn render_scrollbar_custom(
     }
 
     // Clear the track column between arrows with a subtle vertical line
-    let track_color = crate::ui::theme::color_with_opacity(theme.separator, 0.20, None);
+    let track_color = downgrade_color(
+        crate::ui::theme::color_with_opacity(theme.separator, 0.20, None),
+        caps.color,
+    );
     let track_style = Style::default().fg(track_color);
     for y in (top_y + 1)..bot_y {
         buf.set_string(scroll_x, y, glyphs.vline, track_style);
@@ -166,15 +170,18 @@ pub fn render_scrollbar_custom(
     for i in 0..geom.thumb_size {
         let y = top_y + 1 + (geom.thumb_start + i) as u16;
         if y < bot_y {
-            let color = if geom.thumb_size >= 3 {
-                if i == 0 || i == geom.thumb_size - 1 {
-                    crate::ui::theme::color_with_opacity(ratatui::style::Color::Rgb(200, 205, 215), 0.60, None)
+            let color = downgrade_color(
+                if geom.thumb_size >= 3 {
+                    if i == 0 || i == geom.thumb_size - 1 {
+                        crate::ui::theme::color_with_opacity(ratatui::style::Color::Rgb(200, 205, 215), 0.60, None)
+                    } else {
+                        ratatui::style::Color::Rgb(225, 230, 240)
+                    }
                 } else {
-                    ratatui::style::Color::Rgb(225, 230, 240)
-                }
-            } else {
-                ratatui::style::Color::Rgb(200, 205, 215)
-            };
+                    ratatui::style::Color::Rgb(200, 205, 215)
+                },
+                caps.color,
+            );
             buf.set_string(scroll_x, y, glyphs.bar_fill, Style::default().fg(color));
         }
     }
@@ -190,7 +197,7 @@ pub fn render_scrollbar(
     pos: usize,
     visible: usize,
     theme: &crate::ui::theme::ThemePalette,
-    glyphs: &Glyphs,
+    caps: &TermCaps,
     hitboxes: &mut Vec<crate::app::Hitbox>,
     target: crate::app::ScrollbarTarget,
 ) {
@@ -200,7 +207,7 @@ pub fn render_scrollbar(
     let scroll_x = area.x + area.width.saturating_sub(2);
     let top_y = area.y + 1;
     let bot_y = area.y + area.height.saturating_sub(2);
-    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, glyphs, hitboxes, target);
+    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, caps, hitboxes, target);
 }
 
 /// Scrollbar integrated into an inner pane (without own border, e.g. left pane in filters or explorer)
@@ -213,7 +220,7 @@ pub fn render_scrollbar_pane(
     pos: usize,
     visible: usize,
     theme: &crate::ui::theme::ThemePalette,
-    glyphs: &Glyphs,
+    caps: &TermCaps,
     hitboxes: &mut Vec<crate::app::Hitbox>,
     target: crate::app::ScrollbarTarget,
 ) {
@@ -223,5 +230,5 @@ pub fn render_scrollbar_pane(
     let scroll_x = pane.x + pane.width.saturating_sub(1);
     let top_y = pane.y;
     let bot_y = pane.y + pane.height.saturating_sub(1);
-    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, glyphs, hitboxes, target);
+    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, caps, hitboxes, target);
 }

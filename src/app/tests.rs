@@ -2166,6 +2166,14 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
+    async fn test_app_new_uses_full_caps_in_tests() {
+        // Deterministic regardless of TERM/LANG/NO_COLOR or is_terminal():
+        // production refreshes from the real terminal, tests keep full.
+        let app = App::new();
+        assert_eq!(app.term_caps, crate::term_caps::TermCaps::full());
+    }
+
+    #[tokio::test]
     async fn test_settings_ascii_glyphs_render() {
         // Forced TTY caps: the settings modal must draw ASCII fallbacks
         // (no panic, borders fall back to Plain).

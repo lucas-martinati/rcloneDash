@@ -9,6 +9,7 @@ use ratatui::{
 use crate::app::{App, FocusedPanel, HitAction, Hitbox};
 use crate::monitor::events::FileAction;
 use crate::monitor::history::RunStatus;
+use crate::term_caps::selected_style;
 use crate::ui::theme::ThemePalette;
 
 /// Renders the History Panel with 2D duration bar graph, interactive runs table, and scrollbar.
@@ -71,7 +72,7 @@ pub fn render_history_panel(
         Span::styled(glyphs.arrow_down, Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
     ];
-    left_bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "details", key_col, det_col));
+    left_bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label(glyphs.enter, "details", key_col, det_col));
     left_bottom_spans.push(Span::styled(bg.bot_right, Style::default().fg(border_color)));
     let left_bottom = Line::from(left_bottom_spans);
     let right_bottom = Line::from(vec![
@@ -134,6 +135,7 @@ pub fn render_history_panel(
         chunks[0].height as usize,
         past_selected,
         app.config.graph_style,
+        app.term_caps.ascii,
     );
     let bar_p = Paragraph::new(lines);
     f.render_widget(bar_p, chunks[0]);
@@ -174,7 +176,7 @@ pub fn render_history_panel(
         visible_indices.push(item_idx);
         let is_dragging = app.is_dragging_scrollbar(crate::app::ScrollbarTarget::History);
         let is_selected = !is_dragging && app.selected_run_idx == Some(item_idx);
-        let highlight_bg = Color::Rgb(90, 32, 32);
+        let highlight = selected_style(Color::Rgb(90, 32, 32), app.term_caps.color);
 
         if is_syncing && item_idx == 0 {
             // In-progress synchronization row
@@ -184,11 +186,11 @@ pub fn render_history_panel(
                 && (app.live.transfer.pct > 0 || app.live.transfer.files_total > 0 || !app.live.transfer.speed.is_empty());
 
             let status_str = if has_transfer_info {
-                format!("● {}%", app.live.overall_progress_pct())
+                format!("{} {}%", glyphs.dot, app.live.overall_progress_pct())
             } else if app.live.phase_index == 0 {
-                "● Listing".to_string()
+                format!("{} Listing", glyphs.dot)
             } else {
-                "● Scanning".to_string()
+                format!("{} Scanning", glyphs.dot)
             };
             let copied_count = app.live.synced_files.iter().filter(|f| f.action == FileAction::New || f.action == FileAction::Copied).count().max(app.live.transfer.files_done as usize);
             let copied_val = copied_count.to_string();
@@ -208,7 +210,7 @@ pub fn render_history_panel(
                     Cell::from(Span::styled(del_val, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
                     Cell::from(Span::styled(elapsed, Style::default().fg(Color::White))),
                     Cell::from(Span::styled(err_val, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
-                ]).style(Style::default().bg(highlight_bg)));
+                ]).style(highlight));
             } else {
                 let cursor = Span::styled("  ", Style::default());
                 table_rows.push(Row::new(vec![
@@ -226,8 +228,8 @@ pub fn render_history_panel(
             if let Some(run) = app.past_runs.get(past_idx) {
                 let (status_badge, status_color): (String, _) = match run.status {
                     RunStatus::Success => (format!("{} Success", glyphs.check), theme.green),
-                    RunStatus::Failed => ("✗ Error".to_string(), theme.red),
-                    RunStatus::Skipped => ("⊘ Skipped".to_string(), theme.text_muted),
+                    RunStatus::Failed => (format!("{} Error", glyphs.fail), theme.red),
+                    RunStatus::Skipped => (format!("{} Skipped", glyphs.skip), theme.text_muted),
                 };
 
                 let time_short = if run.date == chrono::Local::now().format("%Y-%m-%d").to_string() {
@@ -248,7 +250,7 @@ pub fn render_history_panel(
                         Cell::from(Span::styled(run.files_deleted.len().to_string(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
                         Cell::from(Span::styled(&run.duration, Style::default().fg(Color::White))),
                         Cell::from(Span::styled(run.errors.len().to_string(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
-                    ]).style(Style::default().bg(highlight_bg)));
+                    ]).style(highlight));
                 } else {
                     let cursor = Span::styled("  ", Style::default());
                     table_rows.push(Row::new(vec![
@@ -307,7 +309,7 @@ pub fn render_history_panel(
         offset,
         visible_rows,
         theme,
-        &app.glyphs(),
+        &app.term_caps,
         hitboxes,
         crate::app::ScrollbarTarget::History,
     );

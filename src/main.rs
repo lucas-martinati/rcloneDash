@@ -122,16 +122,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("  {}  Current version: {}", g.vline, style.gray(&format!("v{}", info.current_version)));
                         println!("  {}  Latest version:  {}", g.vline, style.bold(&format!("v{}", info.latest_version)));
                         println!("  {}", g.vline);
-                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("🚀 Update available: v{}! Run: rclonedash --update", info.latest_version)));
+                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("{} Update available: v{}! Run: rclonedash --update", g.rocket, info.latest_version)));
                     }
                     Ok(None) => {
                         println!("  {}  v{} is already installed", g.vline, env!("CARGO_PKG_VERSION"));
                         println!("  {}", g.vline);
-                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green("✅ rcloneDash is up to date."));
+                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("{} rcloneDash is up to date.", g.ok_emoji)));
                     }
                     Err(e) => {
                         println!("  {}", g.vline);
-                        eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("⚠️  Could not check for updates: {}", e)));
+                        eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("{}  Could not check for updates: {}", g.warn, e)));
                     }
                 }
                 return Ok(());
@@ -150,11 +150,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match updater::download_and_install_update(&info, mode).await {
                             Ok(()) => {
                                 println!("  {}", g.vline);
-                                println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("✨ Successfully updated to v{}!", info.latest_version)));
+                                println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("{} Successfully updated to v{}!", g.spark, info.latest_version)));
                             }
                             Err(e) => {
                                 println!("  {}", g.vline);
-                                eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("❌ Update failed: {}", e)));
+                                eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("{} Update failed: {}", g.fail_emoji, e)));
                                 std::process::exit(1);
                             }
                         }
@@ -162,11 +162,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(None) => {
                         println!("  {}  v{} is already installed", g.vline, env!("CARGO_PKG_VERSION"));
                         println!("  {}", g.vline);
-                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green("✅ rcloneDash is already on the latest version."));
+                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("{} rcloneDash is already on the latest version.", g.ok_emoji)));
                     }
                     Err(e) => {
                         println!("  {}", g.vline);
-                        eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("❌ Update check failed: {}", e)));
+                        eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("{} Update check failed: {}", g.fail_emoji, e)));
                         std::process::exit(1);
                     }
                 }

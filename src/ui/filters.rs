@@ -39,7 +39,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
 
     let mut actions = Vec::new();
     if app.is_editing_filter() {
-        actions.push(KeybindingRegistry::format_shortcut_label("↵", "save", theme.green, Color::White));
+        actions.push(KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "save", theme.green, Color::White));
         actions.push(KeybindingRegistry::format_shortcut_label("Esc", "cancel", theme.red, Color::White));
         actions.push(KeybindingRegistry::format_shortcut_label("Backspace", "del", theme.yellow, Color::White));
     } else {
@@ -183,14 +183,14 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     };
 
                     let line = Line::from(vec![
-                        Span::styled("✎ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+                        Span::styled(format!("{} ", app.glyphs().edit), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                         Span::styled(format!("{:2} {} ", i + 1, app.glyphs().vline), Style::default().fg(theme.yellow)),
                         Span::styled("[ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                         Span::styled(buf.to_string(), Style::default().fg(text_col).add_modifier(Modifier::BOLD)),
                         Span::styled(app.glyphs().bar_fill, Style::default().fg(theme.yellow).add_modifier(Modifier::RAPID_BLINK)),
                         Span::styled(" ]", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     ]);
-                    ListItem::new(line).style(Style::default().bg(Color::Rgb(45, 30, 60)))
+                    ListItem::new(line).style(crate::term_caps::selected_style(Color::Rgb(45, 30, 60), app.term_caps.color))
                 } else {
                     let rule = &app.filters[i];
                     let trimmed = rule.trim();
@@ -300,7 +300,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         offset,
         visible_height,
         theme,
-        &app.glyphs(),
+        &app.term_caps,
         hitboxes,
         crate::app::ScrollbarTarget::Filters,
     );

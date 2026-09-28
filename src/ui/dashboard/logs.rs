@@ -209,7 +209,7 @@ pub fn render_logs_panel(
         current_pos,
         visible_height,
         theme,
-        &app.glyphs(),
+        &app.term_caps,
         hitboxes,
         crate::app::ScrollbarTarget::Logs,
     );

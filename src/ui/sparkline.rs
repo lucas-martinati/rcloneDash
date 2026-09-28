@@ -5,15 +5,29 @@ use ratatui::{
 
 use crate::config::GraphStyleChoice;
 use crate::monitor::history::{PastRun, RunStatus};
+use crate::term_caps::Glyphs;
 use crate::ui::theme::ThemePalette;
 
 pub const BLOCKS: [char; 8] = [' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 pub const BRAILLE: [char; 8] = ['⡀', '⣀', '⣄', '⣤', '⣦', '⣶', '⣷', '⣿'];
+/// Classic ASCII fallback levels (btop++ TTY style): both graph styles
+/// collapse onto these when the terminal cannot do Unicode.
+pub const ASCII_GRAPH: [char; 8] = [' ', '.', ':', '-', '=', '+', '*', '#'];
 
 pub fn get_graph_chars(style: GraphStyleChoice) -> [char; 8] {
     match style {
         GraphStyleChoice::Braille => BRAILLE,
         GraphStyleChoice::Blocks => BLOCKS,
+    }
+}
+
+/// Graph levels honoring the terminal: Unicode sets by user choice,
+/// [`ASCII_GRAPH`] on charset-limited consoles.
+pub fn get_graph_chars_for(style: GraphStyleChoice, ascii: bool) -> [char; 8] {
+    if ascii {
+        ASCII_GRAPH
+    } else {
+        get_graph_chars(style)
     }
 }
 
@@ -26,6 +40,7 @@ pub fn render_history_graph_multiline(
     height: usize,
     selected_idx: Option<usize>,
     graph_style: GraphStyleChoice,
+    ascii: bool,
 ) -> (Vec<Line<'static>>, Vec<(usize, usize, usize)>) {
     if past_runs.is_empty() || width < 10 || height < 2 {
         let empty_line = Line::from(vec![Span::styled(" [Aucun run dans l'historique]", Style::default().fg(theme.text_muted))]);
@@ -65,10 +80,11 @@ pub fn render_history_graph_multiline(
 
     if let Some(sel) = selected_idx {
         if let Some(r) = past_runs.get(sel) {
+            let dot = Glyphs::new(ascii).dot;
             let status_span = match r.status {
-                RunStatus::Success => Span::styled("● OK", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-                RunStatus::Failed => Span::styled("● FAILED", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
-                RunStatus::Skipped => Span::styled("● SKIPPED", Style::default().fg(theme.text_muted)),
+                RunStatus::Success => Span::styled(format!("{} OK", dot), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+                RunStatus::Failed => Span::styled(format!("{} FAILED", dot), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                RunStatus::Skipped => Span::styled(format!("{} SKIPPED", dot), Style::default().fg(theme.text_muted)),
             };
             header_spans.push(Span::styled(format!("Run #{} : {} (", sel + 1, r.duration), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
             header_spans.push(status_span);
@@ -76,12 +92,13 @@ pub fn render_history_graph_multiline(
         }
     } else {
         let max_str = format_duration_clean(max_dur);
+        let dot = Glyphs::new(ascii).dot;
         header_spans.push(Span::styled(format!("(max: {}) · ", max_str), Style::default().fg(theme.text_muted)));
-        header_spans.push(Span::styled("●", Style::default().fg(theme.green)));
+        header_spans.push(Span::styled(dot, Style::default().fg(theme.green)));
         header_spans.push(Span::styled(" ok  ", Style::default().fg(theme.text_muted)));
-        header_spans.push(Span::styled("●", Style::default().fg(theme.red)));
+        header_spans.push(Span::styled(dot, Style::default().fg(theme.red)));
         header_spans.push(Span::styled(" err  ", Style::default().fg(theme.text_muted)));
-        header_spans.push(Span::styled("●", Style::default().fg(theme.text_muted)));
+        header_spans.push(Span::styled(dot, Style::default().fg(theme.text_muted)));
         header_spans.push(Span::styled(" skip", Style::default().fg(theme.text_muted)));
     }
 
@@ -105,7 +122,7 @@ pub fn render_history_graph_multiline(
                 1
             };
 
-            let chars = get_graph_chars(graph_style);
+            let chars = get_graph_chars_for(graph_style, ascii);
             let block_char = if level >= high_thresh {
                 chars[7]
             } else if level <= low_thresh {
@@ -196,6 +213,7 @@ pub fn render_gradient_bar(
     width: usize,
     graph_style: GraphStyleChoice,
     theme: &ThemePalette,
+    ascii: bool,
 ) -> Vec<Span<'static>> {
     if width == 0 {
         return vec![];
@@ -204,10 +222,15 @@ pub fn render_gradient_bar(
     let clamped_pct = pct.clamp(0.0, 100.0);
     let filled_slots = ((clamped_pct / 100.0) * width as f64).round() as usize;
 
-    let fill_char = match graph_style {
-        GraphStyleChoice::Braille => "⣿",
-        GraphStyleChoice::Blocks => "█",
+    let fill_char = if ascii {
+        "#"
+    } else {
+        match graph_style {
+            GraphStyleChoice::Braille => "⣿",
+            GraphStyleChoice::Blocks => "█",
+        }
     };
+    let empty_char = if ascii { "-" } else { "·" };
 
     let mut spans = Vec::new();
     spans.push(Span::styled("[", Style::default().fg(theme.border)));
@@ -226,7 +249,7 @@ pub fn render_gradient_bar(
             let color = crate::ui::theme::gradient_multi_stop(&stops, ratio);
             spans.push(Span::styled(fill_char, Style::default().fg(color).add_modifier(Modifier::BOLD)));
         } else {
-            spans.push(Span::styled("·", Style::default().fg(theme.separator)));
+            spans.push(Span::styled(empty_char, Style::default().fg(theme.separator)));
         }
     }
 
@@ -244,6 +267,7 @@ pub fn render_reliability_bar(
     width: usize,
     graph_style: GraphStyleChoice,
     theme: &ThemePalette,
+    ascii: bool,
 ) -> Vec<Span<'static>> {
     if width == 0 {
         return vec![];
@@ -252,10 +276,15 @@ pub fn render_reliability_bar(
     let clamped = rate.clamp(0.0, 100.0);
     let filled_slots = ((clamped / 100.0) * width as f64).round() as usize;
 
-    let fill_char = match graph_style {
-        GraphStyleChoice::Braille => "⣿",
-        GraphStyleChoice::Blocks => "█",
+    let fill_char = if ascii {
+        "#"
+    } else {
+        match graph_style {
+            GraphStyleChoice::Braille => "⣿",
+            GraphStyleChoice::Blocks => "█",
+        }
     };
+    let empty_char = if ascii { "-" } else { "·" };
 
     let mut spans = Vec::new();
     spans.push(Span::styled("[", Style::default().fg(theme.border)));
@@ -287,7 +316,7 @@ pub fn render_reliability_bar(
             let color = crate::ui::theme::lerp_color(base_color, target_color, t);
             spans.push(Span::styled(fill_char, Style::default().fg(color).add_modifier(Modifier::BOLD)));
         } else {
-            spans.push(Span::styled("·", Style::default().fg(theme.separator)));
+            spans.push(Span::styled(empty_char, Style::default().fg(theme.separator)));
         }
     }
 
@@ -383,20 +412,41 @@ mod tests {
             },
         ];
 
-        let (lines, hitboxes) = render_history_graph_multiline(&runs, &theme, 60, 5, Some(0), GraphStyleChoice::Blocks);
+        let (lines, hitboxes) = render_history_graph_multiline(&runs, &theme, 60, 5, Some(0), GraphStyleChoice::Blocks, false);
         assert_eq!(lines.len(), 5); // 1 header line + 4 chart rows
         assert_eq!(hitboxes.len(), 2);
+    }
+
+    #[test]
+    fn test_ascii_graph_fallback() {
+        use crate::ui::theme::ThemeChoice;
+        use unicode_width::UnicodeWidthStr;
+        // All fallback levels are pure ASCII, width 1.
+        for c in ASCII_GRAPH {
+            assert!(c.is_ascii());
+            assert_eq!(c.to_string().width(), 1);
+        }
+        // Both styles collapse onto the ASCII set.
+        assert_eq!(get_graph_chars_for(GraphStyleChoice::Braille, true), ASCII_GRAPH);
+        assert_eq!(get_graph_chars_for(GraphStyleChoice::Blocks, true), ASCII_GRAPH);
+        assert_eq!(get_graph_chars_for(GraphStyleChoice::Braille, false), BRAILLE);
+
+        let theme = ThemeChoice::TokyoNight.palette();
+        let spans = render_gradient_bar(50.0, 10, GraphStyleChoice::Braille, &theme, true);
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text.contains('#'), "ASCII bar should contain '#'");
+        assert!(text.is_ascii(), "ASCII bar must be pure ASCII");
     }
 
     #[test]
     fn test_render_gradient_bar_styles() {
         use crate::ui::theme::ThemeChoice;
         let theme = ThemeChoice::TokyoNight.palette();
-        let spans_braille = render_gradient_bar(50.0, 10, GraphStyleChoice::Braille, &theme);
+        let spans_braille = render_gradient_bar(50.0, 10, GraphStyleChoice::Braille, &theme, false);
         let text_braille: String = spans_braille.iter().map(|s| s.content.as_ref()).collect();
         assert!(text_braille.contains('⣿'), "Braille bar should contain '⣿'");
 
-        let spans_blocks = render_gradient_bar(50.0, 10, GraphStyleChoice::Blocks, &theme);
+        let spans_blocks = render_gradient_bar(50.0, 10, GraphStyleChoice::Blocks, &theme, false);
         let text_blocks: String = spans_blocks.iter().map(|s| s.content.as_ref()).collect();
         assert!(text_blocks.contains('█'), "Blocks bar should contain '█'");
     }
@@ -405,11 +455,11 @@ mod tests {
     fn test_render_reliability_bar_styles() {
         use crate::ui::theme::ThemeChoice;
         let theme = ThemeChoice::TokyoNight.palette();
-        let spans_braille = render_reliability_bar(50.0, 10, GraphStyleChoice::Braille, &theme);
+        let spans_braille = render_reliability_bar(50.0, 10, GraphStyleChoice::Braille, &theme, false);
         let text_braille: String = spans_braille.iter().map(|s| s.content.as_ref()).collect();
         assert!(text_braille.contains('⣿'), "Braille bar should contain '⣿'");
 
-        let spans_blocks = render_reliability_bar(50.0, 10, GraphStyleChoice::Blocks, &theme);
+        let spans_blocks = render_reliability_bar(50.0, 10, GraphStyleChoice::Blocks, &theme, false);
         let text_blocks: String = spans_blocks.iter().map(|s| s.content.as_ref()).collect();
         assert!(text_blocks.contains('█'), "Blocks bar should contain '█'");
     }
