@@ -1473,6 +1473,22 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.config.graph_style, crate::config::GraphStyleChoice::Braille);
         app.cycle_setting(true);
         assert_eq!(app.config.graph_style, crate::config::GraphStyleChoice::Blocks);
+
+        // 5. TtyMode (idx 5, appended last so 1-4 never shift)
+        app.settings_selected_idx = 5;
+        assert_eq!(
+            app.visible_setting_at(1, 5),
+            Some(config::SettingId::TtyMode),
+            "TtyMode must be the last Appearance setting"
+        );
+        app.config.tty_mode = crate::term_caps::TtyMode::Auto;
+        assert_eq!(app.setting_value(config::SettingId::TtyMode), "Auto (detect)");
+        app.cycle_setting(true);
+        assert_eq!(app.config.tty_mode, crate::term_caps::TtyMode::On);
+        app.cycle_setting(true);
+        assert_eq!(app.config.tty_mode, crate::term_caps::TtyMode::Off);
+        app.cycle_setting(false);
+        assert_eq!(app.config.tty_mode, crate::term_caps::TtyMode::On);
     }
 
     #[tokio::test]

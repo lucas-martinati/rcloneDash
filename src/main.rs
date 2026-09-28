@@ -14,6 +14,7 @@ mod ui;
 pub mod updater;
 pub mod cmd;
 pub mod installer;
+pub mod term_caps;
 
 use std::io;
 use std::panic;
@@ -33,11 +34,62 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::time::interval;
 
 use app::App;
+use term_caps::TtyMode;
+
+/// Extracts the global `--tty-mode=auto|on|off` (or `--tty-mode <mode>`)
+/// flag. Returns the override plus the remaining args (program name kept at
+/// index 0). The flag wins over `dash-config.json` and is never saved.
+fn parse_tty_override(args: &[String]) -> (Option<TtyMode>, Vec<String>) {
+    let mut tty_override = None;
+    let mut rest = Vec::with_capacity(args.len());
+    if let Some(first) = args.first() {
+        rest.push(first.clone());
+    }
+    let mut i = 1;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--tty-mode" {
+            i += 1;
+            match args.get(i).and_then(|v| TtyMode::parse(v)) {
+                Some(m) => tty_override = Some(m),
+                None => {
+                    eprintln!(
+                        "Invalid --tty-mode value: expected one of: {}",
+                        TtyMode::options().join(", ")
+                    );
+                    std::process::exit(2);
+                }
+            }
+        } else if let Some(v) = a.strip_prefix("--tty-mode=") {
+            match TtyMode::parse(v) {
+                Some(m) => tty_override = Some(m),
+                None => {
+                    eprintln!(
+                        "Invalid --tty-mode value '{}': expected one of: {}",
+                        v,
+                        TtyMode::options().join(", ")
+                    );
+                    std::process::exit(2);
+                }
+            }
+        } else {
+            rest.push(a.clone());
+        }
+        i += 1;
+    }
+    (tty_override, rest)
+}
+
+/// Effective TTY mode for CLI (updater) paths: flag first, config fallback.
+fn cli_tty_mode(tty_override: Option<TtyMode>) -> TtyMode {
+    tty_override.unwrap_or_else(|| config::load_config().tty_mode)
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle command-line arguments (before initializing TUI / raw mode)
     let args: Vec<String> = std::env::args().collect();
+    let (tty_override, args) = parse_tty_override(&args);
     let force_first_run = args.iter().any(|a| a == "--first-run" || a == "--wizard");
 
     if args.len() > 1 && !force_first_run {
@@ -52,6 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  --check-update        Check if a newer version is available");
                 println!("  -u, --update          Update rcloneDash to the latest release");
                 println!("  --update-demo         Preview the updater interface with a simulated update");
+                println!("  --tty-mode=MODE       TTY compatibility (btop++ style): auto (detect), on (16 colors + ASCII), off (full color + Unicode). Overrides dash-config.json.");
                 return Ok(());
             }
             "--version" | "-v" | "-V" => {
@@ -59,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             "--check-update" => {
-                let style = updater::ConsoleStyle::new();
+                let style = updater::ConsoleStyle::with_mode(cli_tty_mode(tty_override));
                 println!("  ┌─ {}", style.bold_red("rcloneDash Update Check"));
                 println!("  │");
                 println!("  {}  Checking for updates...", style.bold_cyan("◇"));
@@ -83,7 +136,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             "--update" | "-u" => {
-                let style = updater::ConsoleStyle::new();
+                let mode = cli_tty_mode(tty_override);
+                let style = updater::ConsoleStyle::with_mode(mode);
                 println!("  ┌─ {}", style.bold_red("rcloneDash Updater"));
                 println!("  │");
                 println!("  {}  Checking for latest release...", style.bold_cyan("◇"));
@@ -91,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(Some(info)) => {
                         println!("  │  Found {} (current: {})", style.bold(&format!("v{}", info.latest_version)), style.gray(&format!("v{}", info.current_version)));
                         println!("  │");
-                        match updater::download_and_install_update(&info).await {
+                        match updater::download_and_install_update(&info, mode).await {
                             Ok(()) => {
                                 println!("  │");
                                 println!("  └─ {}", style.bold_green(&format!("✨ Successfully updated to v{}!", info.latest_version)));
@@ -117,7 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             "--update-demo" => {
-                updater::demo_update_flow().await;
+                updater::demo_update_flow(cli_tty_mode(tty_override)).await;
                 return Ok(());
             }
             unknown => {
@@ -159,6 +213,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Initialize application state
     let mut app = App::new();
+    if let Some(mode) = tty_override {
+        app.apply_tty_override(mode);
+    }
     if force_first_run {
         app.open_first_run();
     }

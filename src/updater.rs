@@ -1,5 +1,7 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+use crate::term_caps::{TermCaps, TtyMode};
+
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {
     pub current_version: String,
@@ -9,7 +11,7 @@ pub struct UpdateInfo {
 }
 
 pub struct ConsoleStyle {
-    pub is_tty: bool,
+    pub caps: TermCaps,
 }
 
 impl Default for ConsoleStyle {
@@ -20,26 +22,44 @@ impl Default for ConsoleStyle {
 
 impl ConsoleStyle {
     pub fn new() -> Self {
-        use std::io::IsTerminal;
         Self {
-            is_tty: std::io::stdout().is_terminal(),
+            caps: TermCaps::detect(),
         }
     }
 
+    /// Style honoring an explicit [`TtyMode`] (CLI flag / config), resolved
+    /// against the real terminal.
+    pub fn with_mode(mode: TtyMode) -> Self {
+        Self {
+            caps: TermCaps::resolve(mode),
+        }
+    }
+
+    pub fn from_caps(caps: TermCaps) -> Self {
+        Self { caps }
+    }
+
+    /// Color output is allowed (`NO_COLOR` / pipe ⇒ plain text).
+    /// Independent from [`TermCaps::live`]: `NO_COLOR` on a real terminal
+    /// strips ANSI codes but keeps the live progress bar.
+    fn colored(&self) -> bool {
+        self.caps.color.supports_ansi()
+    }
+
     pub fn bold(&self, text: &str) -> String {
-        if self.is_tty { format!("\x1b[1m{}\x1b[0m", text) } else { text.to_string() }
+        if self.colored() { format!("\x1b[1m{}\x1b[0m", text) } else { text.to_string() }
     }
     pub fn bold_red(&self, text: &str) -> String {
-        if self.is_tty { format!("\x1b[1;31m{}\x1b[0m", text) } else { text.to_string() }
+        if self.colored() { format!("\x1b[1;31m{}\x1b[0m", text) } else { text.to_string() }
     }
     pub fn bold_green(&self, text: &str) -> String {
-        if self.is_tty { format!("\x1b[1;32m{}\x1b[0m", text) } else { text.to_string() }
+        if self.colored() { format!("\x1b[1;32m{}\x1b[0m", text) } else { text.to_string() }
     }
     pub fn bold_cyan(&self, text: &str) -> String {
-        if self.is_tty { format!("\x1b[1;36m{}\x1b[0m", text) } else { text.to_string() }
+        if self.colored() { format!("\x1b[1;36m{}\x1b[0m", text) } else { text.to_string() }
     }
     pub fn gray(&self, text: &str) -> String {
-        if self.is_tty { format!("\x1b[90m{}\x1b[0m", text) } else { text.to_string() }
+        if self.colored() { format!("\x1b[90m{}\x1b[0m", text) } else { text.to_string() }
     }
 }
 
@@ -115,9 +135,9 @@ pub fn progress_line(style: &ConsoleStyle, downloaded: u64, total: Option<u64>, 
 
     format!(
         "  │  {}[{}]{} {}  {} ({})",
-        if style.is_tty { "\x1b[32m" } else { "" },
+        if style.colored() { "\x1b[32m" } else { "" },
         bar,
-        if style.is_tty { "\x1b[0m" } else { "" },
+        if style.colored() { "\x1b[0m" } else { "" },
         pct,
         style.gray(&size_info),
         style.gray(&speed_info),
@@ -238,8 +258,8 @@ pub async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
 }
 
 /// Downloads and atomically replaces the current binary with the latest release
-pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String> {
-    let style = ConsoleStyle::new();
+pub async fn download_and_install_update(info: &UpdateInfo, mode: TtyMode) -> Result<(), String> {
+    let style = ConsoleStyle::with_mode(mode);
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("Could not determine executable path: {}", e))?;
 
@@ -275,7 +295,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
     let start = std::time::Instant::now();
     let mut last_render = std::time::Instant::now();
 
-    if style.is_tty {
+    if style.caps.live {
         render_progress(&style, 0, total, 0.0);
     }
 
@@ -289,7 +309,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
             .map_err(|e| format!("File write error: {}", e))?;
         downloaded += n as u64;
 
-        if style.is_tty && (last_render.elapsed().as_millis() >= 33 || total.is_some_and(|t| downloaded >= t)) {
+        if style.caps.live && (last_render.elapsed().as_millis() >= 33 || total.is_some_and(|t| downloaded >= t)) {
             let elapsed_secs = start.elapsed().as_secs_f64();
             let speed = if elapsed_secs > 0.0 { downloaded as f64 / elapsed_secs } else { 0.0 };
             render_progress(&style, downloaded, total, speed);
@@ -307,7 +327,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
         return Err("Download failed (connection lost or asset not found)".to_string());
     }
 
-    if style.is_tty {
+    if style.caps.live {
         let elapsed_secs = start.elapsed().as_secs_f64();
         let speed = if elapsed_secs > 0.0 { downloaded as f64 / elapsed_secs } else { 0.0 };
         finish_progress(&style, downloaded, total, speed);
@@ -431,8 +451,8 @@ pub fn demo_latest_version(current: &str) -> String {
 
 /// Simulates the full update flow on screen without any network access or
 /// filesystem side effect. Visual test entry point (`rclonedash --update-demo`).
-pub async fn demo_update_flow() {
-    let style = ConsoleStyle::new();
+pub async fn demo_update_flow(mode: TtyMode) {
+    let style = ConsoleStyle::with_mode(mode);
     let current = env!("CARGO_PKG_VERSION");
     let latest = demo_latest_version(current);
 
@@ -454,7 +474,7 @@ pub async fn demo_update_flow() {
     // Fake ~1.4 MB payload streamed at ~1.1 MB/s, like a real release asset.
     let total: u64 = 1_478_796;
     let start = std::time::Instant::now();
-    if style.is_tty {
+    if style.caps.live {
         let chunk: u64 = 46_080;
         let mut downloaded: u64 = 0;
         render_progress(&style, 0, Some(total), 0.0);
@@ -547,7 +567,7 @@ mod tests {
     #[test]
     fn test_progress_line_plain_matches_mockup() {
         // Off-TTY style renders deterministically, without ANSI codes.
-        let style = ConsoleStyle { is_tty: false };
+        let style = ConsoleStyle::from_caps(TermCaps::plain());
         let line = progress_line(&style, 1024, Some(2048), 1024.0, false);
         let half = "█".repeat(15);
         let half_empty = "░".repeat(15);
@@ -559,7 +579,7 @@ mod tests {
     fn test_progress_line_done_without_known_total() {
         // Finished with unknown total: 100% and full bar like before, but
         // the size stands alone — no fabricated " / ...".
-        let style = ConsoleStyle { is_tty: false };
+        let style = ConsoleStyle::from_caps(TermCaps::plain());
         let full = "█".repeat(PROGRESS_BAR_WIDTH);
         let line = progress_line(&style, 1_478_796, None, 1_152_000.0, true);
         let expected = format!("  │  [{full}] 100%  1.4 MB (1.1 MB/s)");
@@ -578,7 +598,7 @@ mod tests {
     #[test]
     fn test_progress_line_done_with_unreached_total_stays_honest() {
         // Known-but-unreached total at the end: real percentage, not forced.
-        let style = ConsoleStyle { is_tty: false };
+        let style = ConsoleStyle::from_caps(TermCaps::plain());
         let line = progress_line(&style, 512, Some(2048), 512.0, true);
         let filled = "█".repeat(8);
         let empty = "░".repeat(22);
@@ -589,7 +609,7 @@ mod tests {
     #[test]
     fn test_progress_line_tty_colors() {
         // On-TTY style wraps bar, percentage and sizes in ANSI codes.
-        let style = ConsoleStyle { is_tty: true };
+        let style = ConsoleStyle::from_caps(TermCaps::full());
         let half = "█".repeat(15);
         let half_empty = "░".repeat(15);
         let line = progress_line(&style, 1024, Some(2048), 1024.0, false);
@@ -608,8 +628,26 @@ mod tests {
     }
 
     #[test]
+    fn test_no_color_strips_ansi_but_keeps_live_bar() {
+        // NO_COLOR on a real terminal: no escape codes, but the live
+        // animation flag stays on (color and animation are independent).
+        let caps = TermCaps {
+            live: true,
+            ..TermCaps::plain()
+        };
+        let style = ConsoleStyle::from_caps(caps);
+        assert!(style.caps.live);
+        let half = "█".repeat(15);
+        let half_empty = "░".repeat(15);
+        let line = progress_line(&style, 1024, Some(2048), 1024.0, false);
+        assert!(!line.contains('\x1b'));
+        let expected = format!("  │  [{half}{half_empty}]  50%  1.0 KB / 2.0 KB (1.0 KB/s)");
+        assert_eq!(line, expected);
+    }
+
+    #[test]
     fn test_step_and_detail_lines() {
-        let style = ConsoleStyle { is_tty: false };
+        let style = ConsoleStyle::from_caps(TermCaps::plain());
         assert_eq!(step_line(&style, "Checking for latest release..."), "  ◇  Checking for latest release...");
         assert_eq!(detail_line("hello"), "  │  hello");
     }

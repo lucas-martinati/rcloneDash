@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use crate::ui::theme::ThemeChoice;
+use crate::term_caps::TtyMode;
 
 /// Version centralisée de l'application rcloneDash (synchronisée depuis Cargo.toml)
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -448,6 +449,7 @@ pub enum SettingId {
     MidPanelOrder,
     BorderStyle,
     GraphStyle,
+    TtyMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -478,6 +480,7 @@ impl SettingId {
         Self::MidPanelOrder,
         Self::BorderStyle,
         Self::GraphStyle,
+        Self::TtyMode,
     ];
 
     /// Catégorie d'appartenance de chaque réglage
@@ -498,7 +501,8 @@ impl SettingId {
             | Self::ContainerLayout
             | Self::MidPanelOrder
             | Self::BorderStyle
-            | Self::GraphStyle => SettingCategory::Appearance,
+            | Self::GraphStyle
+            | Self::TtyMode => SettingCategory::Appearance,
         }
     }
 
@@ -541,6 +545,7 @@ impl SettingId {
             Self::MidPanelOrder => "Mid-panel order",
             Self::BorderStyle => "Border style",
             Self::GraphStyle => "Graph style",
+            Self::TtyMode => "TTY mode",
             Self::StatsInterval => "Rclone stats interval",
         }
     }
@@ -561,6 +566,7 @@ impl SettingId {
             Self::MidPanelOrder => "Mid-panel order.",
             Self::BorderStyle => "Border style.",
             Self::GraphStyle => "Graph style.",
+            Self::TtyMode => "TTY mode (Linux console).",
             Self::StatsInterval => "Rclone stats interval (--stats).",
         }
     }
@@ -581,6 +587,7 @@ impl SettingId {
             Self::MidPanelOrder => "Horizontal placement of the middle section containers.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.",
             Self::BorderStyle => "Customize the box-drawing character style for all cards, panels, and modal dialogs.\n\nPersisted across sessions in dash-config.json.",
             Self::GraphStyle => "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nPersisted across sessions in dash-config.json.",
+            Self::TtyMode => "TTY compatibility mode for the Linux console (btop++ style).\n\n'auto' detects the terminal (TERM=linux forces the 16-color ANSI palette with ASCII fallbacks); 'on' forces it; 'off' forces full color with Unicode glyphs.\n\nPersisted across sessions in dash-config.json.",
             Self::StatsInterval => "Frequency at which rclone outputs transfer statistics to the log stream.\n\nDirectly controls the --stats flag passed to rclone bisync.\nA lower value (e.g. 1s) provides near real-time transfer speeds and progress bars, while higher values (e.g. 10s) reduce log verbosity.",
         }
     }
@@ -604,6 +611,7 @@ impl SettingId {
             Self::MidPanelOrder => Some(MidPanelOrder::all().iter().map(|m| m.name().to_string()).collect()),
             Self::BorderStyle => Some(BorderStyleChoice::all().iter().map(|b| b.name().to_string()).collect()),
             Self::GraphStyle => Some(GraphStyleChoice::all().iter().map(|g| g.name().to_string()).collect()),
+            Self::TtyMode => Some(TtyMode::all().iter().map(|m| m.name().to_string()).collect()),
             Self::StatsInterval => Some(stats_interval_options()),
             _ => None,
         }
@@ -640,6 +648,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub graph_style: GraphStyleChoice,
     #[serde(default)]
+    pub tty_mode: TtyMode,
+    #[serde(default)]
     pub first_run_completed: Option<bool>,
     #[serde(default = "default_true")]
     pub show_cadrans: bool,
@@ -670,6 +680,7 @@ impl Default for AppConfig {
             mid_panel_order: MidPanelOrder::HistoryLogs,
             border_style: BorderStyleChoice::Rounded,
             graph_style: GraphStyleChoice::Braille,
+            tty_mode: TtyMode::Auto,
             first_run_completed: None,
             show_cadrans: true,
             show_metrics: true,
@@ -1161,6 +1172,7 @@ mod tests {
         assert_eq!(config.mid_panel_order, MidPanelOrder::HistoryLogs);
         assert_eq!(config.border_style, BorderStyleChoice::Rounded);
         assert_eq!(config.graph_style, GraphStyleChoice::Braille);
+        assert_eq!(config.tty_mode, TtyMode::Auto);
 
         // Verify that legacy "Ascii" value is automatically aliased to Braille
         let legacy_ascii_json = r#"{
@@ -1181,6 +1193,7 @@ mod tests {
             mid_panel_order: MidPanelOrder::LogsHistory,
             border_style: BorderStyleChoice::Double,
             graph_style: GraphStyleChoice::Braille,
+            tty_mode: TtyMode::On,
             ..Default::default()
         };
 
@@ -1191,6 +1204,7 @@ mod tests {
         assert_eq!(deserialized.mid_panel_order, MidPanelOrder::LogsHistory);
         assert_eq!(deserialized.border_style, BorderStyleChoice::Double);
         assert_eq!(deserialized.graph_style, GraphStyleChoice::Braille);
+        assert_eq!(deserialized.tty_mode, TtyMode::On);
     }
 
     #[test]
@@ -1214,6 +1228,7 @@ mod tests {
         assert!(SettingId::ContainerLayout.desc_intro().contains("containers"));
         assert!(SettingId::BorderStyle.desc_intro().contains("dash-config.json"));
         assert!(SettingId::GraphStyle.desc_intro().contains("sparkline"));
+        assert!(SettingId::TtyMode.desc_intro().contains("dash-config.json"));
     }
 
     #[test]
@@ -1264,6 +1279,10 @@ mod tests {
         assert_eq!(
             SettingId::GraphStyle.choices().unwrap(),
             GraphStyleChoice::all().iter().map(|g| g.name().to_string()).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            SettingId::TtyMode.choices().unwrap(),
+            TtyMode::all().iter().map(|m| m.name().to_string()).collect::<Vec<_>>()
         );
 
         // Les réglages texte / action n'ont pas de liste de choix

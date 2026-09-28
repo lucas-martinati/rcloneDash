@@ -169,6 +169,7 @@ impl App {
             config::SettingId::MidPanelOrder => self.config.mid_panel_order.name().to_string(),
             config::SettingId::BorderStyle => self.config.border_style.name().to_string(),
             config::SettingId::GraphStyle => self.config.graph_style.name().to_string(),
+            config::SettingId::TtyMode => self.config.tty_mode.name().to_string(),
         }
     }
 
@@ -239,6 +240,15 @@ impl App {
             config::SettingId::GraphStyle => {
                 self.config.graph_style = if forward { self.config.graph_style.next() } else { self.config.graph_style.prev() };
                 self.set_toast(format!("Graph style: {}", self.config.graph_style.name()));
+                self.save_current_settings();
+            }
+            config::SettingId::TtyMode => {
+                self.config.tty_mode = if forward { self.config.tty_mode.next() } else { self.config.tty_mode.prev() };
+                // An explicit CLI override would shadow the config: drop it
+                // so the cycled value takes effect immediately.
+                self.tty_mode_override = None;
+                self.refresh_term_caps();
+                self.set_toast(format!("TTY mode: {}", self.config.tty_mode.name()));
                 self.save_current_settings();
             }
             _ => {}

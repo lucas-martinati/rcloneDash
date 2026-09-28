@@ -7,6 +7,7 @@ use crate::config::{self, AppConfig};
 use crate::fs_tree::{self, FileEntry};
 use crate::monitor::{fetch_past_runs, spawn_log_streamer, PastRun, RunStatus, SharedStreamer, StreamerState};
 use crate::systemd::{self, get_service_info, ServiceInfo, ServiceState};
+use crate::term_caps::{TermCaps, TtyMode};
 use crate::ui::theme::ThemeChoice;
 
 
@@ -313,6 +314,10 @@ pub struct App {
     pub modal: Modal,
     pub config: AppConfig,
     pub current_theme: ThemeChoice,
+    /// CLI `--tty-mode` override (wins over `config.tty_mode`, never saved).
+    pub tty_mode_override: Option<TtyMode>,
+    /// Resolved terminal capabilities (colors / live animation / ASCII).
+    pub term_caps: TermCaps,
     pub service_info: ServiceInfo,
     pub streamer: SharedStreamer,
     pub live: StreamerState,
@@ -420,6 +425,8 @@ impl App {
             modal: Modal::None,
             config,
             current_theme,
+            tty_mode_override: None,
+            term_caps: TermCaps::full(),
             service_info,
             streamer,
             live: StreamerState::default(),
@@ -490,6 +497,8 @@ impl App {
             last_quota_check: Instant::now().checked_sub(std::time::Duration::from_secs(350)).unwrap_or_else(Instant::now),
             last_file_count_check: Instant::now().checked_sub(std::time::Duration::from_secs(70)).unwrap_or_else(Instant::now),
         };
+
+        app.refresh_term_caps();
 
         #[cfg(not(test))]
         {
@@ -602,6 +611,23 @@ impl App {
 
     pub fn border_type(&self) -> BorderType {
         self.config.border_style.to_border_type()
+    }
+
+    /// Effective TTY mode: the CLI `--tty-mode` override wins over config.
+    pub fn effective_tty_mode(&self) -> TtyMode {
+        self.tty_mode_override.unwrap_or(self.config.tty_mode)
+    }
+
+    /// Recomputes [`Self::term_caps`] from the effective TTY mode and the
+    /// real terminal. Call after config load, CLI override, or cycling.
+    pub fn refresh_term_caps(&mut self) {
+        self.term_caps = TermCaps::resolve(self.effective_tty_mode());
+    }
+
+    /// Applies a CLI `--tty-mode` override (kept out of the saved config).
+    pub fn apply_tty_override(&mut self, mode: TtyMode) {
+        self.tty_mode_override = Some(mode);
+        self.refresh_term_caps();
     }
 
     pub fn border_glyphs(&self) -> crate::config::BorderGlyphs {
