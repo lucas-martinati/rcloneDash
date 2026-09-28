@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::config;
-use crate::term_caps::{downgrade_color, ColorLevel};
+use crate::term_caps::ColorLevel;
 use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
@@ -267,8 +267,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         0
     };
 
-    let highlight_bg = downgrade_color(Color::Rgb(95, 30, 30), app.term_caps.color); // btop++ dark red / maroon banner
-    let edit_bg = downgrade_color(Color::Rgb(70, 20, 20), app.term_caps.color);
+    let highlight_bg = Color::Rgb(95, 30, 30); // btop++ dark red / maroon banner
+    let edit_bg = Color::Rgb(70, 20, 20);
 
     for (visible_pos, i) in (scroll_offset..settings.len()).take(visible_count).enumerate() {
         let (label, val) = &settings[i];

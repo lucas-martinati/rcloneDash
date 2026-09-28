@@ -24,7 +24,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::term_caps::{downgrade_color, TermCaps};
+use crate::term_caps::{downgrade_color, ColorLevel, TermCaps};
 use dashboard::render_dashboard;
 use footer::render_footer;
 use popups::render_popups;
@@ -34,15 +34,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let mut hitboxes = std::mem::take(&mut app.hit_mgr.dashboard);
     hitboxes.clear();
 
-    let full = app.current_theme.palette();
-    // Single downgrade point (TTY mode): widgets consume `theme` /
-    // `dashboard_theme` directly and never branch on capabilities.
-    let theme = full.downgraded(app.term_caps.color);
+    let theme = app.current_theme.palette();
 
     // When menu, settings, or help modal is open, the background dashboard becomes grayscale / monochrome
-    // (grayscale reintroduces RGB triplets, so it is downgraded again).
     let dashboard_theme = if matches!(app.modal, crate::app::Modal::Menu | crate::app::Modal::Settings | crate::app::Modal::Help) {
-        full.to_grayscale().downgraded(app.term_caps.color)
+        theme.to_grayscale()
     } else {
         theme
     };
@@ -95,6 +91,18 @@ pub fn render(f: &mut Frame, app: &mut App) {
     app.hit_mgr.active_modal_area = compute_active_modal_area(&app.modal, f.area());
     app.hit_mgr.modal = modal_hitboxes;
     app.hit_mgr.dashboard = hitboxes;
+
+    // Single downgrade point (TTY mode): the whole frame is composed in
+    // truecolor so gradients and fades keep working on Rgb, then every cell
+    // is reduced to the terminal's palette. This also makes NO_COLOR honest,
+    // including hard-coded named colors.
+    let level = app.term_caps.color;
+    if level != ColorLevel::TrueColor {
+        for cell in f.buffer_mut().content.iter_mut() {
+            cell.fg = downgrade_color(cell.fg, level);
+            cell.bg = downgrade_color(cell.bg, level);
+        }
+    }
 }
 
 /// Custom scrollbar rendering with explicit column coordinates and vertical bounds
@@ -138,10 +146,7 @@ pub fn render_scrollbar_custom(
     }
 
     // Clear the track column between arrows with a subtle vertical line
-    let track_color = downgrade_color(
-        crate::ui::theme::color_with_opacity(theme.separator, 0.20, None),
-        caps.color,
-    );
+    let track_color = crate::ui::theme::color_with_opacity(theme.separator, 0.20, None);
     let track_style = Style::default().fg(track_color);
     for y in (top_y + 1)..bot_y {
         buf.set_string(scroll_x, y, glyphs.vline, track_style);
@@ -170,18 +175,15 @@ pub fn render_scrollbar_custom(
     for i in 0..geom.thumb_size {
         let y = top_y + 1 + (geom.thumb_start + i) as u16;
         if y < bot_y {
-            let color = downgrade_color(
-                if geom.thumb_size >= 3 {
-                    if i == 0 || i == geom.thumb_size - 1 {
-                        crate::ui::theme::color_with_opacity(ratatui::style::Color::Rgb(200, 205, 215), 0.60, None)
-                    } else {
-                        ratatui::style::Color::Rgb(225, 230, 240)
-                    }
+            let color = if geom.thumb_size >= 3 {
+                if i == 0 || i == geom.thumb_size - 1 {
+                    crate::ui::theme::color_with_opacity(ratatui::style::Color::Rgb(200, 205, 215), 0.60, None)
                 } else {
-                    ratatui::style::Color::Rgb(200, 205, 215)
-                },
-                caps.color,
-            );
+                    ratatui::style::Color::Rgb(225, 230, 240)
+                }
+            } else {
+                ratatui::style::Color::Rgb(200, 205, 215)
+            };
             buf.set_string(scroll_x, y, glyphs.bar_fill, Style::default().fg(color));
         }
     }

@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::monitor::history::RunStatus;
-use crate::term_caps::{downgrade_color, selected_style};
+use crate::term_caps::selected_style;
 use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 
@@ -104,7 +104,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             };
 
             let prefix = if is_selected { format!(" {} ", app.glyphs().bullet_active) } else { "   ".to_string() };
-            let highlight_bg = downgrade_color(Color::Rgb(90, 32, 32), app.term_caps.color);
+            let highlight_bg = Color::Rgb(90, 32, 32);
             let highlight = selected_style(Color::Rgb(90, 32, 32), app.term_caps.color);
 
             let mut line_spans = if is_selected {

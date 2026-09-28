@@ -360,12 +360,18 @@ pub fn downgrade_color(color: Color, level: ColorLevel) -> Color {
     }
 }
 
-/// Background style for a selected row or banner: `bg` downgraded to
-/// `level`, plus `REVERSED` when colors are off (`NO_COLOR`) so the
-/// selection stays distinguishable from unselected rows.
+/// Background style for a selected row or banner. The color is kept as-is
+/// (the frame-wide buffer pass reduces it to the terminal palette), except
+/// in `Ansi16` where the maroon banner would degrade to a muddy dark gray:
+/// like btop in TTY mode, selections use plain `Red` there. With colors off
+/// (`NO_COLOR`), `REVERSED` keeps the selection distinguishable.
 pub fn selected_style(bg: Color, level: ColorLevel) -> ratatui::style::Style {
     use ratatui::style::Modifier;
-    let mut style = ratatui::style::Style::default().bg(downgrade_color(bg, level));
+    let bg = match level {
+        ColorLevel::Ansi16 => Color::Red,
+        _ => bg,
+    };
+    let mut style = ratatui::style::Style::default().bg(bg);
     if level == ColorLevel::None {
         style = style.add_modifier(Modifier::REVERSED);
     }
@@ -819,15 +825,19 @@ mod tests {
     #[test]
     fn test_selected_style_reversed_without_colors() {
         use ratatui::style::Modifier;
-        // NO_COLOR: downgraded background plus REVERSED so the selection
-        // stays distinguishable.
+        // NO_COLOR: raw background plus REVERSED so the selection stays
+        // distinguishable (the frame-wide buffer pass resets the color).
         let s = selected_style(Color::Rgb(95, 30, 30), ColorLevel::None);
-        assert_eq!(s.bg, Some(Color::Reset));
+        assert_eq!(s.bg, Some(Color::Rgb(95, 30, 30)));
         assert!(s.add_modifier.contains(Modifier::REVERSED));
-        // Otherwise a plain downgraded background, no extra modifier.
+        // Ansi16 forces plain Red (btop TTY style), no extra modifier.
         let s = selected_style(Color::Rgb(95, 30, 30), ColorLevel::Ansi16);
+        assert_eq!(s.bg, Some(Color::Red));
         assert!(!s.add_modifier.contains(Modifier::REVERSED));
-        assert!(s.bg.is_some());
+        // Otherwise the banner color passes through untouched.
+        let s = selected_style(Color::Rgb(95, 30, 30), ColorLevel::TrueColor);
+        assert_eq!(s.bg, Some(Color::Rgb(95, 30, 30)));
+        assert!(!s.add_modifier.contains(Modifier::REVERSED));
     }
 
     #[test]

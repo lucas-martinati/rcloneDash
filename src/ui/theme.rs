@@ -1,8 +1,6 @@
 use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
-use crate::term_caps::{downgrade_color, ColorLevel};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ThemeChoice {
     TokyoNight,
@@ -242,38 +240,6 @@ pub struct ThemePalette {
 }
 
 impl ThemePalette {
-    /// Reduces every palette color to `level` in one place. Widgets always
-    /// receive the already-reduced palette, so no widget ever branches on
-    /// terminal capabilities. `TrueColor` is the identity.
-    pub fn downgraded(self, level: ColorLevel) -> ThemePalette {
-        let d = |c: Color| downgrade_color(c, level);
-        ThemePalette {
-            accent: d(self.accent),
-            blue: d(self.blue),
-            cyan: d(self.cyan),
-            green: d(self.green),
-            yellow: d(self.yellow),
-            orange: d(self.orange),
-            red: d(self.red),
-            purple: d(self.purple),
-            border: d(self.border),
-            border_focus: d(self.border_focus),
-            border_sys: d(self.border_sys),
-            border_storage: d(self.border_storage),
-            border_history: d(self.border_history),
-            border_logs: d(self.border_logs),
-            border_recent: d(self.border_recent),
-            card_bg: d(self.card_bg),
-            bg_main: d(self.bg_main),
-            header_bg: d(self.header_bg),
-            footer_bg: d(self.footer_bg),
-            highlight: d(self.highlight),
-            separator: d(self.separator),
-            text_bright: d(self.text_bright),
-            text_muted: d(self.text_muted),
-        }
-    }
-
     /// Converts all palette colors to grayscale (monochrome).
     pub fn to_grayscale(self) -> ThemePalette {
         let to_gray = |c: Color| -> Color {

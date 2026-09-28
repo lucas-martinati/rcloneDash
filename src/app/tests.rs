@@ -509,41 +509,29 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[test]
     fn test_downgraded_palette_for_tty_levels() {
-        use crate::term_caps::ColorLevel;
+        use crate::term_caps::{downgrade_color, ColorLevel};
         use ratatui::style::Color;
-        let palette = crate::ui::theme::ThemeChoice::TokyoNight.palette();
-
-        // TrueColor: identity (same bytes back).
-        let full = palette.downgraded(ColorLevel::TrueColor);
-        assert_eq!(full.accent, palette.accent);
-        assert_eq!(full.red, palette.red);
-
-        // Ansi256: no Rgb left; spot-check the sky-blue accent cube entry.
-        let pal256 = palette.downgraded(ColorLevel::Ansi256);
-        assert_eq!(pal256.accent, Color::Indexed(117));
-        for c in [
-            pal256.accent, pal256.blue, pal256.cyan, pal256.green, pal256.yellow,
-            pal256.orange, pal256.red, pal256.purple, pal256.border,
-            pal256.text_bright, pal256.text_muted,
-        ] {
-            assert!(!matches!(c, Color::Rgb(..)), "Ansi256 palette must not contain Rgb, got {:?}", c);
-        }
-
-        // Ansi16: only named colors (or Reset) survive; pure primaries map
-        // onto their names.
-        let pal16 = palette.downgraded(ColorLevel::Ansi16);
-        assert_eq!(pal16.accent, Color::LightCyan);
-        for c in [
-            pal16.accent, pal16.blue, pal16.cyan, pal16.green, pal16.yellow,
-            pal16.orange, pal16.red, pal16.purple, pal16.border,
-            pal16.text_bright, pal16.text_muted,
-        ] {
-            assert!(
-                !matches!(c, Color::Rgb(..) | Color::Indexed(_)),
-                "Ansi16 palette must only contain named colors, got {:?}",
-                c
-            );
-        }
+        // Spot-checks for the frame-wide buffer pass: known Rgb values land
+        // on the expected reduced colors.
+        assert_eq!(
+            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::Ansi256),
+            Color::Indexed(117)
+        );
+        assert_eq!(
+            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::Ansi16),
+            Color::LightCyan
+        );
+        assert_eq!(
+            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::TrueColor),
+            Color::Rgb(125, 207, 255)
+        );
+        assert_eq!(
+            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::None),
+            Color::Reset
+        );
+        // Named colors survive every level except None.
+        assert_eq!(downgrade_color(Color::Red, ColorLevel::Ansi16), Color::Red);
+        assert_eq!(downgrade_color(Color::Red, ColorLevel::None), Color::Reset);
     }
 
     #[tokio::test]
@@ -2207,6 +2195,62 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert!(rendered_text.contains("> "), "ASCII active bullet must be drawn");
         assert!(!rendered_text.contains('▶'), "No Unicode bullet must remain in settings");
         assert!(!rendered_text.contains('•'), "No Unicode idle bullet must remain in settings");
+
+        // Frame-wide downgrade: gradients are composed in truecolor, but no
+        // Rgb may survive in the buffer under Ansi16 (incl. hard-coded
+        // named colors vs Rgb — only Rgb is reduced here).
+        for y in 0..buffer.area.height {
+            for x in 0..buffer.area.width {
+                let cell = &buffer[(x, y)];
+                assert!(
+                    !matches!(cell.fg, ratatui::style::Color::Rgb(..)),
+                    "Ansi16 buffer fg must not contain Rgb at ({}, {})",
+                    x,
+                    y
+                );
+                assert!(
+                    !matches!(cell.bg, ratatui::style::Color::Rgb(..)),
+                    "Ansi16 buffer bg must not contain Rgb at ({}, {})",
+                    x,
+                    y
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_no_color_render_is_fully_plain() {
+        // NO_COLOR in the TUI: every buffer cell loses its colors, and the
+        // selected settings row stays distinguishable via REVERSED.
+        let mut app = App::new();
+        app.term_caps = crate::term_caps::TermCaps {
+            color: crate::term_caps::ColorLevel::None,
+            live: false,
+            ascii: true,
+        };
+        app.modal = Modal::Settings;
+        app.settings_tab = 1;
+        app.settings_selected_idx = 0;
+
+        let backend = ratatui::backend::TestBackend::new(130, 40);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal.draw(|f| {
+            crate::ui::render(f, &mut app);
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let mut reversed_cells = 0;
+        for y in 0..buffer.area.height {
+            for x in 0..buffer.area.width {
+                let cell = &buffer[(x, y)];
+                assert_eq!(cell.fg, ratatui::style::Color::Reset, "NO_COLOR fg at ({}, {})", x, y);
+                assert_eq!(cell.bg, ratatui::style::Color::Reset, "NO_COLOR bg at ({}, {})", x, y);
+                if cell.modifier.contains(ratatui::style::Modifier::REVERSED) {
+                    reversed_cells += 1;
+                }
+            }
+        }
+        assert!(reversed_cells > 0, "selected row must stay visible via REVERSED");
     }
 
     #[tokio::test]
