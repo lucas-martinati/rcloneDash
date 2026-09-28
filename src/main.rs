@@ -51,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  --first-run, --wizard Run initial setup wizard (Google credentials & rclone check)");
                 println!("  --check-update        Check if a newer version is available");
                 println!("  -u, --update          Update rcloneDash to the latest release");
+                println!("  --update-demo         Preview the updater interface with a simulated update");
                 return Ok(());
             }
             "--version" | "-v" | "-V" => {
@@ -113,6 +114,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         std::process::exit(1);
                     }
                 }
+                return Ok(());
+            }
+            "--update-demo" => {
+                updater::demo_update_flow().await;
                 return Ok(());
             }
             unknown => {

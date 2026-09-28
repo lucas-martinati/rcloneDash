@@ -43,7 +43,7 @@ impl ConsoleStyle {
     }
 }
 
-fn format_size(bytes: u64) -> String {
+pub fn format_size(bytes: u64) -> String {
     if bytes >= 1024 * 1024 * 1024 {
         format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
     } else if bytes >= 1024 * 1024 {
@@ -55,65 +55,87 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
-fn render_progress(style: &ConsoleStyle, downloaded: u64, total: Option<u64>, speed: f64) {
-    use std::io::Write;
-    let bar_width: usize = 30;
-    let (pct_str, bar) = if let Some(tot) = total {
-        if tot > 0 {
+/// Width of the download progress bar (matches the updater mockup).
+pub const PROGRESS_BAR_WIDTH: usize = 30;
+
+/// One wizard step header: `◇  <text>...` (cyan diamond on TTY).
+pub fn step_line(style: &ConsoleStyle, text: &str) -> String {
+    format!("  {}  {}", style.bold_cyan("◇"), text)
+}
+
+/// One indented detail line: `│  <text>`.
+pub fn detail_line(text: &str) -> String {
+    format!("  │  {}", text)
+}
+
+/// Splits progress into display percentage and bar glyphs.
+/// Unknown or empty totals render as `---%` with an empty bar.
+pub fn progress_parts(downloaded: u64, total: Option<u64>) -> (String, String) {
+    match total {
+        Some(tot) if tot > 0 => {
             let pct = (downloaded as f64 / tot as f64).clamp(0.0, 1.0);
-            let filled = (pct * bar_width as f64).round() as usize;
-            let empty = bar_width.saturating_sub(filled);
+            let filled = (pct * PROGRESS_BAR_WIDTH as f64).round() as usize;
+            let empty = PROGRESS_BAR_WIDTH.saturating_sub(filled);
             (
                 format!("{:>3.0}%", pct * 100.0),
                 format!("{}{}", "█".repeat(filled), "░".repeat(empty)),
             )
-        } else {
-            ("---%".to_string(), "░".repeat(bar_width))
         }
-    } else {
-        ("---%".to_string(), "░".repeat(bar_width))
-    };
+        _ => ("---%".to_string(), "░".repeat(PROGRESS_BAR_WIDTH)),
+    }
+}
 
-    let size_info = if let Some(tot) = total {
-        format!("{} / {}", format_size(downloaded), format_size(tot))
+/// Renders one full progress line (no `\r`, no newline), e.g.
+/// `│  [██████░░░░]  42%  1.4 MB / 3.3 MB (1.1 MB/s)`.
+///
+/// When `done` is true the line is the finished state: a reached total (or
+/// an unknown one, including a zero total like `Content-Length: 0`) renders
+/// `100%` in green with a full bar, but the total is only displayed when it
+/// is actually known and positive — no fabricated ` / ...`.
+/// A known-but-unreached total keeps its honest percentage instead.
+pub fn progress_line(style: &ConsoleStyle, downloaded: u64, total: Option<u64>, speed: f64, done: bool) -> String {
+    // A zero total carries no information (e.g. Content-Length: 0):
+    // treat it like an unknown one.
+    let unknown_total = total.is_none_or(|t| t == 0);
+    let (pct_str, bar) = if done && unknown_total {
+        ("100%".to_string(), "█".repeat(PROGRESS_BAR_WIDTH))
     } else {
-        format_size(downloaded)
+        progress_parts(downloaded, total)
+    };
+    let pct = if pct_str == "100%" {
+        style.bold_green(&pct_str)
+    } else {
+        style.bold(&pct_str)
+    };
+    let size_info = match total {
+        Some(tot) if tot > 0 => format!("{} / {}", format_size(downloaded), format_size(tot)),
+        _ => format_size(downloaded),
     };
     let speed_info = format!("{}/s", format_size(speed as u64));
 
-    print!(
-        "\r  │  {}[{}]{} {}  {} ({})\x1b[K",
+    format!(
+        "  │  {}[{}]{} {}  {} ({})",
         if style.is_tty { "\x1b[32m" } else { "" },
         bar,
         if style.is_tty { "\x1b[0m" } else { "" },
-        style.bold(&pct_str),
+        pct,
         style.gray(&size_info),
         style.gray(&speed_info),
-    );
+    )
+}
+
+/// Live-updates the progress bar on the current terminal line.
+fn render_progress(style: &ConsoleStyle, downloaded: u64, total: Option<u64>, speed: f64) {
+    use std::io::Write;
+    print!("\r{}\x1b[K", progress_line(style, downloaded, total, speed, false));
     let _ = std::io::stdout().flush();
 }
 
+/// Prints the final progress bar on its own line.
+/// An unknown total renders as before (`100%`, full bar, bare size);
+/// a known-but-unreached total keeps its honest percentage.
 fn finish_progress(style: &ConsoleStyle, downloaded: u64, total: Option<u64>, speed: f64) {
-    use std::io::Write;
-    let bar_width: usize = 30;
-    let bar = "█".repeat(bar_width);
-    let size_info = if let Some(tot) = total {
-        format!("{} / {}", format_size(downloaded), format_size(tot))
-    } else {
-        format_size(downloaded)
-    };
-    let speed_info = format!("{}/s", format_size(speed as u64));
-
-    println!(
-        "\r  │  {}[{}]{} {}  {} ({})\x1b[K",
-        if style.is_tty { "\x1b[32m" } else { "" },
-        bar,
-        if style.is_tty { "\x1b[0m" } else { "" },
-        style.bold_green("100%"),
-        style.gray(&size_info),
-        style.gray(&speed_info),
-    );
-    let _ = std::io::stdout().flush();
+    println!("\r{}\x1b[K", progress_line(style, downloaded, total, speed, true));
 }
 
 /// Parses a semantic version string (e.g. "1.0.0", "v1.0.1", "1.2.3-beta") into (major, minor, patch)
@@ -232,7 +254,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
         std::env::temp_dir().join(format!(".rclonedash-update-{}", pid))
     };
 
-    println!("  {}  Downloading rcloneDash {}...", style.bold_cyan("◇"), style.bold(&format!("v{}", info.latest_version)));
+    println!("{}", step_line(&style, &format!("Downloading rcloneDash {}...", style.bold(&format!("v{}", info.latest_version)))));
 
     let mut child = tokio::process::Command::new("curl")
         .args(["-fsSL", &info.download_url])
@@ -290,13 +312,13 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
         let speed = if elapsed_secs > 0.0 { downloaded as f64 / elapsed_secs } else { 0.0 };
         finish_progress(&style, downloaded, total, speed);
     } else {
-        println!("  │  Downloaded {}", format_size(downloaded));
+        println!("{}", detail_line(&format!("Downloaded {}", format_size(downloaded))));
     }
 
     println!("  │");
 
     if is_deb {
-        println!("  {}  Updating system Debian package (/usr/bin/rclonedash)...", style.bold_cyan("◇"));
+        println!("{}", step_line(&style, "Updating system Debian package (/usr/bin/rclonedash)..."));
         let (cmd, args) = if unsafe { libc::geteuid() } == 0 {
             ("apt", vec!["install", "-y", "--reinstall", tmp_dest.to_str().unwrap_or("")])
         } else {
@@ -312,7 +334,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
 
         match status {
             Ok(st) if st.success() => {
-                println!("  │  Debian package updated successfully");
+                println!("{}", detail_line("Debian package updated successfully"));
                 Ok(())
             }
             _ => Err(format!(
@@ -324,7 +346,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
         let extract_dir = std::env::temp_dir().join(format!(".rclonedash-update-{}", pid));
         let _ = tokio::fs::create_dir_all(&extract_dir).await;
 
-        println!("  {}  Extracting release package...", style.bold_cyan("◇"));
+        println!("{}", step_line(&style, "Extracting release package..."));
         let untar = tokio::process::Command::new("tar")
             .arg("-xzf")
             .arg(&tmp_dest)
@@ -339,7 +361,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
             Ok(st) if st.success() => {
                 let installer = extract_dir.join("install.sh");
                 if installer.is_file() {
-                    println!("  {}  Updating binary, systemd services, desktop entry, and icon...", style.bold_cyan("◇"));
+                    println!("{}", step_line(&style, "Updating binary, systemd services, desktop entry, and icon..."));
                     let inst = tokio::process::Command::new("bash")
                         .arg(&installer)
                         .current_dir(&extract_dir)
@@ -348,7 +370,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
                     let _ = tokio::fs::remove_dir_all(&extract_dir).await;
                     match inst {
                         Ok(ist) if ist.success() => {
-                            println!("  │  Updated all components successfully (user configuration preserved)");
+                            println!("{}", detail_line("Updated all components successfully (user configuration preserved)"));
                             Ok(())
                         }
                         _ => Err("Installer script failed during update".to_string()),
@@ -371,7 +393,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
             }
         }
     } else {
-        println!("  {}  Installing binary to {}...", style.bold_cyan("◇"), style.bold(&current_exe.display().to_string()));
+        println!("{}", step_line(&style, &format!("Installing binary to {}...", style.bold(&current_exe.display().to_string()))));
 
         // Set executable permissions (0755)
         use std::os::unix::fs::PermissionsExt;
@@ -380,7 +402,7 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
             let _ = std::fs::remove_file(&tmp_dest);
             return Err(format!("Failed to set permissions: {}", e));
         }
-        println!("  │  Applied executable permissions (0755)");
+        println!("{}", detail_line("Applied executable permissions (0755)"));
 
         // Atomic replace
         if let Err(e) = std::fs::rename(&tmp_dest, &current_exe) {
@@ -393,9 +415,70 @@ pub async fn download_and_install_update(info: &UpdateInfo) -> Result<(), String
             }
             return Err(format!("Failed to replace executable: {}", e));
         }
-        println!("  │  Replaced binary atomically");
+        println!("{}", detail_line("Replaced binary atomically"));
         Ok(())
     }
+}
+
+/// Computes the demo "latest" version: current patch + 1.
+/// Falls back to `<current>+demo1` when the current version is not semver.
+pub fn demo_latest_version(current: &str) -> String {
+    match parse_semver(current) {
+        Some((maj, min, patch)) => format!("{}.{}.{}", maj, min, patch + 1),
+        None => format!("{}+demo1", current.trim()),
+    }
+}
+
+/// Simulates the full update flow on screen without any network access or
+/// filesystem side effect. Visual test entry point (`rclonedash --update-demo`).
+pub async fn demo_update_flow() {
+    let style = ConsoleStyle::new();
+    let current = env!("CARGO_PKG_VERSION");
+    let latest = demo_latest_version(current);
+
+    println!("  ┌─ {}", style.bold_red("rcloneDash Updater (demo)"));
+    println!("  │");
+    println!("{}", step_line(&style, "Checking for latest release..."));
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    println!(
+        "  │  Found {} (current: {})",
+        style.bold(&format!("v{}", latest)),
+        style.gray(&format!("v{}", current))
+    );
+    println!("  │");
+    println!(
+        "{}",
+        step_line(&style, &format!("Downloading rcloneDash {}...", style.bold(&format!("v{}", latest))))
+    );
+
+    // Fake ~1.4 MB payload streamed at ~1.1 MB/s, like a real release asset.
+    let total: u64 = 1_478_796;
+    let start = std::time::Instant::now();
+    if style.is_tty {
+        let chunk: u64 = 46_080;
+        let mut downloaded: u64 = 0;
+        render_progress(&style, 0, Some(total), 0.0);
+        while downloaded < total {
+            tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+            downloaded = (downloaded + chunk).min(total);
+            let speed = downloaded as f64 / start.elapsed().as_secs_f64().max(0.001);
+            render_progress(&style, downloaded, Some(total), speed);
+        }
+        let speed = downloaded as f64 / start.elapsed().as_secs_f64().max(0.001);
+        finish_progress(&style, downloaded, Some(total), speed);
+    } else {
+        // No carriage-return animation off-TTY: single honest final line.
+        println!("{}", progress_line(&style, total, Some(total), 1_152_000.0, true));
+    }
+
+    println!("  │");
+    println!("{}", step_line(&style, "Extracting release package..."));
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    println!("{}", step_line(&style, "Updating binary, systemd services, desktop entry, and icon..."));
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    println!("  │");
+    println!("  └─ {}", style.bold_green(&format!("✨ Successfully updated to v{}!", latest)));
+    println!("{}", detail_line(&style.gray("demo mode — nothing was downloaded or installed")));
 }
 
 #[cfg(test)]
@@ -418,5 +501,123 @@ mod tests {
         assert!(!is_newer_version("1.0.0", "1.0.0"));
         assert!(!is_newer_version("1.0.0", "1.0.1"));
         assert!(!is_newer_version("invalid", "1.0.0"));
+    }
+
+    #[test]
+    fn test_format_size_boundaries() {
+        assert_eq!(format_size(0), "0 B");
+        assert_eq!(format_size(512), "512 B");
+        assert_eq!(format_size(1023), "1023 B");
+        assert_eq!(format_size(1024), "1.0 KB");
+        assert_eq!(format_size(1536), "1.5 KB");
+        assert_eq!(format_size(1_478_796), "1.4 MB");
+        assert_eq!(format_size(1024 * 1024), "1.0 MB");
+        assert_eq!(format_size(2 * 1024 * 1024 * 1024), "2.0 GB");
+    }
+
+    #[test]
+    fn test_progress_parts() {
+        // Empty bar at start
+        let (pct, bar) = progress_parts(0, Some(100));
+        assert_eq!(pct, "  0%");
+        assert_eq!(bar, "░".repeat(PROGRESS_BAR_WIDTH));
+
+        // Halfway: bar split evenly
+        let (pct, bar) = progress_parts(50, Some(100));
+        assert_eq!(pct, " 50%");
+        assert_eq!(bar, format!("{}{}", "█".repeat(15), "░".repeat(15)));
+
+        // Complete and over-complete clamp to a full bar
+        let (pct, bar) = progress_parts(100, Some(100));
+        assert_eq!(pct, "100%");
+        assert_eq!(bar, "█".repeat(PROGRESS_BAR_WIDTH));
+        let (pct, bar) = progress_parts(200, Some(100));
+        assert_eq!(pct, "100%");
+        assert_eq!(bar, "█".repeat(PROGRESS_BAR_WIDTH));
+
+        // Unknown or empty totals render honestly, never as done
+        let (pct, bar) = progress_parts(5, None);
+        assert_eq!(pct, "---%");
+        assert_eq!(bar, "░".repeat(PROGRESS_BAR_WIDTH));
+        let (pct, bar) = progress_parts(5, Some(0));
+        assert_eq!(pct, "---%");
+        assert_eq!(bar, "░".repeat(PROGRESS_BAR_WIDTH));
+    }
+
+    #[test]
+    fn test_progress_line_plain_matches_mockup() {
+        // Off-TTY style renders deterministically, without ANSI codes.
+        let style = ConsoleStyle { is_tty: false };
+        let line = progress_line(&style, 1024, Some(2048), 1024.0, false);
+        let half = "█".repeat(15);
+        let half_empty = "░".repeat(15);
+        let expected = format!("  │  [{half}{half_empty}]  50%  1.0 KB / 2.0 KB (1.0 KB/s)");
+        assert_eq!(line, expected);
+    }
+
+    #[test]
+    fn test_progress_line_done_without_known_total() {
+        // Finished with unknown total: 100% and full bar like before, but
+        // the size stands alone — no fabricated " / ...".
+        let style = ConsoleStyle { is_tty: false };
+        let full = "█".repeat(PROGRESS_BAR_WIDTH);
+        let line = progress_line(&style, 1_478_796, None, 1_152_000.0, true);
+        let expected = format!("  │  [{full}] 100%  1.4 MB (1.1 MB/s)");
+        assert_eq!(line, expected);
+        assert!(!line.contains(" / "));
+
+        // A zero total (e.g. Content-Length: 0) behaves like unknown.
+        let line = progress_line(&style, 1_478_796, Some(0), 1_152_000.0, true);
+        assert_eq!(line, expected);
+
+        // ... but live (not done) with zero total stays honest.
+        let (pct, _) = progress_parts(1_478_796, Some(0));
+        assert_eq!(pct, "---%");
+    }
+
+    #[test]
+    fn test_progress_line_done_with_unreached_total_stays_honest() {
+        // Known-but-unreached total at the end: real percentage, not forced.
+        let style = ConsoleStyle { is_tty: false };
+        let line = progress_line(&style, 512, Some(2048), 512.0, true);
+        let filled = "█".repeat(8);
+        let empty = "░".repeat(22);
+        let expected = format!("  │  [{filled}{empty}]  25%  512 B / 2.0 KB (512 B/s)");
+        assert_eq!(line, expected);
+    }
+
+    #[test]
+    fn test_progress_line_tty_colors() {
+        // On-TTY style wraps bar, percentage and sizes in ANSI codes.
+        let style = ConsoleStyle { is_tty: true };
+        let half = "█".repeat(15);
+        let half_empty = "░".repeat(15);
+        let line = progress_line(&style, 1024, Some(2048), 1024.0, false);
+        let expected = format!(
+            "  │  \x1b[32m[{half}{half_empty}]\x1b[0m \x1b[1m 50%\x1b[0m  \x1b[90m1.0 KB / 2.0 KB\x1b[0m (\x1b[90m1.0 KB/s\x1b[0m)"
+        );
+        assert_eq!(line, expected);
+
+        // Finished, unknown total: green 100% with bare size.
+        let full = "█".repeat(PROGRESS_BAR_WIDTH);
+        let line = progress_line(&style, 1_478_796, None, 1_152_000.0, true);
+        let expected = format!(
+            "  │  \x1b[32m[{full}]\x1b[0m \x1b[1;32m100%\x1b[0m  \x1b[90m1.4 MB\x1b[0m (\x1b[90m1.1 MB/s\x1b[0m)"
+        );
+        assert_eq!(line, expected);
+    }
+
+    #[test]
+    fn test_step_and_detail_lines() {
+        let style = ConsoleStyle { is_tty: false };
+        assert_eq!(step_line(&style, "Checking for latest release..."), "  ◇  Checking for latest release...");
+        assert_eq!(detail_line("hello"), "  │  hello");
+    }
+
+    #[test]
+    fn test_demo_latest_version() {
+        assert_eq!(demo_latest_version("1.0.32"), "1.0.33");
+        assert_eq!(demo_latest_version("v2.10.4-beta1"), "2.10.5");
+        assert_eq!(demo_latest_version("nonsense"), "nonsense+demo1");
     }
 }
