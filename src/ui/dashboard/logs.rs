@@ -150,9 +150,9 @@ pub fn render_logs_panel(
     cur_hit_x += 2;
 
     let auto_text = if app.auto_scroll { "pause " } else { "auto " };
-    let space_glyph = "␣";
+    let space_glyph = app.glyphs().space;
     let status_text = if app.auto_scroll { " [ON]" } else { " [OFF]" };
-    let auto_width = (auto_text.chars().count() + 1 + status_text.chars().count()) as u16;
+    let auto_width = (auto_text.chars().count() + space_glyph.chars().count() + status_text.chars().count()) as u16;
 
     title_spans.push(Span::styled(auto_text, Style::default().fg(theme.text_bright)));
     title_spans.push(Span::styled(space_glyph, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));

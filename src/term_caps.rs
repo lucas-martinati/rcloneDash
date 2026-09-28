@@ -441,6 +441,10 @@ pub struct Glyphs {
     pub swap: &'static str,
     /// Refresh banner icon.
     pub refresh: &'static str,
+    /// Space-key cap label.
+    pub space: &'static str,
+    /// Truncation marker.
+    pub ellipsis: &'static str,
 }
 
 impl Glyphs {
@@ -490,6 +494,8 @@ impl Glyphs {
             warn_plain: "⚠",
             swap: "⇄",
             refresh: "⟳",
+            space: "␣",
+            ellipsis: "…",
         }
     }
 
@@ -535,6 +541,8 @@ impl Glyphs {
             warn_plain: "!",
             swap: "<>",
             refresh: "@",
+            space: "Space",
+            ellipsis: ".",
         }
     }
 
@@ -568,7 +576,7 @@ impl Glyphs {
     }
 
     /// All drawable fields, for exhaustive tests.
-    pub fn all_fields(&self) -> [&'static str; 36] {
+    pub fn all_fields(&self) -> [&'static str; 38] {
         [
             self.bar_fill,
             self.bar_empty,
@@ -606,6 +614,8 @@ impl Glyphs {
             self.warn_plain,
             self.swap,
             self.refresh,
+            self.space,
+            self.ellipsis,
         ]
     }
 }
@@ -984,6 +994,8 @@ mod tests {
         assert_eq!(g.warn_plain, "⚠");
         assert_eq!(g.swap, "⇄");
         assert_eq!(g.refresh, "⟳");
+        assert_eq!(g.space, "␣");
+        assert_eq!(g.ellipsis, "…");
     }
 
     #[test]
@@ -1010,15 +1022,12 @@ mod tests {
         // Every ASCII fallback is width 1, so alignment-critical pairs keep
         // their width one-for-one. Double-width Unicode decorations (✨, 🚀,
         // ⚠️) only ever end a line, where alignment does not matter; the
-        // hourglass ("...") and swap ("<>") fallbacks only appear in
-        // centered badges and flowing labels.
+        // remaining exceptions only appear in flowing text or centered
+        // badges: hourglass ("..."), swap ("<>") and the Space key ("Space").
+        const WIDTH_FLEXIBLE: [(&str, &str); 3] = [("⏳", "..."), ("⇄", "<>"), ("␣", "Space")];
         for (u, a) in uni.all_fields().iter().zip(asc.all_fields().iter()) {
-            if *u == "⏳" {
-                assert_eq!(*a, "...");
-                continue;
-            }
-            if *u == "⇄" {
-                assert_eq!(*a, "<>");
+            if let Some((_, expected)) = WIDTH_FLEXIBLE.iter().find(|(wu, _)| wu == u) {
+                assert_eq!(a, expected);
                 continue;
             }
             assert_eq!(

@@ -152,7 +152,7 @@ impl App {
                 match id {
                     Some(id) if !id.is_empty() => {
                         let prefix: String = id.chars().take(16).collect();
-                        format!("{}…", prefix)
+                        format!("{}{}", prefix, self.glyphs().ellipsis)
                     }
                     _ => "(not set)".to_string(),
                 }

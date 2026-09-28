@@ -331,10 +331,19 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
 
         if app.dry_run_logs.is_empty() && !app.dry_run_running {
             // Line 1: Ready status
-                summary_lines.push(Line::from(vec![
-                    Span::styled(format!("{} ", app.glyphs().dot_open), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-                Span::styled("Ready to simulate: ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-                Span::styled("Non-destructive preview without modifying any files.", Style::default().fg(theme.text_bright)),
+            summary_lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{} ", app.glyphs().dot_open),
+                    Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Ready to simulate: ",
+                    Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Non-destructive preview without modifying any files.",
+                    Style::default().fg(theme.text_bright),
+                ),
             ]));
 
             // Line 2: Scope description
@@ -656,15 +665,16 @@ fn render_confirm_resync_modal(
 
     let mut confirm_spans =
         KeybindingRegistry::format_shortcut_label("Y / Enter", "resync", theme.red, Color::White);
-    confirm_spans.insert(0, Span::styled("⚠ ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    confirm_spans.insert(0, Span::styled(format!("{} ", app.glyphs().warn_plain), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
 
+    let resync_title = format!(" {} Full Resync ", app.glyphs().warn_plain);
     let inner = render_modal_container(
         f,
         app,
         theme,
         area,
         ModalContainerConfig {
-            title_prefix: " ⚠ Full Resync ",
+            title_prefix: &resync_title,
             title_color: Some(theme.yellow),
             action_shortcuts: Some(vec![confirm_spans]),
             border_color: theme.yellow,
@@ -691,7 +701,7 @@ fn render_confirm_resync_modal(
     // 1. Bannière danger
     let banner = vec![
         Line::from(vec![
-            Span::styled("⚠ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{} ", app.glyphs().warn_plain), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
             Span::styled(
                 "WARNING: FULL RESYNCHRONIZATION",
                 Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD),
@@ -711,7 +721,7 @@ fn render_confirm_resync_modal(
         .border_type(app.border_type())
         .border_style(Style::default().fg(theme.yellow))
         .title(Line::from(vec![
-            Span::styled(" ⚠ ", Style::default().fg(theme.yellow)),
+            Span::styled(format!(" {} ", app.glyphs().warn_plain), Style::default().fg(theme.yellow)),
             Span::styled("Impacts", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
             Span::styled(" ", Style::default()),
         ]));

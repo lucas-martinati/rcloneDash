@@ -301,7 +301,7 @@ fn render_step_remote(
     } else {
         let max_w = inner_in.width as usize;
         let text = if is_active {
-            crate::ui::settings::format_scrolled_input_with_cursor(&state.remote_input, state.remote_cursor, max_w)
+            crate::ui::settings::format_scrolled_input_with_cursor(&state.remote_input, state.remote_cursor, max_w, app.glyphs().ellipsis)
         } else {
             state.remote_input.clone()
         };
@@ -462,7 +462,7 @@ fn render_step_google(
     } else {
         let max_w = id_inner.width as usize;
         let text = if is_id_active {
-            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_id, state.client_id_cursor, max_w)
+            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_id, state.client_id_cursor, max_w, app.glyphs().ellipsis)
         } else {
             state.client_id.clone()
         };
@@ -499,7 +499,7 @@ fn render_step_google(
     } else {
         let max_w = sec_inner.width as usize;
         let text = if is_sec_active {
-            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_secret, state.client_secret_cursor, max_w)
+            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_secret, state.client_secret_cursor, max_w, app.glyphs().ellipsis)
         } else {
             app.glyphs().bullet_idle.repeat(state.client_secret.chars().count())
         };

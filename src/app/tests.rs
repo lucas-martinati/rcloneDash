@@ -507,33 +507,6 @@ use crate::monitor::history::{PastRun, RunStatus};
         }
     }
 
-    #[test]
-    fn test_downgraded_palette_for_tty_levels() {
-        use crate::term_caps::{downgrade_color, ColorLevel};
-        use ratatui::style::Color;
-        // Spot-checks for the frame-wide buffer pass: known Rgb values land
-        // on the expected reduced colors.
-        assert_eq!(
-            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::Ansi256),
-            Color::Indexed(117)
-        );
-        assert_eq!(
-            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::Ansi16),
-            Color::LightCyan
-        );
-        assert_eq!(
-            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::TrueColor),
-            Color::Rgb(125, 207, 255)
-        );
-        assert_eq!(
-            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::None),
-            Color::Reset
-        );
-        // Named colors survive every level except None.
-        assert_eq!(downgrade_color(Color::Red, ColorLevel::Ansi16), Color::Red);
-        assert_eq!(downgrade_color(Color::Red, ColorLevel::None), Color::Reset);
-    }
-
     #[tokio::test]
     async fn test_initial_unselected_and_scroll() {
         let mut app = App::new();
@@ -2161,6 +2134,41 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.term_caps, crate::term_caps::TermCaps::full());
     }
 
+    #[test]
+    fn test_display_value_covers_all_setting_choices() {
+        // Locks display_value() against GraphStyleChoice::name() (and any
+        // other choice list) drifting: every choice of every cycle setting
+        // must map to ASCII-or-box-drawing in ascii mode — the same
+        // predicate as the screen allowlist test.
+        use crate::config::SettingId;
+        use crate::term_caps::Glyphs;
+        let glyphs = Glyphs::ascii();
+        for setting in SettingId::ALL.iter().copied().filter(|s| s.is_cycle()) {
+            let choices = setting.choices().unwrap_or_default();
+            assert!(!choices.is_empty(), "{:?} must expose choices", setting);
+            for choice in &choices {
+                let mapped = crate::ui::settings::display_value(choice, true, &glyphs);
+                for c in mapped.chars() {
+                    assert!(
+                        c.is_ascii() || ('\u{2500}'..='\u{257F}').contains(&c),
+                        "{:?} choice {:?} maps to unexpected {:?}",
+                        setting,
+                        choice,
+                        c
+                    );
+                }
+            }
+            // Identity in Unicode mode: matching against choices() keeps
+            // working for the choice counter and active markers.
+            for choice in &choices {
+                assert_eq!(
+                    crate::ui::settings::display_value(choice, false, &Glyphs::unicode()),
+                    *choice
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_settings_ascii_glyphs_render() {
         // Forced TTY caps: the settings modal must draw ASCII fallbacks
@@ -2255,39 +2263,36 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_ascii_render_denylist_across_screens() {
-        use crate::term_caps::Glyphs;
-        use crate::ui::sparkline::{BLOCKS, BRAILLE};
-        // Every Unicode glyph with an ASCII fallback must be gone in ascii
-        // mode — except box drawing (kept for TERM=linux consoles, whose
-        // fonts include it). The branding logo is the only remaining '█'
-        // source, so only the Help screen (which always shows it) allows it.
-        let uni = Glyphs::unicode();
-        let allowed_box = [
-            uni.vline,
-            uni.hline,
-            uni.corner_tl,
-            uni.corner_bl,
-            uni.tee_top,
-            uni.tee_bottom,
-            uni.tee_left,
-            uni.tee_right,
-        ];
-        let mut denied: Vec<String> = uni
-            .all_fields()
-            .into_iter()
-            .filter(|s| !allowed_box.contains(s))
-            .map(|s| s.to_string())
-            .collect();
-        for c in BRAILLE.iter().chain(BLOCKS.iter()).filter(|c| **c != ' ') {
-            denied.push(c.to_string());
-        }
-        denied.push("▒".to_string());
-        denied.push("▓".to_string());
-
+        // Allowlist: in ascii mode only pure ASCII and box drawing may
+        // reach the screen (box drawing is kept for TERM=linux consoles,
+        // whose fonts include it). The branding logo is the only remaining
+        // '█' source, so only logo screens allow it. Explicitly allowed
+        // residuals: decorative emoji, latin-1 '·' (filter marker) and '—'
+        // inside English prose; everything else must go through Glyphs.
+        const ALLOWED_RESIDUAL: [char; 9] = ['💻', '☁', '📊', '🛡', '📜', '📦', '⏱', '·', '—'];
         let ascii_caps = crate::term_caps::TermCaps {
             color: crate::term_caps::ColorLevel::Ansi16,
             live: false,
             ascii: true,
+        };
+        let full_caps = crate::term_caps::TermCaps {
+            color: crate::term_caps::ColorLevel::Ansi256,
+            live: false,
+            ascii: false,
+        };
+        let first_run = |step: crate::app::FirstRunStep| {
+            Modal::FirstRun(Box::new(crate::app::FirstRunState {
+                step,
+                rclone_status: crate::app::RcloneInstallStatus::Installed("1.99".into()),
+                remote_input: "GoogleDrive:".into(),
+                remote_cursor: 12,
+                client_id: String::new(),
+                client_secret: "secret".into(),
+                active_field: crate::app::FirstRunField::ContinueButton,
+                show_help: false,
+                client_id_cursor: 0,
+                client_secret_cursor: 6,
+            }))
         };
         // (modal, tab, idx, width, height, allow_logo_blocks)
         let screens: Vec<(Modal, usize, usize, u16, u16, bool)> = vec![
@@ -2297,14 +2302,52 @@ use crate::monitor::history::{PastRun, RunStatus};
             (Modal::Filters, 0, 0, 130, 40, false),
             (Modal::Help, 0, 0, 130, 40, true),
             (Modal::DryRun, 0, 0, 130, 40, false),
+            (Modal::Menu, 0, 0, 130, 40, true),
+            (Modal::ConfirmSync, 0, 0, 130, 40, false),
+            (Modal::ConfirmResync, 0, 0, 130, 40, false),
+            (Modal::HistoryDetails(0), 0, 0, 130, 40, false),
+            (
+                first_run(crate::app::FirstRunStep::RcloneCheck),
+                0,
+                0,
+                130,
+                40,
+                false,
+            ),
+            (
+                first_run(crate::app::FirstRunStep::RemoteSetup),
+                0,
+                0,
+                130,
+                40,
+                false,
+            ),
+            (
+                first_run(crate::app::FirstRunStep::GoogleCredentials),
+                0,
+                0,
+                130,
+                40,
+                false,
+            ),
         ];
-        for (modal, tab, idx, w, h, allow_logo) in screens {
-            let mut app = App::new();
-            app.term_caps = ascii_caps;
+        // Reduced levels share the same guard: no readable cell may draw
+        // its glyph in its own background color (e.g. two dark tones
+        // collapsing onto DarkGray in Ansi16). Flat case list to keep the
+        // body indentation stable.
+        let mut cases = Vec::new();
+        for caps in [ascii_caps, full_caps] {
+            for (modal, tab, idx, w, h, allow_logo) in screens.clone() {
+                cases.push((caps, modal, tab, idx, w, h, allow_logo));
+            }
+        }
+        for (caps, modal, tab, idx, w, h, allow_logo) in cases {
+        let mut app = App::new();
+            app.term_caps = caps;
             app.modal = modal.clone();
             app.settings_tab = tab;
             app.settings_selected_idx = idx;
-            if modal == Modal::None {
+            if modal == Modal::None || matches!(modal, Modal::HistoryDetails(_)) {
                 // Force scrollbars, graph and status rows onto the dashboard.
                 app.live.log_lines = (0..200).map(|i| format!("log line {}", i)).collect();
                 app.past_runs = vec![
@@ -2351,16 +2394,35 @@ use crate::monitor::history::{PastRun, RunStatus};
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            for d in &denied {
-                if allow_logo && d == "█" {
+            if caps.ascii {
+                let bad: Vec<char> = text
+                    .chars()
+                    .filter(|c| !c.is_ascii())
+                    .filter(|c| !('\u{2500}'..='\u{257F}').contains(c))
+                    .filter(|c| !(allow_logo && *c == '█'))
+                    .filter(|c| !ALLOWED_RESIDUAL.contains(c))
+                    .collect();
+                assert!(
+                    bad.is_empty(),
+                    "ascii screen {:?}: unexpected non-ASCII {:?}",
+                    modal,
+                    bad
+                );
+            }
+            for cell in buffer.content.iter() {
+                if cell.symbol().trim().is_empty() {
                     continue;
                 }
-                assert!(
-                    !text.contains(d.as_str()),
-                    "ascii screen {:?} must not contain {:?}",
-                    modal,
-                    d
-                );
+                if cell.fg != ratatui::style::Color::Reset
+                    && cell.bg != ratatui::style::Color::Reset
+                {
+                    assert_ne!(
+                        cell.fg, cell.bg,
+                        "invisible text {:?} on {:?} screen",
+                        cell.symbol(),
+                        modal
+                    );
+                }
             }
         }
     }

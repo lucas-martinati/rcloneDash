@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::app::{App, HitAction, Hitbox};
 use crate::config;
-use crate::term_caps::ColorLevel;
+use crate::term_caps::{selected_style, ColorLevel};
 use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
 pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
@@ -265,8 +265,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         0
     };
 
-    let highlight_bg = Color::Rgb(95, 30, 30); // btop++ dark red / maroon banner
-    let edit_bg = Color::Rgb(70, 20, 20);
+    let highlight_bg = selected_style(Color::Rgb(95, 30, 30), app.term_caps.color).bg.unwrap_or(Color::Rgb(95, 30, 30)); // btop++ dark red / maroon banner
+    let edit_bg = if app.term_caps.color == ColorLevel::Ansi16 { Color::Blue } else { Color::Rgb(70, 20, 20) };
 
     for (visible_pos, i) in (scroll_offset..settings.len()).take(visible_count).enumerate() {
         let (label, val) = &settings[i];
@@ -322,17 +322,17 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             ]);
 
             let inner_w = w.saturating_sub(4);
-                let line2 = if app.is_editing_setting() && setting_kind == config::SettingKind::TextInput {
-                    let buf = app.edit_buffer();
-                    let visible = format_scrolled_input_with_cursor(buf, app.edit_cursor(), inner_w);
-                    let edit_centered = format!("{:^width$}", visible, width = inner_w);
-                    Line::from(vec![
-                        Span::styled("[ ", Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
-                        Span::styled(edit_centered, Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
-                        Span::styled(" ]", Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
-                    ])
+            let line2 = if app.is_editing_setting() && setting_kind == config::SettingKind::TextInput {
+                let buf = app.edit_buffer();
+                let visible = format_scrolled_input_with_cursor(buf, app.edit_cursor(), inner_w, g.ellipsis);
+                let edit_centered = format!("{:^width$}", visible, width = inner_w);
+                Line::from(vec![
+                    Span::styled("[ ", Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(edit_centered, Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(" ]", Style::default().fg(Color::Yellow).bg(edit_bg).add_modifier(Modifier::BOLD)),
+                ])
             } else {
-                let truncated = truncate_chars(val, inner_w);
+                let truncated = truncate_chars(val, inner_w, g.ellipsis);
                 let val_centered = format!("{:^width$}", truncated, width = inner_w);
                 match setting_kind {
                     config::SettingKind::Cycle => {
@@ -373,7 +373,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 }
             }
         } else {
-            let truncated = truncate_chars(val, w);
+            let truncated = truncate_chars(val, w, g.ellipsis);
             let line1 = Line::from(vec![
                 Span::styled(format!("{:^width$}", label, width = w), Style::default().fg(Color::White)),
             ]);
@@ -566,7 +566,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 /// Display mapping for setting names and values: layout arrows and graph
 /// glyph samples follow the terminal glyph set. Identity in Unicode mode,
 /// so matching against [`SettingId::choices`] keeps working.
-fn display_value(s: &str, ascii: bool, glyphs: &crate::term_caps::Glyphs) -> String {
+pub(crate) fn display_value(s: &str, ascii: bool, glyphs: &crate::term_caps::Glyphs) -> String {
     if !ascii {
         return s.to_string();
     }
@@ -642,18 +642,18 @@ fn parse_option_line(line: &str, theme: &ThemePalette, glyphs: &crate::term_caps
     Line::from(spans)
 }
 
-fn truncate_chars(s: &str, max_chars: usize) -> String {
+fn truncate_chars(s: &str, max_chars: usize, ellipsis: &str) -> String {
     let count = s.chars().count();
     if count > max_chars {
         let prefix: String = s.chars().take(max_chars.saturating_sub(1)).collect();
-        format!("{}…", prefix)
+        format!("{}{}", prefix, ellipsis)
     } else {
         s.to_string()
     }
 }
 
 
-pub fn format_scrolled_input_with_cursor(buf: &str, cursor_pos: usize, max_w: usize) -> String {
+pub fn format_scrolled_input_with_cursor(buf: &str, cursor_pos: usize, max_w: usize, ellipsis: &str) -> String {
     let chars: Vec<char> = buf.chars().collect();
     let cursor_pos = cursor_pos.min(chars.len());
     let mut with_cursor: Vec<char> = Vec::with_capacity(chars.len() + 1);
@@ -685,13 +685,13 @@ pub fn format_scrolled_input_with_cursor(buf: &str, cursor_pos: usize, max_w: us
 
         let mut res = String::new();
         if start > 0 {
-            res.push('…');
+            res.push_str(ellipsis);
         }
         for &ch in &with_cursor[start..end] {
             res.push(ch);
         }
         if end < total {
-            res.push('…');
+            res.push_str(ellipsis);
         }
         res
     }
