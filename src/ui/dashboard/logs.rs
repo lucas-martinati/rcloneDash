@@ -84,7 +84,7 @@ pub fn render_logs_panel(
 
     let mut title_spans: Vec<Span> = Vec::new();
     title_spans.push(Span::styled(bg.top_left, Style::default().fg(border_color)));
-    title_spans.push(Span::styled("⁴", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    title_spans.push(Span::styled(crate::term_caps::Glyphs::tab_digit(app.term_caps.ascii, 4), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     title_spans.push(Span::styled("logs", Style::default().fg(border_color).add_modifier(Modifier::BOLD)));
     title_spans.push(Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)));
 

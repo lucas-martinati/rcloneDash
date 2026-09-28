@@ -86,7 +86,7 @@ pub fn render_history_panel(
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
             Span::styled(bg.top_left, Style::default().fg(border_color)),
-            Span::styled("³", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(crate::term_caps::Glyphs::tab_digit(app.term_caps.ascii, 3), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("history", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
             Span::styled(bg.top_right, Style::default().fg(border_color)),
         ]))

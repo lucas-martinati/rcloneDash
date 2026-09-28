@@ -81,6 +81,7 @@ pub fn render_history_graph_multiline(
     if let Some(sel) = selected_idx {
         if let Some(r) = past_runs.get(sel) {
             let dot = Glyphs::new(ascii).dot;
+            let sep = if ascii { "-" } else { "·" };
             let status_span = match r.status {
                 RunStatus::Success => Span::styled(format!("{} OK", dot), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                 RunStatus::Failed => Span::styled(format!("{} FAILED", dot), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
@@ -88,12 +89,13 @@ pub fn render_history_graph_multiline(
             };
             header_spans.push(Span::styled(format!("Run #{} : {} (", sel + 1, r.duration), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
             header_spans.push(status_span);
-            header_spans.push(Span::styled(format!(") · {} ", r.time), Style::default().fg(theme.text_muted)));
+            header_spans.push(Span::styled(format!(") {} {} ", sep, r.time), Style::default().fg(theme.text_muted)));
         }
     } else {
         let max_str = format_duration_clean(max_dur);
         let dot = Glyphs::new(ascii).dot;
-        header_spans.push(Span::styled(format!("(max: {}) · ", max_str), Style::default().fg(theme.text_muted)));
+        let sep = if ascii { "-" } else { "·" };
+        header_spans.push(Span::styled(format!("(max: {}) {} ", max_str, sep), Style::default().fg(theme.text_muted)));
         header_spans.push(Span::styled(dot, Style::default().fg(theme.green)));
         header_spans.push(Span::styled(" ok  ", Style::default().fg(theme.text_muted)));
         header_spans.push(Span::styled(dot, Style::default().fg(theme.red)));

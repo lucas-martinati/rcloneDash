@@ -380,7 +380,7 @@ fn format_active_file_spans(
     let empty_str: String = empty_char.repeat(bar_len.saturating_sub(filled_len));
 
     let mut spans = vec![
-        Span::styled("  ⚡ Active: ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("  {} Active: ", crate::term_caps::Glyphs::new(ascii).bolt), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
     ];
     spans.extend(name_spans);
     spans.push(Span::styled(" ", Style::default()));

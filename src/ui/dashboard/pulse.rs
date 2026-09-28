@@ -46,7 +46,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
 
         // 1. Left prefix
         let prefix_style = Style::default().fg(theme.green).add_modifier(Modifier::BOLD);
-        line_spans.push(Span::styled("⚡ Sync: ", prefix_style));
+        line_spans.push(Span::styled(format!("{} Sync: ", app.glyphs().bolt), prefix_style));
 
         let has_transfer_info = app.live.phase_index >= 3
             && (app.live.transfer.pct > 0 || app.live.transfer.files_total > 0 || !app.live.transfer.speed.is_empty());
@@ -179,7 +179,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
             || app.config.timer_interval.eq_ignore_ascii_case("never");
 
         if is_disabled {
-            line_spans.push(Span::styled("⚡ Sync timer: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)));
+            line_spans.push(Span::styled(format!("{} Sync timer: ", app.glyphs().bolt), Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)));
             line_spans.push(Span::styled("Paused ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)));
             if max_w >= 50 {
                 line_spans.push(Span::styled("(manual sync only)", Style::default().fg(theme.text_muted)));
@@ -191,7 +191,7 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 app.service_info.timer_left.clone()
             };
 
-            line_spans.push(Span::styled("⚡ Next sync: ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
+            line_spans.push(Span::styled(format!("{} Next sync: ", app.glyphs().bolt), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
             line_spans.push(Span::styled(format!("{} ", left_str), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
 
             let right_text = if max_w >= 50 {

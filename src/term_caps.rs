@@ -69,9 +69,10 @@ impl TermCaps {
 
     /// Pure detection from an env getter and an `is_terminal` flag.
     ///
-    /// - `live` is exactly `is_terminal`.
+    /// - `live` is exactly `is_terminal` (except on `TERM=dumb`, which
+    ///   cannot animate either).
     /// - `color`: piped stdout (not a terminal) has no color capability ->
-    ///   `None`; `NO_COLOR` present and non-empty -> `None`; `TERM=linux`
+    ///   `None`; `TERM=dumb` likewise; `NO_COLOR` present and non-empty -> `None`; `TERM=linux`
     ///   -> `Ansi16`; `COLORTERM` containing `truecolor`/`24bit` ->
     ///   `TrueColor`; otherwise `Ansi256`. (An explicit `TtyMode::Off` can
     ///   still force colors, like `ls --color=always`.)
@@ -80,11 +81,13 @@ impl TermCaps {
     pub fn detect_from(env: &impl Fn(&str) -> Option<String>, is_terminal: bool) -> Self {
         let term = env("TERM").unwrap_or_default();
         let is_linux_console = term.trim().eq_ignore_ascii_case("linux");
+        // A dumb terminal can do neither colors nor in-place animation.
+        let dumb = term.trim().eq_ignore_ascii_case("dumb");
 
         // `NO_COLOR` counts when present and non-empty; an empty value
         // leaves colors alone.
         let no_color = env("NO_COLOR").is_some_and(|v| !v.is_empty());
-        let color = if !is_terminal || no_color {
+        let color = if !is_terminal || dumb || no_color {
             ColorLevel::None
         } else if is_linux_console {
             ColorLevel::Ansi16
@@ -99,7 +102,7 @@ impl TermCaps {
 
         Self {
             color,
-            live: is_terminal,
+            live: is_terminal && !dumb,
             ascii: is_linux_console || locale_is_not_utf8(env),
         }
     }
@@ -117,8 +120,10 @@ impl TermCaps {
     /// - `Auto`: detection unchanged.
     /// - `On`: caps colors at `Ansi16` + ASCII (stays in color, like btop++),
     ///   but never re-enables colors a pipe or `NO_COLOR` took away.
-    /// - `Off`: forces `TrueColor` (or the detected level if stronger) +
-    ///   Unicode, even piped — like `ls --color=always`. Animation (`live`)
+    /// - `Off`: lifts colors to `TrueColor` + Unicode wherever the terminal
+    ///   allows any color at all; stays at `None` on pipes or `NO_COLOR`.
+    ///   Only an explicit CLI flag forces colors there (see `apply_tty_override`
+    ///   / `cli_style`, like `ls --color=always`). Animation (`live`)
     ///   always follows detection.
     pub fn resolve_from(
         mode: TtyMode,
@@ -134,7 +139,11 @@ impl TermCaps {
                 ascii: true,
             },
             TtyMode::Off => Self {
-                color: detected.color.max(ColorLevel::TrueColor),
+                color: if detected.color == ColorLevel::None {
+                    ColorLevel::None
+                } else {
+                    ColorLevel::TrueColor
+                },
                 live: detected.live,
                 ascii: false,
             },
@@ -422,6 +431,16 @@ pub struct Glyphs {
     pub ok_emoji: &'static str,
     pub fail_emoji: &'static str,
     pub warn: &'static str,
+    /// Activity bolt.
+    pub bolt: &'static str,
+    /// In-progress hourglass (centered badge use only, width differs).
+    pub hourglass: &'static str,
+    /// Plain warning sign (distinct from [`Glyphs::warn`]).
+    pub warn_plain: &'static str,
+    /// Bidirectional swap arrow.
+    pub swap: &'static str,
+    /// Refresh banner icon.
+    pub refresh: &'static str,
 }
 
 impl Glyphs {
@@ -466,6 +485,11 @@ impl Glyphs {
             ok_emoji: "✅",
             fail_emoji: "❌",
             warn: "⚠️",
+            bolt: "⚡",
+            hourglass: "⏳",
+            warn_plain: "⚠",
+            swap: "⇄",
+            refresh: "⟳",
         }
     }
 
@@ -506,6 +530,11 @@ impl Glyphs {
             ok_emoji: "v",
             fail_emoji: "x",
             warn: "!",
+            bolt: "*",
+            hourglass: "...",
+            warn_plain: "!",
+            swap: "<>",
+            refresh: "@",
         }
     }
 
@@ -539,7 +568,7 @@ impl Glyphs {
     }
 
     /// All drawable fields, for exhaustive tests.
-    pub fn all_fields(&self) -> [&'static str; 31] {
+    pub fn all_fields(&self) -> [&'static str; 36] {
         [
             self.bar_fill,
             self.bar_empty,
@@ -572,6 +601,11 @@ impl Glyphs {
             self.ok_emoji,
             self.fail_emoji,
             self.warn,
+            self.bolt,
+            self.hourglass,
+            self.warn_plain,
+            self.swap,
+            self.refresh,
         ]
     }
 }
@@ -672,6 +706,14 @@ mod tests {
     }
 
     #[test]
+    fn test_dumb_terminal_has_neither_color_nor_animation() {
+        let env = env_of(&[("TERM", "dumb")]);
+        let caps = TermCaps::detect_from(&env, true);
+        assert_eq!(caps.color, ColorLevel::None);
+        assert!(!caps.live);
+    }
+
+    #[test]
     fn test_c_locale_forces_ascii() {
         let env = env_of(&[("TERM", "xterm-256color"), ("LANG", "C")]);
         let caps = TermCaps::detect_from(&env, true);
@@ -732,6 +774,21 @@ mod tests {
         let caps = TermCaps::resolve_from(TtyMode::Off, &env, true);
         assert_eq!(caps.color, ColorLevel::TrueColor);
         assert!(!caps.ascii);
+        assert!(caps.live);
+    }
+
+    #[test]
+    fn test_tty_mode_off_stays_plain_without_capability() {
+        // Polite Off: no colors on pipes or NO_COLOR (only an explicit CLI
+        // flag forces them there).
+        let env = env_of(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")]);
+        let caps = TermCaps::resolve_from(TtyMode::Off, &env, false);
+        assert_eq!(caps.color, ColorLevel::None);
+        assert!(!caps.live);
+
+        let env = env_of(&[("TERM", "xterm-256color"), ("NO_COLOR", "1")]);
+        let caps = TermCaps::resolve_from(TtyMode::Off, &env, true);
+        assert_eq!(caps.color, ColorLevel::None);
         assert!(caps.live);
     }
 
@@ -922,6 +979,11 @@ mod tests {
         assert_eq!(g.ok_emoji, "✅");
         assert_eq!(g.fail_emoji, "❌");
         assert_eq!(g.warn, "⚠️");
+        assert_eq!(g.bolt, "⚡");
+        assert_eq!(g.hourglass, "⏳");
+        assert_eq!(g.warn_plain, "⚠");
+        assert_eq!(g.swap, "⇄");
+        assert_eq!(g.refresh, "⟳");
     }
 
     #[test]
@@ -947,8 +1009,18 @@ mod tests {
         let asc = Glyphs::ascii();
         // Every ASCII fallback is width 1, so alignment-critical pairs keep
         // their width one-for-one. Double-width Unicode decorations (✨, 🚀,
-        // ⚠️) only ever end a line, where alignment does not matter.
+        // ⚠️) only ever end a line, where alignment does not matter; the
+        // hourglass ("...") and swap ("<>") fallbacks only appear in
+        // centered badges and flowing labels.
         for (u, a) in uni.all_fields().iter().zip(asc.all_fields().iter()) {
+            if *u == "⏳" {
+                assert_eq!(*a, "...");
+                continue;
+            }
+            if *u == "⇄" {
+                assert_eq!(*a, "<>");
+                continue;
+            }
             assert_eq!(
                 a.width(),
                 1,

@@ -110,7 +110,7 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
     if let Some(newer) = &app.available_update {
         ver_spans.push(Span::raw("  "));
         ver_spans.push(Span::styled(
-            format!("(🚀 v{} available! Run: rclonedash --update)", newer),
+            format!("({} v{} available! Run: rclonedash --update)", app.glyphs().rocket, newer),
             Style::default().fg(Color::Rgb(250, 200, 50)).add_modifier(Modifier::BOLD),
         ));
     }

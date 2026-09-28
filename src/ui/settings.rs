@@ -41,7 +41,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         if let Some(newer) = &app.available_update {
             ver_spans.push(Span::raw("  "));
             ver_spans.push(Span::styled(
-                format!("(🚀 v{} available)", newer),
+                format!("({} v{} available)", app.glyphs().rocket, newer),
                 Style::default().fg(Color::Rgb(250, 200, 50)).add_modifier(Modifier::BOLD),
             ));
         }
@@ -54,12 +54,13 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     use crate::config::SettingId;
 
+    let g = app.term_caps.glyphs();
     // Settings data based on active tab, filtrés : les options Google Drive
     // (Client ID/Secret) n'apparaissent que si le remote est un Drive.
     let visible: Vec<SettingId> = app.visible_settings_for_tab(app.settings_tab);
     let settings: Vec<(&str, String)> = visible
         .iter()
-        .map(|s| (s.label(), app.setting_value(*s)))
+        .map(|s| (s.label(), display_value(&app.setting_value(*s), app.term_caps.ascii, &g)))
         .collect();
 
     let total_opts = settings.len();
@@ -78,7 +79,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "confirm", theme.green, Color::White));
         spans
     } else if let Some(setting) = app.visible_setting_at(app.settings_tab, app.settings_selected_idx) {
-        let g = app.term_caps.glyphs();
         match setting.kind() {
             config::SettingKind::TextInput => {
                 crate::ui::keys::KeybindingRegistry::format_shortcut_label(g.enter, "edit", theme.red, Color::White)
@@ -99,7 +99,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             }
         }
     } else {
-        let g = app.term_caps.glyphs();
         vec![
             Span::styled(g.arrow_left, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled(" change ", Style::default().fg(Color::White)),
@@ -144,7 +143,6 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     };
 
     // 1. Render tab bar row at top of inner area: tab→   [rclone]    2ui (btop++ style)
-    let g = app.term_caps.glyphs();
     let mut tab_spans = vec![
         Span::raw(" "),
         Span::styled(format!("tab{}", g.arrow_right), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
@@ -400,8 +398,13 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     let (desc_title, desc_body): (&str, String) = match app.visible_setting_at(app.settings_tab, app.settings_selected_idx) {
         Some(setting) if setting.is_cycle() => {
-            let choices = setting.choices().unwrap_or_default();
-            let current = app.setting_value(setting);
+            let choices: Vec<String> = setting
+                .choices()
+                .unwrap_or_default()
+                .iter()
+                .map(|c| display_value(c, app.term_caps.ascii, &g))
+                .collect();
+            let current = display_value(&app.setting_value(setting), app.term_caps.ascii, &g);
             let header = if setting == SettingId::BandwidthLimit {
                 "Available presets:"
             } else {
@@ -558,6 +561,18 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 
     let right_p = Paragraph::new(desc_lines).wrap(Wrap { trim: true }).scroll((scroll_y, 0));
     f.render_widget(right_p, desc_inner);
+}
+
+/// Display mapping for setting names and values: layout arrows and graph
+/// glyph samples follow the terminal glyph set. Identity in Unicode mode,
+/// so matching against [`SettingId::choices`] keeps working.
+fn display_value(s: &str, ascii: bool, glyphs: &crate::term_caps::Glyphs) -> String {
+    if !ascii {
+        return s.to_string();
+    }
+    s.replace('→', glyphs.arrow_right)
+        .replace("(⡀⣀⣄⣤⣦⣶⣷⣿)", "( .:-=+*#)")
+        .replace("( ▂▃▄▅▆▇█)", "( .:-=+*#)")
 }
 
 /// Parses and styles an options line (1 or multiple columns) preserving alignment and colors.

@@ -138,7 +138,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
             if let Some(newer) = &app.available_update {
                 ver_spans.push(Span::raw("  "));
                 ver_spans.push(Span::styled(
-                    format!("(🚀 v{} available)", newer),
+                    format!("({} v{} available)", app.glyphs().rocket, newer),
                     Style::default().fg(Color::Rgb(250, 200, 50)).add_modifier(Modifier::BOLD),
                 ));
             }
@@ -258,7 +258,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         None
     } else if app.dry_run_logs.is_empty() {
         Some(vec![
-            KeybindingRegistry::format_shortcut_label("↵, r", "start", theme.green, Color::White),
+            KeybindingRegistry::format_shortcut_label(&format!("{}, r", app.glyphs().enter), "start", theme.green, Color::White),
         ])
     } else {
         Some(vec![
@@ -341,9 +341,9 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             if s_inner.height >= 2 {
                 summary_lines.push(Line::from(vec![
                     Span::styled("💻 Local (Path 2) ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled("⇄ ", Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("{} ", app.glyphs().swap), Style::default().fg(theme.text_muted)),
                     Span::styled("☁ Remote (Path 1)", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-                    Span::styled("   │   Filter rules and rclone config active", Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("   {}   Filter rules and rclone config active", app.glyphs().vline), Style::default().fg(theme.text_muted)),
                 ]));
             }
 
@@ -364,7 +364,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 ]
             } else if summary.total_changes() == 0 {
                 vec![
-                    Span::styled("✔ ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", app.glyphs().check), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                     Span::styled("Folders are in sync: ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                     Span::styled("No differences detected between Local & Remote.", Style::default().fg(theme.text_bright)),
                 ]
@@ -372,7 +372,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 let p2_tot = summary.path2_new + summary.path2_modified + summary.path2_deleted;
                 let p1_tot = summary.path1_new + summary.path1_modified + summary.path1_deleted;
                 vec![
-                    Span::styled("⚡ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", app.glyphs().bolt), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("{} planned difference(s) detected: ", summary.total_changes()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("{} local action(s), {} remote action(s)", p2_tot, p1_tot), Style::default().fg(theme.text_bright)),
                 ]
@@ -384,16 +384,16 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 summary_lines.push(Line::from(vec![
                     Span::styled("💻 Local (Path 2): ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("+{} new ", summary.path2_new), Style::default().fg(if summary.path2_new > 0 { theme.green } else { theme.text_muted }).add_modifier(Modifier::BOLD)),
-                    Span::styled("│ ", Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
                     Span::styled(format!("~{} mod ", summary.path2_modified), Style::default().fg(if summary.path2_modified > 0 { theme.yellow } else { theme.text_muted })),
-                    Span::styled("│ ", Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
                     Span::styled(format!("-{} del", summary.path2_deleted), Style::default().fg(if summary.path2_deleted > 0 { theme.red } else { theme.text_muted })),
-                    Span::styled("   │   ", Style::default().fg(theme.border)),
+                    Span::styled(format!("   {}   ", app.glyphs().vline), Style::default().fg(theme.border)),
                     Span::styled("☁ Remote (Path 1): ", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("+{} new ", summary.path1_new), Style::default().fg(if summary.path1_new > 0 { theme.green } else { theme.text_muted }).add_modifier(Modifier::BOLD)),
-                    Span::styled("│ ", Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
                     Span::styled(format!("~{} mod ", summary.path1_modified), Style::default().fg(if summary.path1_modified > 0 { theme.yellow } else { theme.text_muted })),
-                    Span::styled("│ ", Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
                     Span::styled(format!("-{} del", summary.path1_deleted), Style::default().fg(if summary.path1_deleted > 0 { theme.red } else { theme.text_muted })),
                 ]));
             }
@@ -405,9 +405,9 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 summary_lines.push(Line::from(vec![
                     Span::styled("Checks: ", Style::default().fg(theme.text_muted)),
                     Span::styled(format!("{} ", summary.checks), Style::default().fg(theme.text_bright)),
-                    Span::styled("│ Volume: ", Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("{} Volume: ", app.glyphs().vline), Style::default().fg(theme.text_muted)),
                     Span::styled(format!("{} ", bytes_str), Style::default().fg(theme.text_bright)),
-                    Span::styled("│ Elapsed: ", Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("{} Elapsed: ", app.glyphs().vline), Style::default().fg(theme.text_muted)),
                     Span::styled(format!("{} ", elapsed_str), Style::default().fg(theme.yellow)),
                 ]));
             }
@@ -464,7 +464,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 ]),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("  ➔ Press ", Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("  {} Press ", app.glyphs().arrow_right), Style::default().fg(theme.text_muted)),
                     Span::styled("[Enter]", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                     Span::styled(" or ", Style::default().fg(theme.text_muted)),
                     Span::styled("[r]", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
@@ -517,13 +517,14 @@ fn render_confirm_sync_modal(
         KeybindingRegistry::format_shortcut_label("Y / Enter", "confirm", theme.green, Color::White);
     confirm_spans.insert(0, Span::styled(format!("{} ", app.glyphs().bullet_active), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
 
+    let force_title = format!(" {} Force Run ", app.glyphs().refresh);
     let inner = render_modal_container(
         f,
         app,
         theme,
         area,
         ModalContainerConfig {
-            title_prefix: " ⟳ Force Run ",
+            title_prefix: &force_title,
             title_color: Some(theme.accent),
             action_shortcuts: Some(vec![confirm_spans]),
             border_color: theme.accent,
@@ -551,7 +552,7 @@ fn render_confirm_sync_modal(
     // 1. Bannière
     let banner = vec![
         Line::from(vec![
-            Span::styled("⟳ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{} ", app.glyphs().refresh), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
             Span::styled(
                 "TRIGGER SYNCHRONIZATION NOW?",
                 Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
@@ -581,9 +582,9 @@ fn render_confirm_sync_modal(
 
     if card_inner.height >= 3 {
         let max_w = card_inner.width as usize;
-        let raw_scope = format!("{}  ⇄  {}", app.config.local_dir, app.config.remote);
+        let raw_scope = format!("{}  {}  {}", app.config.local_dir, app.glyphs().swap, app.config.remote);
         let mut scope_spans = vec![
-            Span::styled("💻 Local ⇄ ☁ Remote: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("💻 Local {} ☁ Remote: ", app.glyphs().swap), Style::default().fg(theme.text_muted)),
         ];
         scope_spans.extend(crate::ui::theme::truncate_with_fade_spans(
             &raw_scope,
@@ -720,9 +721,9 @@ fn render_confirm_resync_modal(
 
     if card_inner.height >= 4 {
         let max_w = card_inner.width as usize;
-        let raw_scope = format!("{}  ⇄  {}", app.config.local_dir, app.config.remote);
+        let raw_scope = format!("{}  {}  {}", app.config.local_dir, app.glyphs().swap, app.config.remote);
         let mut scope_spans = vec![
-            Span::styled("💻 Local ⇄ ☁ Remote: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("💻 Local {} ☁ Remote: ", app.glyphs().swap), Style::default().fg(theme.text_muted)),
         ];
         scope_spans.extend(crate::ui::theme::truncate_with_fade_spans(
             &raw_scope,

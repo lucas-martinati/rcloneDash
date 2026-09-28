@@ -7,7 +7,7 @@ use crate::config::{self, AppConfig};
 use crate::fs_tree::{self, FileEntry};
 use crate::monitor::{fetch_past_runs, spawn_log_streamer, PastRun, RunStatus, SharedStreamer, StreamerState};
 use crate::systemd::{self, get_service_info, ServiceInfo, ServiceState};
-use crate::term_caps::{TermCaps, TtyMode};
+use crate::term_caps::{ColorLevel, TermCaps, TtyMode};
 use crate::ui::theme::ThemeChoice;
 
 
@@ -634,9 +634,14 @@ impl App {
     }
 
     /// Applies a CLI `--tty-mode` override (kept out of the saved config).
+    /// An explicit `off` forces colors even piped or NO_COLOR
+    /// (like `ls --color=always`).
     pub fn apply_tty_override(&mut self, mode: TtyMode) {
         self.tty_mode_override = Some(mode);
         self.refresh_term_caps();
+        if mode == TtyMode::Off {
+            self.term_caps.color = ColorLevel::TrueColor;
+        }
     }
 
     pub fn border_glyphs(&self) -> crate::config::BorderGlyphs {

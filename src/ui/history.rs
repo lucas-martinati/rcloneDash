@@ -104,7 +104,6 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             };
 
             let prefix = if is_selected { format!(" {} ", app.glyphs().bullet_active) } else { "   ".to_string() };
-            let highlight_bg = Color::Rgb(90, 32, 32);
             let highlight = selected_style(Color::Rgb(90, 32, 32), app.term_caps.color);
 
             let mut line_spans = if is_selected {
@@ -124,7 +123,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 is_selected,
                 app.ctrl_mode,
                 theme,
-                if is_selected { Some(highlight_bg) } else { None },
+                if is_selected { Some(highlight) } else { None },
             ));
 
             all_lines.push((Line::from(line_spans), Some(idx)));

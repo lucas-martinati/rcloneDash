@@ -271,8 +271,8 @@ pub async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
 }
 
 /// Downloads and atomically replaces the current binary with the latest release
-pub async fn download_and_install_update(info: &UpdateInfo, mode: TtyMode) -> Result<(), String> {
-    let style = ConsoleStyle::with_mode(mode);
+pub async fn download_and_install_update(info: &UpdateInfo, caps: TermCaps) -> Result<(), String> {
+    let style = ConsoleStyle::from_caps(caps);
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("Could not determine executable path: {}", e))?;
 
@@ -464,8 +464,8 @@ pub fn demo_latest_version(current: &str) -> String {
 
 /// Simulates the full update flow on screen without any network access or
 /// filesystem side effect. Visual test entry point (`rclonedash --update-demo`).
-pub async fn demo_update_flow(mode: TtyMode) {
-    let style = ConsoleStyle::with_mode(mode);
+pub async fn demo_update_flow(caps: TermCaps) {
+    let style = ConsoleStyle::from_caps(caps);
     let current = env!("CARGO_PKG_VERSION");
     let latest = demo_latest_version(current);
     let g = style.caps.glyphs();

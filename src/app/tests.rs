@@ -2254,6 +2254,118 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
+    async fn test_ascii_render_denylist_across_screens() {
+        use crate::term_caps::Glyphs;
+        use crate::ui::sparkline::{BLOCKS, BRAILLE};
+        // Every Unicode glyph with an ASCII fallback must be gone in ascii
+        // mode — except box drawing (kept for TERM=linux consoles, whose
+        // fonts include it). The branding logo is the only remaining '█'
+        // source, so only the Help screen (which always shows it) allows it.
+        let uni = Glyphs::unicode();
+        let allowed_box = [
+            uni.vline,
+            uni.hline,
+            uni.corner_tl,
+            uni.corner_bl,
+            uni.tee_top,
+            uni.tee_bottom,
+            uni.tee_left,
+            uni.tee_right,
+        ];
+        let mut denied: Vec<String> = uni
+            .all_fields()
+            .into_iter()
+            .filter(|s| !allowed_box.contains(s))
+            .map(|s| s.to_string())
+            .collect();
+        for c in BRAILLE.iter().chain(BLOCKS.iter()).filter(|c| **c != ' ') {
+            denied.push(c.to_string());
+        }
+        denied.push("▒".to_string());
+        denied.push("▓".to_string());
+
+        let ascii_caps = crate::term_caps::TermCaps {
+            color: crate::term_caps::ColorLevel::Ansi16,
+            live: false,
+            ascii: true,
+        };
+        // (modal, tab, idx, width, height, allow_logo_blocks)
+        let screens: Vec<(Modal, usize, usize, u16, u16, bool)> = vec![
+            (Modal::None, 0, 0, 130, 40, false),
+            (Modal::Settings, 1, 0, 130, 30, false),
+            (Modal::Files, 0, 0, 130, 40, false),
+            (Modal::Filters, 0, 0, 130, 40, false),
+            (Modal::Help, 0, 0, 130, 40, true),
+            (Modal::DryRun, 0, 0, 130, 40, false),
+        ];
+        for (modal, tab, idx, w, h, allow_logo) in screens {
+            let mut app = App::new();
+            app.term_caps = ascii_caps;
+            app.modal = modal.clone();
+            app.settings_tab = tab;
+            app.settings_selected_idx = idx;
+            if modal == Modal::None {
+                // Force scrollbars, graph and status rows onto the dashboard.
+                app.live.log_lines = (0..200).map(|i| format!("log line {}", i)).collect();
+                app.past_runs = vec![
+                    PastRun {
+                        id: 1,
+                        date: "2026-09-18".into(),
+                        time: "08:00".into(),
+                        duration: "10s".into(),
+                        status: RunStatus::Success,
+                        files_copied: vec![],
+                        files_modified: vec![],
+                        files_deleted: vec![],
+                        errors: vec![],
+                        synced_files: vec![],
+                    },
+                    PastRun {
+                        id: 2,
+                        date: "2026-09-18".into(),
+                        time: "08:15".into(),
+                        duration: "20s".into(),
+                        status: RunStatus::Failed,
+                        files_copied: vec![],
+                        files_modified: vec![],
+                        files_deleted: vec![],
+                        errors: vec!["boom".into()],
+                        synced_files: vec![],
+                    },
+                ];
+                app.selected_run_idx = Some(0);
+            }
+
+            let backend = ratatui::backend::TestBackend::new(w, h);
+            let mut terminal = ratatui::Terminal::new(backend).unwrap();
+            terminal.draw(|f| {
+                crate::ui::render(f, &mut app);
+            }).unwrap();
+
+            let buffer = terminal.backend().buffer();
+            let text: String = (0..buffer.area.height)
+                .map(|y| {
+                    (0..buffer.area.width)
+                        .map(|x| buffer[(x, y)].symbol())
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            for d in &denied {
+                if allow_logo && d == "█" {
+                    continue;
+                }
+                assert!(
+                    !text.contains(d.as_str()),
+                    "ascii screen {:?} must not contain {:?}",
+                    modal,
+                    d
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_toggle_boxes_and_focus_adjustment() {
         // toggle_box()/save_config() écrivent dash-config.json : sérialiser.
         let _guard = config::test_support::hold_test_config_lock();

@@ -85,6 +85,17 @@ fn cli_tty_mode(tty_override: Option<TtyMode>) -> TtyMode {
     tty_override.unwrap_or_else(|| config::load_config().tty_mode)
 }
 
+/// Style for CLI (updater) paths: flag first, config fallback, and an
+/// explicit `--tty-mode=off` forces colors even when piped or NO_COLOR
+/// (like `ls --color=always`).
+fn cli_style(tty_override: Option<TtyMode>) -> updater::ConsoleStyle {
+    let mut style = updater::ConsoleStyle::with_mode(cli_tty_mode(tty_override));
+    if tty_override == Some(TtyMode::Off) {
+        style.caps.color = term_caps::ColorLevel::TrueColor;
+    }
+    style
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle command-line arguments (before initializing TUI / raw mode)
@@ -112,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             "--check-update" => {
-                let style = updater::ConsoleStyle::with_mode(cli_tty_mode(tty_override));
+                let style = cli_style(tty_override);
                 let g = style.caps.glyphs();
                 println!("  {}{} {}", g.corner_tl, g.hline, style.bold_red("rcloneDash Update Check"));
                 println!("  {}", g.vline);
@@ -137,8 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             "--update" | "-u" => {
-                let mode = cli_tty_mode(tty_override);
-                let style = updater::ConsoleStyle::with_mode(mode);
+                let style = cli_style(tty_override);
                 let g = style.caps.glyphs();
                 println!("  {}{} {}", g.corner_tl, g.hline, style.bold_red("rcloneDash Updater"));
                 println!("  {}", g.vline);
@@ -147,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(Some(info)) => {
                         println!("  {}  Found {} (current: {})", g.vline, style.bold(&format!("v{}", info.latest_version)), style.gray(&format!("v{}", info.current_version)));
                         println!("  {}", g.vline);
-                        match updater::download_and_install_update(&info, mode).await {
+                        match updater::download_and_install_update(&info, style.caps).await {
                             Ok(()) => {
                                 println!("  {}", g.vline);
                                 println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("{} Successfully updated to v{}!", g.spark, info.latest_version)));
@@ -173,7 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             "--update-demo" => {
-                updater::demo_update_flow(cli_tty_mode(tty_override)).await;
+                updater::demo_update_flow(cli_style(tty_override).caps).await;
                 return Ok(());
             }
             unknown => {

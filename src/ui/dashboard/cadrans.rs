@@ -53,7 +53,7 @@ pub fn render_disks_cloud_box(
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
             Span::styled(bg.top_left, Style::default().fg(theme.border_storage)),
-            Span::styled("¹", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(crate::term_caps::Glyphs::tab_digit(app.term_caps.ascii, 1), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("disks & cloud", Style::default().fg(theme.border_storage).add_modifier(Modifier::BOLD)),
             Span::styled(bg.top_right, Style::default().fg(theme.border_storage)),
         ]))
@@ -246,7 +246,7 @@ pub fn render_metrics_box(
         .style(Style::default().bg(theme.card_bg))
         .title(Line::from(vec![
             Span::styled(bg.top_left, Style::default().fg(theme.border_sys)),
-            Span::styled("²", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(crate::term_caps::Glyphs::tab_digit(app.term_caps.ascii, 2), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled("metrics", Style::default().fg(theme.border_sys).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{} ", bg.horizontal), Style::default().fg(theme.border_sys)),
             Span::styled(clock_str, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),

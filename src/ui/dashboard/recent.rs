@@ -154,7 +154,7 @@ pub fn render_recent_files_panel(
 
     let mut top_spans = vec![
         Span::styled(bg.top_left, Style::default().fg(border_color)),
-        Span::styled("⁵", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled(crate::term_caps::Glyphs::tab_digit(app.term_caps.ascii, 5), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         Span::styled("recent files", Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)),
     ];
@@ -284,18 +284,15 @@ pub fn format_path_spans(
     is_selected: bool,
     ctrl_mode: bool,
     theme: &ThemePalette,
-    bg: Option<Color>,
+    sel: Option<Style>,
 ) -> Vec<Span<'static>> {
     let normalized = normalize_display_path(path);
     let (dir, name) = split_path(&normalized);
 
     let make_style = |fg: Color, bold: bool| {
-        let mut s = Style::default().fg(fg);
+        let mut s = sel.unwrap_or_default().fg(fg);
         if bold {
             s = s.add_modifier(Modifier::BOLD);
-        }
-        if let Some(b) = bg {
-            s = s.bg(b);
         }
         s
     };

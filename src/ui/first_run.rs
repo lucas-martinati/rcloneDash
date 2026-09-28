@@ -46,7 +46,7 @@ pub fn render_first_run_modal(
                 KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "continue", theme.green, Color::White),
             ],
             RcloneInstallStatus::Installing => vec![
-                KeybindingRegistry::format_shortcut_label("⏳", "installing...", theme.cyan, Color::White),
+                KeybindingRegistry::format_shortcut_label(app.glyphs().hourglass, "installing...", theme.cyan, Color::White),
             ],
             RcloneInstallStatus::NotInstalled | RcloneInstallStatus::Failed(_) => vec![
                 KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "install", theme.cyan, Color::White),
@@ -136,7 +136,7 @@ fn render_step_rclone(
         ),
         RcloneInstallStatus::NotInstalled => (
             Style::default().fg(Color::Black).bg(theme.yellow).add_modifier(Modifier::BOLD),
-            " ⚠ RCLONE NOT FOUND ".to_string(),
+            format!(" {} RCLONE NOT FOUND ", app.glyphs().warn_plain),
             vec![
                 Line::from(Span::styled("rclone was not found in PATH or ~/.local/bin/rclone.", Style::default().fg(theme.yellow))),
                 Line::from("You can install it automatically right now without sudo privileges."),
@@ -144,7 +144,7 @@ fn render_step_rclone(
         ),
         RcloneInstallStatus::Installing => (
             Style::default().fg(Color::Black).bg(theme.cyan).add_modifier(Modifier::BOLD),
-            " ⏳ INSTALLING RCLONE... ".to_string(),
+            format!(" {} INSTALLING RCLONE... ", app.glyphs().hourglass),
             vec![
                 Line::from(Span::styled("Downloading official precompiled binary to ~/.local/bin/rclone...", Style::default().fg(theme.cyan))),
             ],
