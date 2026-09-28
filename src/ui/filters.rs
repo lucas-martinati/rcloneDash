@@ -129,7 +129,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     let items: Vec<ListItem> = if total_count == 0 {
         vec![
             ListItem::new(Line::from(vec![
-                Span::styled(" No filter rules in gdrive-filters.txt.", Style::default().fg(theme.text_muted)),
+                Span::styled(format!(" No filter rules in {}.", crate::config::filters_display_name()), Style::default().fg(theme.text_muted)),
             ])),
             ListItem::new(Line::from(vec![
                 Span::styled(" Press ", Style::default().fg(theme.text_muted)),
@@ -347,7 +347,7 @@ fn render_filters_help(f: &mut Frame, _app: &App, theme: &ThemePalette, area: Re
         Line::from(Span::styled("  subsequent exclusion patterns.", Style::default().fg(theme.text_muted))),
         Line::from(""),
         Line::from(Span::styled("• All changes are saved automatically", Style::default().fg(theme.cyan))),
-        Line::from(Span::styled("  to ~/.config/rclone/gdrive-filters.txt", Style::default().fg(theme.text_muted))),
+        Line::from(Span::styled(format!("  to ~/.config/rclone/{}", crate::config::filters_display_name()), Style::default().fg(theme.text_muted))),
         Line::from(Span::styled("  and applied on next bisync run.", Style::default().fg(theme.text_muted))),
     ];
 

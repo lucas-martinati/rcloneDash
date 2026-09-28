@@ -237,7 +237,6 @@ pub fn get_disk_usage(path: &str) -> (f64, f64, f64, f64) {
         let frsize = stat.f_frsize as f64;
         let total_bytes = stat.f_blocks as f64 * frsize;
         let free_bytes = stat.f_bavail as f64 * frsize;
-        let _used_bytes = (total_bytes - stat.f_bfree as f64 * frsize).max(0.0);
         let g = 1024.0 * 1024.0 * 1024.0;
         let total_gb = (total_bytes / g * 10.0).round() / 10.0;
         let free_gb = (free_bytes / g * 10.0).round() / 10.0;

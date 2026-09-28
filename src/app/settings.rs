@@ -2,7 +2,7 @@ use super::*;
 
 impl App {
     pub fn settings_items_count(&self) -> usize {
-        config::SettingId::tab_count(self.settings_tab)
+        self.visible_settings_count(self.settings_tab)
     }
 
     pub fn scroll_settings_down(&mut self) {
@@ -25,7 +25,7 @@ impl App {
             _ => return,
         };
 
-        let setting = match config::SettingId::from_tab_and_idx(tab, idx) {
+        let setting = match self.visible_setting_at(tab, idx) {
             Some(s) => s,
             None => {
                 self.edit_state = EditState::Idle;
@@ -53,6 +53,12 @@ impl App {
                     if self.config.remote != trimmed {
                         self.config.remote = trimmed;
                         self.save_current_settings();
+                        // Le changement de remote peut faire apparaître/disparaître
+                        // les options Drive-only : re-clampe la sélection.
+                        let count = self.visible_settings_count(self.settings_tab);
+                        if self.settings_selected_idx >= count.max(1) {
+                            self.settings_selected_idx = count.saturating_sub(1);
+                        }
                         self.set_toast(format!("✔ Remote storage updated: {}", self.config.remote));
                     } else {
                         self.set_toast("✔ Remote storage kept");
@@ -99,7 +105,7 @@ impl App {
 
     /// Enter editing mode for the currently selected setting (text fields only).
     pub fn start_editing_setting(&mut self) {
-        let setting = match config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+        let setting = match self.visible_setting_at(self.settings_tab, self.settings_selected_idx) {
             Some(s) if s.is_text_input() => s,
             _ => return,
         };
@@ -167,7 +173,7 @@ impl App {
     }
 
     pub fn cycle_setting(&mut self, forward: bool) {
-        let setting = match config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+        let setting = match self.visible_setting_at(self.settings_tab, self.settings_selected_idx) {
             Some(s) => s,
             None => return,
         };

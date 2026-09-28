@@ -35,7 +35,8 @@ pub fn render_first_run_modal(
 
     let (step_num, step_name) = match state.step {
         FirstRunStep::RcloneCheck => (1, "Rclone Detection"),
-        FirstRunStep::GoogleCredentials => (2, "Google Drive API"),
+        FirstRunStep::RemoteSetup => (2, "Remote Storage"),
+        FirstRunStep::GoogleCredentials => (3, "Google Drive API (Drive only)"),
     };
 
     use crate::ui::keys::KeybindingRegistry;
@@ -53,6 +54,11 @@ pub fn render_first_run_modal(
                 KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.yellow, Color::White),
             ],
         },
+        FirstRunStep::RemoteSetup => vec![
+            KeybindingRegistry::format_shortcut_label("Tab", "navigate", theme.accent, Color::White),
+            KeybindingRegistry::format_shortcut_label("↵", "continue", theme.green, Color::White),
+            KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.red, Color::White),
+        ],
         FirstRunStep::GoogleCredentials => vec![
             KeybindingRegistry::format_shortcut_label("Tab", "navigate", theme.accent, Color::White),
             KeybindingRegistry::format_shortcut_label("Ctrl+V", "paste", theme.cyan, Color::White),
@@ -74,7 +80,7 @@ pub fn render_first_run_modal(
                 Span::styled(format!(" │ {}", step_name), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
             ]),
             action_shortcuts: Some(actions),
-            counter: Some((step_num, 2)),
+            counter: Some((step_num, 3)),
             border_color: theme.accent,
             show_close_button: true,
             ..Default::default()
@@ -84,6 +90,7 @@ pub fn render_first_run_modal(
 
     match state.step {
         FirstRunStep::RcloneCheck => render_step_rclone(f, app, state, theme, inner, hitboxes),
+        FirstRunStep::RemoteSetup => render_step_remote(f, app, state, theme, inner, hitboxes),
         FirstRunStep::GoogleCredentials => render_step_google(f, app, state, theme, inner, hitboxes),
     }
 }
@@ -180,7 +187,7 @@ fn render_step_rclone(
         } else {
             Style::default().fg(theme.text_bright).bg(theme.border).add_modifier(Modifier::BOLD)
         };
-        let btn_text = " [ Next: Configure Google Drive → (Enter) ] ";
+        let btn_text = " [ Next: Choose Remote → (Enter) ] ";
         btn_spans.push(Span::styled(btn_text, style));
 
         hitboxes.push(Hitbox {
@@ -239,6 +246,157 @@ fn render_step_rclone(
     }
 
     f.render_widget(Paragraph::new(Line::from(btn_spans)), btn_area);
+}
+
+fn render_step_remote(
+    f: &mut Frame,
+    app: &App,
+    state: &FirstRunState,
+    theme: &ThemePalette,
+    area: Rect,
+    hitboxes: &mut Vec<Hitbox>,
+) {
+    let remotes = crate::rclone::list_remotes();
+    let has_drive = remotes.iter().any(|r| r.is_drive());
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(4), // Intro
+            Constraint::Length(3), // Remote input
+            Constraint::Length(2), // Buttons
+            Constraint::Min(3),    // Detected remotes / hint
+        ])
+        .split(area);
+
+    // 1. Intro
+    let intro = vec![
+        Line::from(Span::styled(
+            "Which rclone remote should bisync synchronize?",
+            Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD),
+        )),
+        Line::from("Any rclone remote works (Drive, S3, Dropbox, SFTP...). Google-only options appear later, only for Drive remotes."),
+    ];
+    f.render_widget(Paragraph::new(intro).wrap(Wrap { trim: true }), chunks[0]);
+
+    // 2. Remote input
+    let input_area = chunks[1];
+    let is_active = state.active_field == FirstRunField::RemoteInput;
+    let border_col = if is_active { theme.accent } else { theme.border };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(app.border_type())
+        .border_style(Style::default().fg(border_col))
+        .title(Span::styled(
+            " Remote name (e.g. GoogleDrive:) ",
+            Style::default()
+                .fg(if is_active { theme.accent } else { theme.text_muted })
+                .add_modifier(Modifier::BOLD),
+        ))
+        .style(Style::default().bg(theme.card_bg));
+    let inner_in = block.inner(input_area);
+    f.render_widget(block, input_area);
+    let disp = if state.remote_input.is_empty() {
+        Line::from(Span::styled("(type the remote name, `:` included)", Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC)))
+    } else {
+        let max_w = inner_in.width as usize;
+        let text = if is_active {
+            crate::ui::settings::format_scrolled_input_with_cursor(&state.remote_input, state.remote_cursor, max_w)
+        } else {
+            state.remote_input.clone()
+        };
+        // Badge du type détecté
+        let kind = crate::rclone::remote_type(&state.remote_input);
+        let kind_owned: String = match kind.as_deref() {
+            Some("drive") => "  [Google Drive ✓]".to_string(),
+            Some(k) => format!("  [{}]", k),
+            None => "  [unknown — run `rclone config`?]".to_string(),
+        };
+        Line::from(vec![
+            Span::styled(text, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
+            Span::styled(kind_owned, Style::default().fg(theme.text_muted)),
+        ])
+    };
+    f.render_widget(Paragraph::new(disp), inner_in);
+    hitboxes.push(Hitbox { rect: input_area, action: HitAction::FirstRunRemoteInput });
+
+    // 3. Buttons
+    let btn_area = chunks[2];
+    let is_cont = state.active_field == FirstRunField::RemoteContinueButton;
+    let is_skip = state.active_field == FirstRunField::RemoteSkipButton;
+    let cont_style = if is_cont {
+        Style::default().fg(Color::Black).bg(theme.green).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme.text_bright).bg(theme.border).add_modifier(Modifier::BOLD)
+    };
+    let skip_style = if is_skip {
+        Style::default().fg(Color::Black).bg(theme.yellow).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme.text_muted).bg(theme.border)
+    };
+    let wants_google = state.wants_google_step();
+    let btn_cont = if wants_google { " [ Next: Google API → (Enter) ] " } else { " [ Save & Finish (Enter) ] " };
+    let btn_skip = " [ Skip (Esc) ] ";
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(btn_cont, cont_style),
+            Span::raw("  "),
+            Span::styled(btn_skip, skip_style),
+        ])),
+        btn_area,
+    );
+    let cw = btn_cont.chars().count() as u16;
+    let sw = btn_skip.chars().count() as u16;
+    hitboxes.push(Hitbox {
+        rect: Rect { x: btn_area.x, y: btn_area.y, width: cw.min(btn_area.width), height: 1 },
+        action: HitAction::FirstRunRemoteContinue,
+    });
+    if btn_area.x + cw + 2 < btn_area.x + btn_area.width {
+        hitboxes.push(Hitbox {
+            rect: Rect {
+                x: btn_area.x + cw + 2,
+                y: btn_area.y,
+                width: sw.min((btn_area.x + btn_area.width).saturating_sub(btn_area.x + cw + 2)),
+                height: 1,
+            },
+            action: HitAction::FirstRunRemoteSkip,
+        });
+    }
+
+    // 4. Detected remotes
+    let list_area = chunks[3];
+    let lines: Vec<Line> = if remotes.is_empty() {
+        vec![
+            Line::from(Span::styled("No remotes found in ~/.config/rclone/rclone.conf.", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD))),
+            Line::from("Run `rclone config` in another terminal, then type the new name above."),
+        ]
+    } else {
+        let mut v = vec![Line::from(Span::styled(
+            "Detected remotes in rclone.conf:",
+            Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD),
+        ))];
+        for r in remotes.iter().take(5) {
+            let marker = if r.display_name() == state.remote_input { "▶" } else { "•" };
+            let col = if r.is_drive() { theme.green } else { theme.text_bright };
+            v.push(Line::from(vec![
+                Span::styled(format!("  {} ", marker), Style::default().fg(col).add_modifier(Modifier::BOLD)),
+                Span::styled(r.human_label(), Style::default().fg(col)),
+            ]));
+        }
+        if !has_drive {
+            v.push(Line::from(Span::styled(
+                "No Google Drive remote detected — the Google API step will be skipped.",
+                Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC),
+            )));
+        } else {
+            v.push(Line::from(Span::styled(
+                "Choose a Drive remote above to configure its personal API quota next.",
+                Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC),
+            )));
+        }
+        v
+    };
+    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), list_area);
 }
 
 fn render_step_google(

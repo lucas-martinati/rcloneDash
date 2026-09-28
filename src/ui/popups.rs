@@ -174,7 +174,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 ("c", "Cancels active synchronization run."),
                 ("b, p", "Opens file browser modal (explorer)."),
                 ("f, /", "In Recent files: search filter."),
-                ("e", "Opens exclusion rules editor (gdrive-filters.txt)."),
+                ("e", "Opens exclusion rules editor (rclone-filters.txt)."),
                 ("Ctrl+X", "Toggles parent directory mode (shows folder paths)."),
                 ("Enter", "Opens selected file / Validates actions."),
                 ("Ctrl+Enter", "Opens containing folder in system file manager (xdg)."),

@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=RcloneDash
 GenericName=Rclone Bisync Dashboard
-Comment=Google Drive & Rclone Bisync Dashboard
+Comment=Rclone Bisync Dashboard (Drive, S3, Dropbox...)
 Exec=rclonedash
 Icon=rclonedash
 Terminal=true

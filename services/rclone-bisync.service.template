@@ -1,5 +1,5 @@
 [Unit]
-Description=Synchronisation rclone Google Drive
+Description=Synchronisation rclone bisync (tous remotes)
 After=network-online.target
 Wants=network-online.target
 

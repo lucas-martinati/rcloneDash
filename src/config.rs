@@ -507,17 +507,6 @@ impl SettingId {
         Self::ALL.iter().copied().filter(|s| s.category() == cat).collect()
     }
 
-    pub fn from_tab_and_idx(tab: usize, idx: usize) -> Option<Self> {
-        let cat = *SettingCategory::ALL.get(tab)?;
-        Self::for_category(cat).get(idx).copied()
-    }
-
-    pub fn tab_count(tab: usize) -> usize {
-        SettingCategory::ALL.get(tab)
-            .map(|&cat| Self::for_category(cat).len())
-            .unwrap_or(0)
-    }
-
     pub fn kind(&self) -> SettingKind {
         match self {
             Self::LocalDirectory | Self::RemoteStorage | Self::GoogleClientId | Self::GoogleClientSecret => {
@@ -582,11 +571,11 @@ impl SettingId {
             Self::CloudSafetyNet => "Maximum time elapsed before running a full bidirectional sync.\n\nEnsures files created or updated remotely from another computer or the web interface are retrieved, even if no local changes were detected.\n'Never' triggers sync only upon local changes.",
             Self::BandwidthLimit => "Maximum allowed transfer speed for rclone.\n\nPreserves your internet connection by limiting network bandwidth used by rclone.\nStored in bwlimit.env and injected into the systemd service.\nValue 'Disabled' uses 100% of available bandwidth.",
             Self::LocalDirectory => "Path to the root local directory synchronized with cloud storage.\n\nContains your local data replicated by bisync.",
-            Self::RemoteStorage => "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nUsed for cloud quota inquiries, remote listings, and bidirectional synchronization.",
-            Self::ResyncAction => "In case of critical bisync errors or corrupted sync listings, this action rebuilds listing databases by comparing the local directory and Google Drive (keeping the newest files: --resync-mode newer).",
+            Self::RemoteStorage => "Remote storage name configured in ~/.config/rclone/rclone.conf.\n\nAny rclone remote works (Google Drive, S3, Dropbox, SFTP, local...). Used for quota inquiries, remote listings, and bidirectional synchronization.\nRun `rclone listremotes` to see available remotes.",
+            Self::ResyncAction => "In case of critical bisync errors or corrupted sync listings, this action rebuilds listing databases by comparing the local directory and the configured remote (keeping the newest files: --resync-mode newer).",
             Self::LogJournalAction => "Opens the complete rclone-bisync systemd journal log in your external viewer (less or configured editor).\n\nAllows navigating the full history, searching text, and inspecting detailed file transfers.",
-            Self::GoogleClientId => "OAuth 2.0 Client ID generated in Google Cloud Console.\n\nProvides a dedicated API quota to prevent 'Rate Limit Exceeded' (403) errors.\nStored directly in ~/.config/rclone/rclone.conf under your configured remote.",
-            Self::GoogleClientSecret => "OAuth 2.0 Client Secret paired with your Google Client ID.\n\nStored securely in ~/.config/rclone/rclone.conf (file permissions 0600).",
+            Self::GoogleClientId => "OAuth 2.0 Client ID generated in Google Cloud Console.\n\nOnly shown when the configured remote is a Google Drive (type = drive).\nProvides a dedicated API quota to prevent 'Rate Limit Exceeded' (403) errors.\nStored directly in ~/.config/rclone/rclone.conf under your configured remote.",
+            Self::GoogleClientSecret => "OAuth 2.0 Client Secret paired with your Google Client ID.\n\nOnly shown when the configured remote is a Google Drive (type = drive).\nStored securely in ~/.config/rclone/rclone.conf (file permissions 0600).",
             Self::ColorTheme => "Sets the color theme applied across the entire dashboard.\n\nEach theme dynamically adapts borders, text, and gradient charts.",
             Self::ContainerLayout => "Reorder the main dashboard containers to match your preferred workflow.\n\nApplies instantly across the entire dashboard.",
             Self::MidPanelOrder => "Horizontal placement of the middle section containers.\n\nAll keyboard shortcuts and mouse interactions adapt automatically.",
@@ -594,6 +583,13 @@ impl SettingId {
             Self::GraphStyle => "Select the glyph set used to render multiline activity and speed sparkline charts.\n\nPersisted across sessions in dash-config.json.",
             Self::StatsInterval => "Frequency at which rclone outputs transfer statistics to the log stream.\n\nDirectly controls the --stats flag passed to rclone bisync.\nA lower value (e.g. 1s) provides near real-time transfer speeds and progress bars, while higher values (e.g. 10s) reduce log verbosity.",
         }
+    }
+
+    /// `true` for settings that only make sense with a Google Drive remote
+    /// (`type = drive` in rclone.conf). The UI hides them otherwise so that
+    /// S3 / Dropbox / SFTP / local users are not offered Drive-only options.
+    pub fn is_drive_only(&self) -> bool {
+        matches!(self, Self::GoogleClientId | Self::GoogleClientSecret)
     }
 
     /// Source de vérité unique pour les choix des paramètres : renvoie exactement la même liste
@@ -729,7 +725,35 @@ pub fn config_file() -> PathBuf {
 }
 
 pub fn filters_file() -> PathBuf {
-    config_dir().join("gdrive-filters.txt")
+    // Lecture : nom générique (tous providers) avec fallback legacy.
+    // Si l'ancien gdrive-filters.txt existe et pas le nouveau, on le
+    // réutilise pour ne jamais perdre les règles existantes.
+    let generic = filters_write_file();
+    if generic.exists() {
+        return generic;
+    }
+    let legacy = config_dir().join("gdrive-filters.txt");
+    if legacy.exists() {
+        return legacy;
+    }
+    generic
+}
+
+/// Chemin d'écriture des filtres : TOUJOURS le nom générique.
+/// Politique de migration : la lecture (`filters_file()`) accepte l'ancien
+/// `gdrive-filters.txt` en fallback, mais toute sauvegarde écrit
+/// `rclone-filters.txt` — l'état legacy est donc migré dès la première
+/// modification, sans duplication.
+pub fn filters_write_file() -> PathBuf {
+    config_dir().join("rclone-filters.txt")
+}
+
+/// Nom du fichier de filtres réellement utilisé, pour l'affichage.
+pub fn filters_display_name() -> String {
+    filters_file()
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "rclone-filters.txt".to_string())
 }
 
 pub fn bwlimit_file() -> PathBuf {
@@ -1010,7 +1034,9 @@ pub fn read_filters() -> Vec<String> {
 }
 
 pub fn save_filters(filters: &[String]) -> Result<(), String> {
-    let path = filters_file();
+    // Écriture via le chemin canonique (voir `filters_write_file`) : une
+    // sauvegarde migre implicitement un état legacy vers le nom générique.
+    let path = filters_write_file();
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -1052,6 +1078,28 @@ pub fn save_quota_cache(quota: &CloudQuotaCache) -> Result<(), String> {
     }
     let json = serde_json::to_string(quota).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| e.to_string())
+}
+
+/// Outillage réservé aux tests : le dossier de config de test
+/// (`config_dir()` sous `#[cfg(test)]`, surchargeable via
+/// `RCLONEDASH_CONFIG_DIR`) est PARTAGÉ par tous les tests du processus.
+/// Les tests qui écrivent `rclone.conf` / `dash-config.json` doivent garder
+/// ce verrou pendant toute leur durée, sinon les tests parallèles se
+/// piétinent (race). Sans effet sur le binaire réel (`#[cfg(test)]`).
+#[cfg(test)]
+pub mod test_support {
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    fn shared_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    /// Garde à conserver (ex. `let _guard = ...;`) pendant tout test qui
+    /// lit/écrit les fichiers du dossier de config de test.
+    pub fn hold_test_config_lock() -> MutexGuard<'static, ()> {
+        shared_lock().lock().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 #[cfg(test)]
@@ -1267,6 +1315,8 @@ mod tests {
 
     #[test]
     fn test_rclone_credentials_read_write_roundtrip() {
+        // Dossier de config partagé entre tests : sérialiser.
+        let _guard = test_support::hold_test_config_lock();
         let test_dir = config_dir();
         let _ = fs::create_dir_all(&test_dir);
         let conf_file = rclone_config_file();

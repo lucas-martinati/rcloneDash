@@ -161,6 +161,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_stats_interval_stepping() {
+        // step_stats_interval() sauvegarde dash-config.json : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         app.config.stats_interval = "3s".to_string();
 
@@ -184,6 +186,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_settings_never_cycle() {
+        // cycle_setting() sauvegarde dash-config.json : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         app.settings_tab = 0;
         app.settings_selected_idx = 1; // full_sync_interval
@@ -333,6 +337,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_stats_interval_stepping_and_settings_harmony() {
+        // step_stats_interval() sauvegarde dash-config.json : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         app.config.stats_interval = "2s".to_string();
 
@@ -869,14 +875,25 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_google_credentials_settings_editing() {
+        // Dossier de config de test partagé : sérialiser (voir
+        // `config::test_support`). En mode test, `rclone_config_file()` pointe
+        // vers un dossier sandboxé, jamais vers le vrai ~/.config/rclone.
+        let _guard = config::test_support::hold_test_config_lock();
+        // Le remote de test doit être déclaré comme Drive pour que les
+        // réglages Google soient visibles (filtrage drive-only).
+        let conf = config::rclone_config_file();
+        if let Some(parent) = conf.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&conf, "[TestGoogleRemote]\ntype = drive\n\n[GoogleDrive]\ntype = drive\n");
         let mut app = App::new();
         app.config.remote = "TestGoogleRemote:".to_string();
         app.modal = Modal::Settings;
         app.settings_tab = 0;
 
-        // Option 8: GoogleClientId
-        app.settings_selected_idx = 8;
-        assert_eq!(config::SettingId::from_tab_and_idx(0, 8), Some(config::SettingId::GoogleClientId));
+        // Option 8: GoogleClientId (visible car remote Drive)
+        let idx_id = app.visible_settings_for_tab(0).iter().position(|s| *s == config::SettingId::GoogleClientId).expect("GoogleClientId visible for drive remote");
+        app.settings_selected_idx = idx_id;
         assert!(config::SettingId::GoogleClientId.is_text_input());
 
         // Press Enter to start editing
@@ -891,9 +908,9 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(!app.is_editing_setting());
 
-        // Option 9: GoogleClientSecret
-        app.settings_selected_idx = 9;
-        assert_eq!(config::SettingId::from_tab_and_idx(0, 9), Some(config::SettingId::GoogleClientSecret));
+        // Option GoogleClientSecret (visible car remote Drive)
+        let idx_sec = app.visible_settings_for_tab(0).iter().position(|s| *s == config::SettingId::GoogleClientSecret).expect("GoogleClientSecret visible for drive remote");
+        app.settings_selected_idx = idx_sec;
         assert!(config::SettingId::GoogleClientSecret.is_text_input());
 
         // Press 'e' to start editing
@@ -911,6 +928,25 @@ use crate::monitor::history::{PastRun, RunStatus};
         // Clean up test remote credentials
         let _ = config::write_rclone_credentials("TestGoogleRemote:", "", "");
         let _ = config::write_rclone_credentials("GoogleDrive:", "", "");
+    }
+
+    #[tokio::test]
+    async fn test_drive_only_settings_hidden_for_non_drive_remote() {
+        // Contrat pur (sans fichier partagé, donc sans race inter-tests) :
+        // seules les options Google sont marquées drive-only.
+        assert!(config::SettingId::GoogleClientId.is_drive_only());
+        assert!(config::SettingId::GoogleClientSecret.is_drive_only());
+        assert!(!config::SettingId::RemoteStorage.is_drive_only());
+        assert!(!config::SettingId::TimerInterval.is_drive_only());
+        assert!(!config::SettingId::LocalDirectory.is_drive_only());
+
+        // Le parsing distingue Drive des autres providers.
+        let remotes = crate::rclone::parse_remotes("[DriveRemote]\ntype = drive\n\n[S3Remote]\ntype = s3\n");
+        assert_eq!(remotes.len(), 2);
+        assert!(remotes[0].is_drive());
+        assert!(!remotes[1].is_drive());
+        assert_eq!(remotes[0].human_label(), "DriveRemote: (Google Drive)");
+        assert_eq!(remotes[1].human_label(), "S3Remote: (s3)");
     }
 
     #[tokio::test]
@@ -1293,6 +1329,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_log_filter_tabs_and_shortcuts() {
+        // set_log_filter() sauvegarde dash-config.json : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         assert_eq!(app.log_filter, LogFilter::All);
 
@@ -1395,6 +1433,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_new_appearance_and_layout_settings_cycle() {
+        // cycle_setting() sauvegarde dash-config.json : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         app.settings_tab = 1;
         app.config.container_layout = crate::config::ContainerLayout::Default;
@@ -1617,6 +1657,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_timer_interval_options_cycle_forward_and_backward() {
+        // cycle_setting() sauvegarde dash-config.json : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         app.modal = Modal::Settings;
         app.settings_tab = 0;
@@ -1886,6 +1928,14 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_first_run_modal_flow() {
+        // Wizard en 3 étapes : RcloneCheck -> RemoteSetup -> GoogleCredentials (Drive only).
+        // Dossier de config de test partagé : sérialiser (sandboxé, jamais le vrai ~/.config/rclone).
+        let _guard = config::test_support::hold_test_config_lock();
+        let conf = config::rclone_config_file();
+        if let Some(parent) = conf.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&conf, "[GoogleDrive]\ntype = drive\n\n[TestGoogleRemote]\ntype = drive\n");
         let mut app = App::new();
         let mut first_run = FirstRunState::new(&app.config.remote);
         first_run.client_id.clear();
@@ -1895,8 +1945,30 @@ use crate::monitor::history::{PastRun, RunStatus};
         first_run.active_field = FirstRunField::ContinueButton;
         app.modal = Modal::FirstRun(Box::new(first_run));
 
-        // 1. Press Enter to transition to Google Credentials step
+        // 1. Press Enter -> RemoteSetup step
         let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        app.handle_key(enter);
+
+        match &app.modal {
+            Modal::FirstRun(st) => {
+                assert_eq!(st.step, FirstRunStep::RemoteSetup);
+                assert_eq!(st.active_field, FirstRunField::RemoteInput);
+            }
+            _ => panic!("Expected Modal::FirstRun in RemoteSetup step"),
+        }
+
+        // 1b. Choisir un remote Drive (différent du défaut) puis avancer vers
+        // GoogleCredentials : Enter (RemoteInput -> Continue), Enter (Continue -> GoogleCredentials).
+        if let Modal::FirstRun(st) = &mut app.modal {
+            st.remote_input = "TestGoogleRemote:".to_string();
+            st.remote_cursor = st.remote_input.chars().count();
+            st.active_field = FirstRunField::RemoteInput;
+        }
+        app.handle_key(enter);
+        match &app.modal {
+            Modal::FirstRun(st) => assert_eq!(st.active_field, FirstRunField::RemoteContinueButton),
+            _ => panic!("Expected RemoteContinueButton"),
+        }
         app.handle_key(enter);
 
         match &app.modal {
@@ -1906,6 +1978,11 @@ use crate::monitor::history::{PastRun, RunStatus};
             }
             _ => panic!("Expected Modal::FirstRun in GoogleCredentials step"),
         }
+
+        // 1c. Le remote choisi au clavier doit déjà être persisté (sinon un
+        // "Skip credentials" le perdrait) et l'explorateur rechargé.
+        assert_eq!(app.config.remote, "TestGoogleRemote:");
+        assert_eq!(config::load_config().remote, "TestGoogleRemote:");
 
         // 2. Type into Client ID
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
@@ -2002,10 +2079,21 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_settings_google_client_secret_render_no_panic() {
+        // Fichiers partagés : sérialiser. Remote Drive dédié pour que la
+        // ligne GoogleClientSecret soit visible (filtrage drive-only).
+        let _guard = config::test_support::hold_test_config_lock();
+        let conf = config::rclone_config_file();
+        if let Some(parent) = conf.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&conf, "[RenderDrive]\ntype = drive\n");
         let mut app = App::new();
+        app.config.remote = "RenderDrive:".to_string();
         app.modal = Modal::Settings;
         app.settings_tab = 0;
-        app.settings_selected_idx = 9; // GoogleClientSecret
+        app.settings_selected_idx = app.visible_settings_for_tab(0).iter()
+            .position(|s| *s == config::SettingId::GoogleClientSecret)
+            .expect("GoogleClientSecret visible for drive remote");
 
         // Set credentials so that secret is configured ("••••••••••••")
         let _ = config::write_rclone_credentials(&app.config.remote, "test-client-id", "test-client-secret-12345");
@@ -2024,6 +2112,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_toggle_boxes_and_focus_adjustment() {
+        // toggle_box()/save_config() écrivent dash-config.json : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         app.config.show_cadrans = true;
         app.config.show_metrics = true;
@@ -2169,6 +2259,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
     #[tokio::test]
     async fn test_log_filter_persistence() {
+        // Round-trip fichier (save/load/remove de dash-config.json) : sérialiser.
+        let _guard = config::test_support::hold_test_config_lock();
         let mut app = App::new();
         // Set log filter to Problems
         app.set_log_filter(LogFilter::Problems);

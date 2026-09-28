@@ -354,14 +354,20 @@ step 3 "Setting up configuration and rclone filters"
 RCLONE_CONF_DIR="$HOME/.config/rclone"
 mkdir -p "$RCLONE_CONF_DIR"
 
-# gdrive-filters.txt
-if [ ! -f "$RCLONE_CONF_DIR/gdrive-filters.txt" ]; then
-    if [ -f "$TEMPLATE_DIR/gdrive-filters.txt" ]; then
-        cp "$TEMPLATE_DIR/gdrive-filters.txt" "$RCLONE_CONF_DIR/gdrive-filters.txt"
-        ok "Default filters file installed ($RCLONE_CONF_DIR/gdrive-filters.txt)"
+# rclone-filters.txt (generic, all providers) with legacy migration
+if [ ! -f "$RCLONE_CONF_DIR/rclone-filters.txt" ]; then
+    if [ -f "$RCLONE_CONF_DIR/gdrive-filters.txt" ]; then
+        cp "$RCLONE_CONF_DIR/gdrive-filters.txt" "$RCLONE_CONF_DIR/rclone-filters.txt"
+        ok "Migrated legacy filters to rclone-filters.txt ($RCLONE_CONF_DIR/rclone-filters.txt)"
+    elif [ -f "$TEMPLATE_DIR/rclone-filters.txt" ]; then
+        cp "$TEMPLATE_DIR/rclone-filters.txt" "$RCLONE_CONF_DIR/rclone-filters.txt"
+        ok "Default filters file installed ($RCLONE_CONF_DIR/rclone-filters.txt)"
+    elif [ -f "$TEMPLATE_DIR/gdrive-filters.txt" ]; then
+        cp "$TEMPLATE_DIR/gdrive-filters.txt" "$RCLONE_CONF_DIR/rclone-filters.txt"
+        ok "Default filters file installed ($RCLONE_CONF_DIR/rclone-filters.txt)"
     fi
 else
-    info "Preserving existing filters ($RCLONE_CONF_DIR/gdrive-filters.txt)"
+    info "Preserving existing filters ($RCLONE_CONF_DIR/rclone-filters.txt)"
 fi
 
 # dash-config.json
@@ -447,7 +453,7 @@ printf '  %s• Installed binary:%s       %s\n' "$BOLD" "$RESET" "$INSTALL_BIN_D
 printf '  %s• Application icon:%s       %s\n' "$BOLD" "$RESET" "$ICON_DIR/rclonedash.svg"
 printf '  %s• Desktop launcher:%s       %s\n' "$BOLD" "$RESET" "$APP_DIR/rclonedash.desktop"
 printf '  %s• Configuration:%s          %s\n' "$BOLD" "$RESET" "$CONFIG_FILE"
-printf '  %s• Exclusion filters:%s      %s\n' "$BOLD" "$RESET" "$RCLONE_CONF_DIR/gdrive-filters.txt"
+printf '  %s• Exclusion filters:%s      %s\n' "$BOLD" "$RESET" "$RCLONE_CONF_DIR/rclone-filters.txt"
 printf '  %s• Guard script:%s           %s\n' "$BOLD" "$RESET" "$DATA_DIR/rclone-bisync-guard.sh"
 printf '  %s• Notification helper:%s    %s\n' "$BOLD" "$RESET" "$DATA_DIR/rclonedash-notify.py"
 printf '  %s• Timer status:%s           systemctl --user status rclone-bisync.timer\n\n' "$BOLD" "$RESET"

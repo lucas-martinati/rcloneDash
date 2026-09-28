@@ -51,13 +51,14 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         container_area
     };
 
-    use crate::config::{SettingCategory, SettingId};
+    use crate::config::SettingId;
 
-    // Settings data based on active tab
-    let current_cat = SettingCategory::ALL.get(app.settings_tab).copied().unwrap_or(SettingCategory::Rclone);
-    let settings: Vec<(&str, String)> = SettingId::for_category(current_cat)
-        .into_iter()
-        .map(|s| (s.label(), app.setting_value(s)))
+    // Settings data based on active tab, filtrés : les options Google Drive
+    // (Client ID/Secret) n'apparaissent que si le remote est un Drive.
+    let visible: Vec<SettingId> = app.visible_settings_for_tab(app.settings_tab);
+    let settings: Vec<(&str, String)> = visible
+        .iter()
+        .map(|s| (s.label(), app.setting_value(*s)))
         .collect();
 
     let total_opts = settings.len();
@@ -75,7 +76,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         spans.push(Span::styled("  ", Style::default()));
         spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "confirm", theme.green, Color::White));
         spans
-    } else if let Some(setting) = config::SettingId::from_tab_and_idx(app.settings_tab, app.settings_selected_idx) {
+    } else if let Some(setting) = app.visible_setting_at(app.settings_tab, app.settings_selected_idx) {
         match setting.kind() {
             config::SettingKind::TextInput => {
                 crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "edit", theme.red, Color::White)
@@ -285,7 +286,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         });
 
         let w = left_area.width as usize;
-        let setting_opt = SettingId::from_tab_and_idx(app.settings_tab, i);
+        let setting_opt = app.visible_setting_at(app.settings_tab, i);
         let setting_kind = setting_opt.map(|s| s.kind()).unwrap_or(config::SettingKind::Cycle);
 
         if is_selected {
@@ -376,7 +377,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let k_enter = KeybindingRegistry::get_key_str(KeyAction::Validate);
     let k_esc = KeybindingRegistry::get_key_str(KeyAction::CancelEdit);
 
-    let (desc_title, desc_body): (&str, String) = match SettingId::from_tab_and_idx(app.settings_tab, app.settings_selected_idx) {
+    let (desc_title, desc_body): (&str, String) = match app.visible_setting_at(app.settings_tab, app.settings_selected_idx) {
         Some(setting) if setting.is_cycle() => {
             let choices = setting.choices().unwrap_or_default();
             let current = app.setting_value(setting);
@@ -409,14 +410,23 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 k_files, k_enter, k_enter, k_esc, app.config.local_dir
             ),
         ),
-        Some(SettingId::RemoteStorage) => (
-            SettingId::RemoteStorage.desc_title(),
-            format!(
-                "{}\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.\n\nCurrent remote:\n  ▶ {} (active)",
-                SettingId::RemoteStorage.desc_intro(),
-                k_enter, k_enter, k_esc, app.config.remote
-            ),
-        ),
+        Some(SettingId::RemoteStorage) => {
+            let remotes = crate::rclone::list_remotes();
+            let remotes_hint = if remotes.is_empty() {
+                "No remotes found in rclone.conf — run `rclone config` to create one.".to_string()
+            } else {
+                let list: Vec<String> = remotes.iter().take(8).map(|r| r.human_label()).collect();
+                format!("Detected remotes:\n{}", config::format_setting_options_list(&list, &app.config.remote))
+            };
+            (
+                SettingId::RemoteStorage.desc_title(),
+                format!(
+                    "{}\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.\n\nCurrent remote:\n  ▶ {} (active)\n\n{}",
+                    SettingId::RemoteStorage.desc_intro(),
+                    k_enter, k_enter, k_esc, app.remote_display(), remotes_hint
+                ),
+            )
+        }
         Some(SettingId::ResyncAction) => (
             SettingId::ResyncAction.desc_title(),
             format!(

@@ -1,5 +1,5 @@
 [Unit]
-Description=Sync Google Drive périodique (après chaque exécution)
+Description=Sync rclone périodique (après chaque exécution)
 
 [Timer]
 OnBootSec=1min

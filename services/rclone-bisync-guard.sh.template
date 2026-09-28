@@ -3,7 +3,7 @@
 # Garde légère pour rclone bisync
 # -----------------------------------------------------------------------------
 # Ne lance le bisync que si c'est utile, pour économiser les ressources
-# (appels API Drive, bande passante, CPU) quand rien n'a changé :
+# (appels API cloud, bande passante, CPU) quand rien n'a changé :
 #
 #   1. FORCE   : un sync manuel a été demandé depuis le dashboard
 #                (fichier marqueur .force-sync) -> on lance, sans condition.
@@ -55,13 +55,42 @@ run_bisync() {
             fi
         done
     fi
+    # Fichier de filtres generique (tous providers) avec fallback legacy.
+    FILTER_FILE="$RCLONE_CONF/rclone-filters.txt"
+    if [ ! -f "$FILTER_FILE" ] && [ -f "$RCLONE_CONF/gdrive-filters.txt" ]; then
+        FILTER_FILE="$RCLONE_CONF/gdrive-filters.txt"
+    fi
+    FILTER_ARGS=()
+    if [ -f "$FILTER_FILE" ]; then
+        FILTER_ARGS+=(--filter-from "$FILTER_FILE")
+    fi
+    # Flags specifiques Google Drive uniquement si le remote est un Drive
+    # (type = drive dans rclone.conf). Inutiles voire rejetes sinon.
+    # NOTE : le nom du remote n'est JAMAIS interpolé dans une regex ni
+    # dans un -v awk (qui interprète les backslashes) : il transite par
+    # l'environnement et n'est comparé qu'en chaîne littérale (insensible à
+    # la casse). Seuls des motifs fixes sont des regex. Pas d'injection
+    # possible même avec des caractères spéciaux dans le nom du remote.
+    DRIVE_ARGS=()
+    REMOTE_BASE="${REMOTE%:}"
+    if [ -n "$REMOTE_BASE" ] && [ -f "$RCLONE_CONF/rclone.conf" ]; then
+        if REMOTE_SECTION="[$REMOTE_BASE]" awk '
+            BEGIN { sec = ENVIRON["REMOTE_SECTION"] }
+            { line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line) }
+            tolower(line) == tolower(sec) { in_sec = 1; next }
+            /^\[/ { in_sec = 0; next }
+            in_sec && tolower($0) ~ /^[ \t]*type[ \t]*=[ \t]*drive([ \t]|$)/ { found = 1; exit }
+            END { exit !found }
+        ' "$RCLONE_CONF/rclone.conf" 2>/dev/null; then
+            DRIVE_ARGS+=(--drive-skip-shortcuts --drive-skip-gdocs)
+        fi
+    fi
     local rclone_bin
     rclone_bin="$(command -v rclone 2>/dev/null || echo /usr/bin/rclone)"
     "$rclone_bin" bisync "$REMOTE" "$SYNC_DIR" \
         --config "$RCLONE_CONF/rclone.conf" \
-        --filter-from "$RCLONE_CONF/gdrive-filters.txt" \
-        --drive-skip-shortcuts \
-        --drive-skip-gdocs \
+        "${FILTER_ARGS[@]}" \
+        "${DRIVE_ARGS[@]}" \
         --tpslimit 8 \
         -v \
         --use-json-log \

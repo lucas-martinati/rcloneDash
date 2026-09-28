@@ -8,6 +8,7 @@ mod clipboard;
 mod config;
 mod fs_tree;
 mod monitor;
+mod rclone;
 mod systemd;
 mod ui;
 pub mod updater;
@@ -294,7 +295,7 @@ fn handle_single_event(
 
                     app.filters = config::read_filters();
                     app.reload_files();
-                    app.set_toast("✔ gdrive-filters.txt reloaded!");
+                    app.set_toast(format!("✔ {} reloaded!", config::filters_display_name()));
                 } else if action == app::Action::OpenFullLogs {
                     open_full_logs(terminal, app)?;
                 }

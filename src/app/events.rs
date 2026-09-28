@@ -366,7 +366,7 @@ impl App {
                     self.commit_setting_edit();
                 }
                 self.settings_selected_idx = idx;
-                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, idx) {
+                if let Some(setting) = self.visible_setting_at(self.settings_tab, idx) {
                     match setting.kind() {
                         config::SettingKind::TextInput => {
                             if !self.is_editing_setting() || self.settings_selected_idx != idx {
@@ -392,7 +392,7 @@ impl App {
                     self.commit_setting_edit();
                 }
                 self.settings_selected_idx = idx;
-                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, idx) {
+                if let Some(setting) = self.visible_setting_at(self.settings_tab, idx) {
                     match setting.kind() {
                         config::SettingKind::TextInput => {
                             if !self.is_editing_setting() || self.settings_selected_idx != idx {
@@ -419,9 +419,31 @@ impl App {
             }
             HitAction::FirstRunContinue | HitAction::FirstRunSkipRclone => {
                 if let Modal::FirstRun(ref mut state) = self.modal {
-                    state.step = FirstRunStep::GoogleCredentials;
-                    state.active_field = FirstRunField::ClientIdInput;
+                    state.step = FirstRunStep::RemoteSetup;
+                    state.active_field = FirstRunField::RemoteInput;
+                    state.remote_cursor = state.remote_input.chars().count();
                 }
+                Action::None
+            }
+            HitAction::FirstRunRemoteInput => {
+                if let Modal::FirstRun(ref mut state) = self.modal {
+                    state.active_field = FirstRunField::RemoteInput;
+                    state.remote_cursor = state.remote_input.chars().count();
+                }
+                Action::None
+            }
+            HitAction::FirstRunRemoteContinue => {
+                // Chemin unique partagé avec le clavier : persiste le remote
+                // (save + reload) puis va aux credentials Drive ou termine.
+                self.advance_from_remote_continue();
+                Action::None
+            }
+            HitAction::FirstRunRemoteSkip => {
+                self.config.first_run_completed = Some(true);
+                let _ = config::save_config(&self.config);
+                self.set_toast("✔ Setup skipped. You can configure the remote anytime in Settings.");
+                self.modal = Modal::None;
+                self.hit_mgr.active_modal_area = None;
                 Action::None
             }
             HitAction::FirstRunClientId => {
@@ -439,20 +461,19 @@ impl App {
                 Action::None
             }
             HitAction::FirstRunSaveCredentials => {
+                // Chemin unique partagé avec le clavier (voir
+                // `save_first_run_credentials`) : impossible de diverger.
                 if let Modal::FirstRun(ref state) = self.modal {
-                    match config::write_rclone_credentials(&self.config.remote, &state.client_id, &state.client_secret) {
-                        Ok(()) => {
-                            self.config.first_run_completed = Some(true);
-                            let _ = config::save_config(&self.config);
-                            self.set_toast("✔ Google Drive credentials saved! Setup complete.");
-                        }
-                        Err(e) => {
-                            self.set_toast(format!("✗ Failed to save credentials: {}", e));
-                        }
-                    }
+                    let (remote, id, sec) = (
+                        state.remote_input.clone(),
+                        state.client_id.clone(),
+                        state.client_secret.clone(),
+                    );
+                    self.save_first_run_credentials(&remote, &id, &sec);
+                } else {
+                    self.modal = Modal::None;
+                    self.hit_mgr.active_modal_area = None;
                 }
-                self.modal = Modal::None;
-                self.hit_mgr.active_modal_area = None;
                 Action::None
             }
             HitAction::FirstRunSkipCredentials => {
@@ -647,8 +668,10 @@ impl App {
             enum FirstRunKeyAction {
                 None,
                 InstallRclone,
-                SaveCredentials(String, String),
+                SaveCredentials(String, String, String),
                 SkipCredentials,
+                AdvanceRemote,
+                SkipAll,
             }
 
             let mut action_to_do = FirstRunKeyAction::None;
@@ -658,13 +681,15 @@ impl App {
                     KeyCode::Enter => {
                         match state.rclone_status {
                             RcloneInstallStatus::Installed(_) => {
-                                state.step = FirstRunStep::GoogleCredentials;
-                                state.active_field = FirstRunField::ClientIdInput;
+                                state.step = FirstRunStep::RemoteSetup;
+                                state.active_field = FirstRunField::RemoteInput;
+                                state.remote_cursor = state.remote_input.chars().count();
                             }
                             RcloneInstallStatus::NotInstalled | RcloneInstallStatus::Failed(_) => {
                                 if state.active_field == FirstRunField::SkipRcloneButton {
-                                    state.step = FirstRunStep::GoogleCredentials;
-                                    state.active_field = FirstRunField::ClientIdInput;
+                                    state.step = FirstRunStep::RemoteSetup;
+                                    state.active_field = FirstRunField::RemoteInput;
+                                    state.remote_cursor = state.remote_input.chars().count();
                                 } else {
                                     action_to_do = FirstRunKeyAction::InstallRclone;
                                 }
@@ -689,8 +714,137 @@ impl App {
                         }
                     }
                     KeyCode::Esc => {
-                        state.step = FirstRunStep::GoogleCredentials;
-                        state.active_field = FirstRunField::ClientIdInput;
+                        state.step = FirstRunStep::RemoteSetup;
+                        state.active_field = FirstRunField::RemoteInput;
+                        state.remote_cursor = state.remote_input.chars().count();
+                    }
+                    _ => {}
+                },
+                FirstRunStep::RemoteSetup => match key.code {
+                    KeyCode::Tab => {
+                        state.active_field = match state.active_field {
+                            FirstRunField::RemoteInput => FirstRunField::RemoteContinueButton,
+                            FirstRunField::RemoteContinueButton => FirstRunField::RemoteSkipButton,
+                            FirstRunField::RemoteSkipButton => FirstRunField::RemoteInput,
+                            _ => FirstRunField::RemoteInput,
+                        };
+                    }
+                    KeyCode::BackTab => {
+                        state.active_field = match state.active_field {
+                            FirstRunField::RemoteInput => FirstRunField::RemoteSkipButton,
+                            FirstRunField::RemoteContinueButton => FirstRunField::RemoteInput,
+                            FirstRunField::RemoteSkipButton => FirstRunField::RemoteContinueButton,
+                            _ => FirstRunField::RemoteInput,
+                        };
+                    }
+                    KeyCode::Down => {
+                        state.active_field = match state.active_field {
+                            FirstRunField::RemoteInput => FirstRunField::RemoteContinueButton,
+                            _ => FirstRunField::RemoteInput,
+                        };
+                    }
+                    KeyCode::Up => {
+                        state.active_field = match state.active_field {
+                            FirstRunField::RemoteContinueButton | FirstRunField::RemoteSkipButton => {
+                                FirstRunField::RemoteInput
+                            }
+                            _ => FirstRunField::RemoteContinueButton,
+                        };
+                    }
+                    KeyCode::Enter => match state.active_field {
+                        FirstRunField::RemoteInput => {
+                            state.active_field = FirstRunField::RemoteContinueButton;
+                        }
+                        FirstRunField::RemoteContinueButton => {
+                            // Même chemin que la souris : persiste le remote
+                            // avant de passer à l'étape 3 (sinon un "Skip
+                            // credentials" perdrait le remote choisi).
+                            action_to_do = FirstRunKeyAction::AdvanceRemote;
+                        }
+                        FirstRunField::RemoteSkipButton => {
+                            action_to_do = FirstRunKeyAction::SkipAll;
+                        }
+                        _ => {}
+                    },
+                    KeyCode::Esc => {
+                        action_to_do = FirstRunKeyAction::SkipAll;
+                    }
+                    KeyCode::Left => {
+                        if state.active_field == FirstRunField::RemoteInput && state.remote_cursor > 0 {
+                            state.remote_cursor -= 1;
+                        } else {
+                            state.active_field = match state.active_field {
+                                FirstRunField::RemoteContinueButton => FirstRunField::RemoteSkipButton,
+                                FirstRunField::RemoteSkipButton => FirstRunField::RemoteContinueButton,
+                                _ => state.active_field,
+                            };
+                        }
+                    }
+                    KeyCode::Right => {
+                        if state.active_field == FirstRunField::RemoteInput
+                            && state.remote_cursor < state.remote_input.chars().count()
+                        {
+                            state.remote_cursor += 1;
+                        } else {
+                            state.active_field = match state.active_field {
+                                FirstRunField::RemoteContinueButton => FirstRunField::RemoteSkipButton,
+                                FirstRunField::RemoteSkipButton => FirstRunField::RemoteContinueButton,
+                                _ => state.active_field,
+                            };
+                        }
+                    }
+                    KeyCode::Home => {
+                        if state.active_field == FirstRunField::RemoteInput {
+                            state.remote_cursor = 0;
+                        }
+                    }
+                    KeyCode::End => {
+                        if state.active_field == FirstRunField::RemoteInput {
+                            state.remote_cursor = state.remote_input.chars().count();
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        if state.active_field == FirstRunField::RemoteInput && state.remote_cursor > 0 {
+                            let mut chars: Vec<char> = state.remote_input.chars().collect();
+                            if state.remote_cursor <= chars.len() {
+                                chars.remove(state.remote_cursor - 1);
+                                state.remote_input = chars.into_iter().collect();
+                                state.remote_cursor -= 1;
+                            }
+                        }
+                    }
+                    KeyCode::Delete => {
+                        if state.active_field == FirstRunField::RemoteInput {
+                            let mut chars: Vec<char> = state.remote_input.chars().collect();
+                            if state.remote_cursor < chars.len() {
+                                chars.remove(state.remote_cursor);
+                                state.remote_input = chars.into_iter().collect();
+                            }
+                        }
+                    }
+                    KeyCode::Char(c) => {
+                        if key.modifiers.contains(KeyModifiers::CONTROL) && (c == 'v' || c == 'V') {
+                            if state.active_field == FirstRunField::RemoteInput {
+                                if let Some(clip) = crate::clipboard::paste_from_clipboard() {
+                                    let clean = clip.trim().replace(['\r', '\n'], "");
+                                    let mut chars: Vec<char> = state.remote_input.chars().collect();
+                                    let cur = state.remote_cursor.min(chars.len());
+                                    let clean_chars: Vec<char> = clean.chars().collect();
+                                    let clean_len = clean_chars.len();
+                                    chars.splice(cur..cur, clean_chars);
+                                    state.remote_input = chars.into_iter().collect();
+                                    state.remote_cursor = cur + clean_len;
+                                }
+                            }
+                        } else if !key.modifiers.contains(KeyModifiers::CONTROL)
+                            && state.active_field == FirstRunField::RemoteInput
+                        {
+                            let mut chars: Vec<char> = state.remote_input.chars().collect();
+                            let cur = state.remote_cursor.min(chars.len());
+                            chars.insert(cur, c);
+                            state.remote_input = chars.into_iter().collect();
+                            state.remote_cursor = cur + 1;
+                        }
                     }
                     _ => {}
                 },
@@ -744,7 +898,7 @@ impl App {
                                 state.active_field = FirstRunField::SaveCredentialsButton;
                             }
                             FirstRunField::SaveCredentialsButton => {
-                                action_to_do = FirstRunKeyAction::SaveCredentials(state.client_id.clone(), state.client_secret.clone());
+                                action_to_do = FirstRunKeyAction::SaveCredentials(state.remote_input.clone(), state.client_id.clone(), state.client_secret.clone());
                             }
                             FirstRunField::SkipCredentialsButton => {
                                 action_to_do = FirstRunKeyAction::SkipCredentials;
@@ -919,19 +1073,14 @@ impl App {
                 FirstRunKeyAction::InstallRclone => {
                     self.start_rclone_install();
                 }
-                FirstRunKeyAction::SaveCredentials(id, sec) => {
-                    match config::write_rclone_credentials(&self.config.remote, &id, &sec) {
-                        Ok(()) => {
-                            self.config.first_run_completed = Some(true);
-                            let _ = config::save_config(&self.config);
-                            self.modal = Modal::None;
-                            self.hit_mgr.active_modal_area = None;
-                            self.set_toast("✔ Google Drive credentials saved! Setup complete.");
-                        }
-                        Err(e) => {
-                            self.set_toast(format!("✗ Failed to save credentials: {}", e));
-                        }
-                    }
+                FirstRunKeyAction::SaveCredentials(remote, id, sec) => {
+                    self.save_first_run_credentials(&remote, &id, &sec);
+                }
+                FirstRunKeyAction::AdvanceRemote => {
+                    // Même chemin que la souris : persiste le remote (save +
+                    // reload) avant l'étape 3, sinon "Skip credentials"
+                    // perdrait le remote et l'explorateur serait obsolète.
+                    self.advance_from_remote_continue();
                 }
                 FirstRunKeyAction::SkipCredentials => {
                     self.config.first_run_completed = Some(true);
@@ -939,6 +1088,13 @@ impl App {
                     self.modal = Modal::None;
                     self.hit_mgr.active_modal_area = None;
                     self.set_toast("✔ Setup skipped. You can configure credentials anytime in Settings.");
+                }
+                FirstRunKeyAction::SkipAll => {
+                    self.config.first_run_completed = Some(true);
+                    let _ = config::save_config(&self.config);
+                    self.modal = Modal::None;
+                    self.hit_mgr.active_modal_area = None;
+                    self.set_toast("✔ Setup skipped. You can configure the remote anytime in Settings.");
                 }
                 FirstRunKeyAction::None => {}
             }
@@ -1048,7 +1204,7 @@ impl App {
     /// `cycle_dir` donne le sens du cycle pour les réglages à choix ;
     /// None = activation simple (touche Enter).
     fn activate_selected_setting(&mut self, cycle_dir: Option<bool>) -> Action {
-        if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+        if let Some(setting) = self.visible_setting_at(self.settings_tab, self.settings_selected_idx) {
             match setting.kind() {
                 config::SettingKind::TextInput => {
                     self.start_editing_setting();
@@ -1187,7 +1343,7 @@ impl App {
                 return self.activate_selected_setting(None);
             }
             KeyCode::Char('e') | KeyCode::Char(' ') => {
-                if let Some(setting) = config::SettingId::from_tab_and_idx(self.settings_tab, self.settings_selected_idx) {
+                if let Some(setting) = self.visible_setting_at(self.settings_tab, self.settings_selected_idx) {
                     if setting.is_text_input() {
                         self.start_editing_setting();
                     } else if setting.is_cycle() {
@@ -1612,19 +1768,13 @@ impl App {
                 return Action::None;
             }
             KeyCode::Char(c)
-                if Some(c)
-                    == KeybindingRegistry::get_key_str(KeyAction::ForceSync)
-                        .chars()
-                        .next() =>
+                if KeybindingRegistry::get_key_str(KeyAction::ForceSync).starts_with(c) =>
             {
                 self.modal = Modal::ConfirmSync;
                 return Action::None;
             }
             KeyCode::Char(c)
-                if Some(c)
-                    == KeybindingRegistry::get_key_str(KeyAction::Resync)
-                        .chars()
-                        .next() =>
+                if KeybindingRegistry::get_key_str(KeyAction::Resync).starts_with(c) =>
             {
                 self.modal = Modal::ConfirmResync;
                 return Action::None;

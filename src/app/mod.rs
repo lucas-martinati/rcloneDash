@@ -72,6 +72,7 @@ pub enum Modal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FirstRunStep {
     RcloneCheck,
+    RemoteSetup,
     GoogleCredentials,
 }
 
@@ -90,7 +91,12 @@ pub enum FirstRunField {
     ContinueButton,
     SkipRcloneButton,
 
-    // Step 2
+    // Step 2 : choix du remote (tous providers)
+    RemoteInput,
+    RemoteContinueButton,
+    RemoteSkipButton,
+
+    // Step 3 (uniquement si remote Google Drive)
     ClientIdInput,
     ClientSecretInput,
     SaveCredentialsButton,
@@ -102,6 +108,8 @@ pub enum FirstRunField {
 pub struct FirstRunState {
     pub step: FirstRunStep,
     pub rclone_status: RcloneInstallStatus,
+    pub remote_input: String,
+    pub remote_cursor: usize,
     pub client_id: String,
     pub client_secret: String,
     pub active_field: FirstRunField,
@@ -132,9 +140,25 @@ impl FirstRunState {
         let client_id_cursor = client_id.len();
         let client_secret_cursor = client_secret.len();
 
+        // Pré-remplit le champ remote : remote actuel s'il existe dans
+        // rclone.conf, sinon le premier remote détecté, sinon le remote passé.
+        let remote_input = {
+            let trimmed = remote.trim();
+            if crate::rclone::remote_exists(trimmed) {
+                trimmed.to_string()
+            } else if let Some(first) = crate::rclone::list_remotes().into_iter().next() {
+                first.display_name()
+            } else {
+                trimmed.to_string()
+            }
+        };
+        let remote_cursor = remote_input.chars().count();
+
         Self {
             step,
             rclone_status: status,
+            remote_input,
+            remote_cursor,
             client_id,
             client_secret,
             active_field: field,
@@ -142,6 +166,11 @@ impl FirstRunState {
             client_id_cursor,
             client_secret_cursor,
         }
+    }
+
+    /// `true` si l'étape Google Credentials a un sens pour le remote saisi.
+    pub fn wants_google_step(&self) -> bool {
+        crate::rclone::is_drive_remote(&self.remote_input)
     }
 }
 
@@ -212,6 +241,9 @@ pub enum HitAction {
     FirstRunInstall,
     FirstRunContinue,
     FirstRunSkipRclone,
+    FirstRunRemoteInput,
+    FirstRunRemoteContinue,
+    FirstRunRemoteSkip,
     FirstRunClientId,
     FirstRunClientSecret,
     FirstRunSaveCredentials,
@@ -497,6 +529,75 @@ impl App {
 
     pub fn open_first_run(&mut self) {
         self.modal = Modal::FirstRun(Box::new(FirstRunState::new(&self.config.remote)));
+    }
+
+    /// Persiste le remote saisi dans le wizard : met à jour `config.remote`
+    /// (si non-vide et différent), sauvegarde et recharge l'explorateur.
+    /// Retourne `true` si l'étape Google Credentials a un sens (Drive).
+    /// Chemin unique pour le clavier ET la souris.
+    pub fn apply_first_run_remote(&mut self, remote_input: &str) -> bool {
+        let raw = remote_input.trim();
+        if !raw.is_empty() && raw != self.config.remote {
+            self.config.remote = raw.to_string();
+            let _ = config::save_config(&self.config);
+            self.reload_files();
+        }
+        self.is_drive_remote()
+    }
+
+    /// Suite commune clavier/souris après "Continue" de l'étape remote :
+    /// pré-remplit et affiche les credentials Google (Drive), ou termine
+    /// directement le setup (autres providers).
+    pub fn advance_from_remote_continue(&mut self) {
+        let remote = if let Modal::FirstRun(ref state) = self.modal {
+            state.remote_input.clone()
+        } else {
+            return;
+        };
+        if self.apply_first_run_remote(&remote) {
+            if let Modal::FirstRun(ref mut state) = self.modal {
+                let (id, secret) = config::read_rclone_credentials(&self.config.remote);
+                state.client_id = id.unwrap_or_default();
+                state.client_secret = secret.unwrap_or_default();
+                state.client_id_cursor = state.client_id.chars().count();
+                state.client_secret_cursor = state.client_secret.chars().count();
+                state.step = FirstRunStep::GoogleCredentials;
+                state.active_field = FirstRunField::ClientIdInput;
+            }
+        } else {
+            self.config.first_run_completed = Some(true);
+            let _ = config::save_config(&self.config);
+            self.set_toast(format!("✔ Remote configured: {}", crate::rclone::describe_remote(&self.config.remote)));
+            self.modal = Modal::None;
+            self.hit_mgr.active_modal_area = None;
+        }
+    }
+
+    /// Sauvegarde les credentials Google du wizard (chemin unique pour le
+    /// clavier ET la souris : `remote_input` non-vide gagne, sinon on garde
+    /// le remote configuré). Ferme le wizard en cas de succès.
+    pub fn save_first_run_credentials(&mut self, remote_input: &str, client_id: &str, client_secret: &str) {
+        let raw = remote_input.trim();
+        let target = if raw.is_empty() {
+            self.config.remote.clone()
+        } else {
+            raw.to_string()
+        };
+        if target != self.config.remote {
+            self.config.remote = target.clone();
+        }
+        match config::write_rclone_credentials(&target, client_id, client_secret) {
+            Ok(()) => {
+                self.config.first_run_completed = Some(true);
+                let _ = config::save_config(&self.config);
+                self.modal = Modal::None;
+                self.hit_mgr.active_modal_area = None;
+                self.set_toast("✔ Google Drive credentials saved! Setup complete.");
+            }
+            Err(e) => {
+                self.set_toast(format!("✗ Failed to save credentials: {}", e));
+            }
+        }
     }
 
     pub fn border_type(&self) -> BorderType {
@@ -793,10 +894,48 @@ impl App {
         }
     }
 
+    /// `true` uniquement si le remote configuré est un Google Drive.
+    /// Les options Drive (Client ID/Secret, flags --drive-*) sont proposées
+    /// uniquement dans ce cas.
+    pub fn is_drive_remote(&self) -> bool {
+        crate::rclone::is_drive_remote(&self.config.remote)
+    }
+
+    /// Libellé convivial du remote configuré pour l'affichage.
+    pub fn remote_display(&self) -> String {
+        crate::rclone::describe_remote(&self.config.remote)
+    }
+
+    /// Liste des réglages visibles pour un onglet, en filtrant les options
+    /// spécifiques à Google Drive quand le remote n'est pas un Drive.
+    pub fn visible_settings_for_tab(&self, tab: usize) -> Vec<config::SettingId> {
+        let cat = match config::SettingCategory::ALL.get(tab) {
+            Some(c) => *c,
+            None => return Vec::new(),
+        };
+        let is_drive = self.is_drive_remote();
+        config::SettingId::for_category(cat)
+            .into_iter()
+            .filter(|s| !s.is_drive_only() || is_drive)
+            .collect()
+    }
+
+    /// Réglage visible à (tab, idx) en tenant compte du filtrage Drive.
+    pub fn visible_setting_at(&self, tab: usize, idx: usize) -> Option<config::SettingId> {
+        self.visible_settings_for_tab(tab).get(idx).copied()
+    }
+
+    /// Nombre de réglages visibles pour un onglet (source de vérité pour
+    /// la navigation clavier/souris dans Settings).
+    pub fn visible_settings_count(&self, tab: usize) -> usize {
+        self.visible_settings_for_tab(tab).len()
+    }
+
     pub fn start_dry_run(&mut self) {
         self.dry_run_running = true;
+        let remote_label = crate::rclone::describe_remote(&self.config.remote);
         self.dry_run_logs = vec![
-            "Analyzing differences between local folder and Google Drive...".to_string(),
+            format!("Analyzing differences between local folder and {}...", remote_label),
             "Executing: rclone bisync --dry-run -v --tpslimit 8".to_string(),
             "This may take a moment...".to_string(),
         ];
@@ -806,32 +945,38 @@ impl App {
         self.set_toast("🛡 Dry-Run simulation started...");
 
         let remote = self.config.remote.clone();
+        let drive_args = crate::rclone::drive_extra_args(&remote);
         let local_dir = config::expand_tilde(&self.config.local_dir).to_string_lossy().to_string();
         let filters_path = config::filters_file().to_string_lossy().to_string();
+        let filters_exists = config::filters_file().exists();
         let rclone_conf_path = config::rclone_config_file().to_string_lossy().to_string();
 
         let (tx, rx) = std::sync::mpsc::channel();
         self.dry_run_rx = Some(rx);
 
         std::thread::spawn(move || {
-            let mut cmd = std::process::Command::new("rclone");
-            cmd.args([
-                "bisync",
-                &remote,
-                &local_dir,
-                "--dry-run",
-                "-v",
-                "--use-json-log",
-                "--tpslimit",
-                "8",
-                "--filter-from",
-                &filters_path,
-                "--drive-skip-shortcuts",
-                "--drive-skip-gdocs",
-                "--conflict-resolve",
-                "newer",
-                "--resilient",
+            let mut args: Vec<String> = vec![
+                "bisync".to_string(),
+                remote.clone(),
+                local_dir.clone(),
+                "--dry-run".to_string(),
+                "-v".to_string(),
+                "--use-json-log".to_string(),
+                "--tpslimit".to_string(),
+                "8".to_string(),
+            ];
+            if filters_exists {
+                args.push("--filter-from".to_string());
+                args.push(filters_path.clone());
+            }
+            args.extend(drive_args);
+            args.extend([
+                "--conflict-resolve".to_string(),
+                "newer".to_string(),
+                "--resilient".to_string(),
             ]);
+            let mut cmd = std::process::Command::new("rclone");
+            cmd.args(&args);
             if std::path::Path::new(&rclone_conf_path).exists() {
                 cmd.args(["--config", &rclone_conf_path]);
             }

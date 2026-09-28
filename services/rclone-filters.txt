@@ -1,0 +1,59 @@
+# --- FICHIERS À IGNORER (Ne seront jamais touchés) ---
+# Fichier de filtres par défaut de RcloneDash (tous providers : Drive, S3,
+# Dropbox, SFTP...). Adaptez-le à votre usage : ajoutez vos propres règles
+# ci-dessous. Les installations existantes conservent leur fichier tel quel.
+
+# Sorties de compilation et fichiers temporaires
+- *.out
+- *.tmp
+- *.part
+- *.crdownload
+- ~$*
+- .~lock.*
+
+# Python
+- venv_python/**
+- venv/**
+- __pycache__/**
+- *.pyc
+
+# Dossiers lourds / volatils à ignorer
+- out/**
+- .idea/**
+- .Trash-*
+- .thumbnails/**
+- .cache/**
+- node_modules/**
+- vendor/**
+
+# Fichiers système inutiles
+- **/.DS_Store
+- **/Thumbs.db
+- desktop.ini
+
+# Internes à rclone
+- .rclone*
+- RCLONE_TEST
+
+# Documents natifs Google Drive uniquement (sans effet sur les autres
+# providers : ces motifs ne correspondent à rien hors Drive). Avec un remote
+# Drive, la garde ajoute déjà --drive-skip-gdocs ; ces règles couvrent aussi
+# les lancements manuels sans ces flags.
+- *.gdoc
+- *.gsheet
+- *.gslides
+- *.gdraw
+- *.gjam
+- *.gform
+- *.gsite
+
+# Dossiers de build / VCS
+- .git/**
+- target/**
+- build/**
+- .gradle/**
+
+# --- VOS RÈGLES PERSONNELLES (exemples commentés) ---
+# Décommentez et adaptez, par exemple :
+# - Cours/archive/**
+# - *.bak
