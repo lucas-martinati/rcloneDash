@@ -33,11 +33,15 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let mut hitboxes = std::mem::take(&mut app.hit_mgr.dashboard);
     hitboxes.clear();
 
-    let theme = app.current_theme.palette();
+    let full = app.current_theme.palette();
+    // Single downgrade point (TTY mode): widgets consume `theme` /
+    // `dashboard_theme` directly and never branch on capabilities.
+    let theme = full.downgraded(app.term_caps.color);
 
     // When menu, settings, or help modal is open, the background dashboard becomes grayscale / monochrome
+    // (grayscale reintroduces RGB triplets, so it is downgraded again).
     let dashboard_theme = if matches!(app.modal, crate::app::Modal::Menu | crate::app::Modal::Settings | crate::app::Modal::Help) {
-        theme.to_grayscale()
+        full.to_grayscale().downgraded(app.term_caps.color)
     } else {
         theme
     };

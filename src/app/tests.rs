@@ -507,6 +507,45 @@ use crate::monitor::history::{PastRun, RunStatus};
         }
     }
 
+    #[test]
+    fn test_downgraded_palette_for_tty_levels() {
+        use crate::term_caps::ColorLevel;
+        use ratatui::style::Color;
+        let palette = crate::ui::theme::ThemeChoice::TokyoNight.palette();
+
+        // TrueColor: identity (same bytes back).
+        let full = palette.downgraded(ColorLevel::TrueColor);
+        assert_eq!(full.accent, palette.accent);
+        assert_eq!(full.red, palette.red);
+
+        // Ansi256: no Rgb left; spot-check the sky-blue accent cube entry.
+        let pal256 = palette.downgraded(ColorLevel::Ansi256);
+        assert_eq!(pal256.accent, Color::Indexed(117));
+        for c in [
+            pal256.accent, pal256.blue, pal256.cyan, pal256.green, pal256.yellow,
+            pal256.orange, pal256.red, pal256.purple, pal256.border,
+            pal256.text_bright, pal256.text_muted,
+        ] {
+            assert!(!matches!(c, Color::Rgb(..)), "Ansi256 palette must not contain Rgb, got {:?}", c);
+        }
+
+        // Ansi16: only named colors (or Reset) survive; pure primaries map
+        // onto their names.
+        let pal16 = palette.downgraded(ColorLevel::Ansi16);
+        assert_eq!(pal16.accent, Color::LightCyan);
+        for c in [
+            pal16.accent, pal16.blue, pal16.cyan, pal16.green, pal16.yellow,
+            pal16.orange, pal16.red, pal16.purple, pal16.border,
+            pal16.text_bright, pal16.text_muted,
+        ] {
+            assert!(
+                !matches!(c, Color::Rgb(..) | Color::Indexed(_)),
+                "Ansi16 palette must only contain named colors, got {:?}",
+                c
+            );
+        }
+    }
+
     #[tokio::test]
     async fn test_initial_unselected_and_scroll() {
         let mut app = App::new();

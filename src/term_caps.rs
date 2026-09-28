@@ -12,6 +12,7 @@
 //! the real process environment (parallel tests must never mutate
 //! `std::env`).
 
+use ratatui::style::Color;
 use serde::{Deserialize, Serialize};
 
 /// Color palette level understood by the terminal, ordered from weakest to
@@ -222,6 +223,115 @@ impl TtyMode {
     }
 }
 
+/// Explicit reference table of the 16 base ANSI colors with their RGB
+/// values. These match the definitions used by the theme helpers
+/// (`ThemePalette` utilities map the same names to the same triplets), so a
+/// pure primary like `Rgb(255, 0, 0)` unambiguously resolves to `Red`.
+pub const ANSI16_TABLE: [(Color, (u8, u8, u8)); 16] = [
+    (Color::Black, (0, 0, 0)),
+    (Color::Red, (255, 0, 0)),
+    (Color::Green, (0, 255, 0)),
+    (Color::Yellow, (255, 255, 0)),
+    (Color::Blue, (0, 0, 255)),
+    (Color::Magenta, (255, 0, 255)),
+    (Color::Cyan, (0, 255, 255)),
+    (Color::Gray, (128, 128, 128)),
+    (Color::DarkGray, (64, 64, 64)),
+    (Color::LightRed, (255, 100, 100)),
+    (Color::LightGreen, (100, 255, 100)),
+    (Color::LightYellow, (255, 255, 100)),
+    (Color::LightBlue, (100, 100, 255)),
+    (Color::LightMagenta, (255, 100, 255)),
+    (Color::LightCyan, (100, 255, 255)),
+    (Color::White, (255, 255, 255)),
+];
+
+/// Maps an `Rgb` triplet to the nearest xterm 256-color palette index:
+/// color cube entries 16-231, gray ramp 232-255 for equal components
+/// (pure black → 16, near-white → 231).
+fn rgb_to_ansi256_index(r: u8, g: u8, b: u8) -> u8 {
+    if r == g && g == b {
+        if r < 8 {
+            16
+        } else if r > 248 {
+            231
+        } else {
+            232 + (r - 8) / 10
+        }
+    } else {
+        // Quantize each channel to 0-5 with rounding.
+        let q = |v: u8| ((v as u16 * 5 + 127) / 255) as u8;
+        16 + 36 * q(r) + 6 * q(g) + q(b)
+    }
+}
+
+/// Recovers the RGB triplet behind an xterm 256-color index (standard cube
+/// levels and gray ramp), so `Indexed` colors can join the ANSI16 search.
+fn ansi256_index_to_rgb(idx: u8) -> (u8, u8, u8) {
+    match idx {
+        0..=15 => ANSI16_TABLE[idx as usize].1,
+        16..=231 => {
+            const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+            let i = idx - 16;
+            (
+                LEVELS[(i / 36) as usize],
+                LEVELS[((i % 36) / 6) as usize],
+                LEVELS[(i % 6) as usize],
+            )
+        }
+        _ => {
+            let v = 8 + 10 * (idx - 232);
+            (v, v, v)
+        }
+    }
+}
+
+/// Nearest base ANSI color by euclidean distance in RGB space. Ties resolve
+/// to the earliest table entry (plain colors before bright ones).
+fn nearest_ansi16(r: u8, g: u8, b: u8) -> Color {
+    let mut best = ANSI16_TABLE[0].0;
+    let mut best_dist = u32::MAX;
+    for (color, (tr, tg, tb)) in ANSI16_TABLE {
+        let dr = r as i32 - tr as i32;
+        let dg = g as i32 - tg as i32;
+        let db = b as i32 - tb as i32;
+        let dist = (dr * dr + dg * dg + db * db) as u32;
+        if dist < best_dist {
+            best_dist = dist;
+            best = color;
+        }
+    }
+    best
+}
+
+/// Reduces a single color to what `level` can display:
+///
+/// - `TrueColor`: identity.
+/// - `Ansi256`: `Rgb` becomes the nearest xterm 256-color `Indexed` entry;
+///   named colors and `Reset` pass through untouched.
+/// - `Ansi16`: `Rgb` (or `Indexed`, via its RGB value) becomes the nearest
+///   of the 16 base ANSI colors; named colors and `Reset` pass through.
+/// - `None`: any concrete color becomes `Reset` (honest `NO_COLOR`).
+pub fn downgrade_color(color: Color, level: ColorLevel) -> Color {
+    match level {
+        ColorLevel::TrueColor => color,
+        // Honest NO_COLOR: everything becomes the terminal default.
+        ColorLevel::None => Color::Reset,
+        ColorLevel::Ansi256 => match color {
+            Color::Rgb(r, g, b) => Color::Indexed(rgb_to_ansi256_index(r, g, b)),
+            other => other,
+        },
+        ColorLevel::Ansi16 => match color {
+            Color::Rgb(r, g, b) => nearest_ansi16(r, g, b),
+            Color::Indexed(idx) => {
+                let (r, g, b) = ansi256_index_to_rgb(idx);
+                nearest_ansi16(r, g, b)
+            }
+            other => other,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,5 +475,103 @@ mod tests {
         assert_eq!(TtyMode::Auto.next(), TtyMode::On);
         assert_eq!(TtyMode::On.prev(), TtyMode::Auto);
         assert_eq!(TtyMode::options(), vec!["auto", "on", "off"]);
+    }
+
+    #[test]
+    fn test_downgrade_truecolor_is_identity() {
+        let rgb = Color::Rgb(125, 207, 255);
+        assert_eq!(downgrade_color(rgb, ColorLevel::TrueColor), rgb);
+        assert_eq!(
+            downgrade_color(Color::Indexed(117), ColorLevel::TrueColor),
+            Color::Indexed(117)
+        );
+        assert_eq!(
+            downgrade_color(Color::Red, ColorLevel::TrueColor),
+            Color::Red
+        );
+    }
+
+    #[test]
+    fn test_downgrade_ansi256_maps_rgb_to_indexed() {
+        // Pure xterm primaries land on exact cube entries.
+        assert_eq!(
+            downgrade_color(Color::Rgb(255, 0, 0), ColorLevel::Ansi256),
+            Color::Indexed(196)
+        );
+        // TokyoNight accent: cube (2, 4, 5) -> 16 + 72 + 24 + 5.
+        assert_eq!(
+            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::Ansi256),
+            Color::Indexed(117)
+        );
+        // Equal components take the gray ramp; pure black takes entry 16.
+        assert_eq!(
+            downgrade_color(Color::Rgb(128, 128, 128), ColorLevel::Ansi256),
+            Color::Indexed(244)
+        );
+        assert_eq!(
+            downgrade_color(Color::Rgb(0, 0, 0), ColorLevel::Ansi256),
+            Color::Indexed(16)
+        );
+        // Named colors and Reset pass through.
+        assert_eq!(downgrade_color(Color::Red, ColorLevel::Ansi256), Color::Red);
+        assert_eq!(
+            downgrade_color(Color::Indexed(7), ColorLevel::Ansi256),
+            Color::Indexed(7)
+        );
+        assert_eq!(
+            downgrade_color(Color::Reset, ColorLevel::Ansi256),
+            Color::Reset
+        );
+    }
+
+    #[test]
+    fn test_downgrade_ansi16_maps_to_named_colors() {
+        assert_eq!(
+            downgrade_color(Color::Rgb(0, 0, 0), ColorLevel::Ansi16),
+            Color::Black
+        );
+        assert_eq!(
+            downgrade_color(Color::Rgb(255, 255, 255), ColorLevel::Ansi16),
+            Color::White
+        );
+        assert_eq!(
+            downgrade_color(Color::Rgb(255, 0, 0), ColorLevel::Ansi16),
+            Color::Red
+        );
+        assert_eq!(
+            downgrade_color(Color::Rgb(0, 255, 0), ColorLevel::Ansi16),
+            Color::Green
+        );
+        // Indexed entries rejoin the search through their RGB value.
+        assert_eq!(
+            downgrade_color(Color::Indexed(196), ColorLevel::Ansi16),
+            Color::Red
+        );
+        // Named colors and Reset pass through.
+        assert_eq!(
+            downgrade_color(Color::LightCyan, ColorLevel::Ansi16),
+            Color::LightCyan
+        );
+        assert_eq!(
+            downgrade_color(Color::Reset, ColorLevel::Ansi16),
+            Color::Reset
+        );
+    }
+
+    #[test]
+    fn test_downgrade_none_resets_everything() {
+        assert_eq!(
+            downgrade_color(Color::Rgb(125, 207, 255), ColorLevel::None),
+            Color::Reset
+        );
+        assert_eq!(downgrade_color(Color::Red, ColorLevel::None), Color::Reset);
+        assert_eq!(
+            downgrade_color(Color::Indexed(117), ColorLevel::None),
+            Color::Reset
+        );
+        assert_eq!(
+            downgrade_color(Color::Reset, ColorLevel::None),
+            Color::Reset
+        );
     }
 }
