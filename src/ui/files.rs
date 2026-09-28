@@ -101,7 +101,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                 let is_selected = !is_dragging && actual_i == app.file_selected_idx;
 
                 let cursor = if is_selected {
-                    Span::styled("▶ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                    Span::styled(format!("{} ", app.glyphs().bullet_active), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
                 } else {
                     Span::styled("  ", Style::default())
                 };
@@ -202,6 +202,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
         start_idx,
         visible_height,
         theme,
+        &app.glyphs(),
         hitboxes,
         crate::app::ScrollbarTarget::Files,
     );

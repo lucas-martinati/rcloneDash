@@ -77,6 +77,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "confirm", theme.green, Color::White));
         spans
     } else if let Some(setting) = app.visible_setting_at(app.settings_tab, app.settings_selected_idx) {
+        let g = app.term_caps.glyphs();
         match setting.kind() {
             config::SettingKind::TextInput => {
                 crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "edit", theme.red, Color::White)
@@ -90,17 +91,18 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             }
             config::SettingKind::Cycle => {
                 vec![
-                    Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(g.arrow_left, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled(" change ", Style::default().fg(Color::White)),
-                    Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(g.arrow_right, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                 ]
             }
         }
     } else {
+        let g = app.term_caps.glyphs();
         vec![
-            Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(g.arrow_left, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
             Span::styled(" change ", Style::default().fg(Color::White)),
-            Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+            Span::styled(g.arrow_right, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         ]
     };
 
@@ -141,9 +143,10 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     };
 
     // 1. Render tab bar row at top of inner area: tab→   [rclone]    2ui (btop++ style)
+    let g = app.term_caps.glyphs();
     let mut tab_spans = vec![
         Span::raw(" "),
-        Span::styled("tab→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("tab{}", g.arrow_right), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
         Span::raw("   "),
     ];
     let mut tab_x = inner.x + 8;
@@ -154,7 +157,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
         }
         let is_active = i == app.settings_tab;
         let short_name = cat.short_name();
-        let num = superscript_digit(i + 1);
+        let num = superscript_digit(app.term_caps.ascii, i + 1);
         let tab_len = if is_active {
             tab_spans.push(Span::styled("[", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
             tab_spans.push(Span::styled(num, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
@@ -208,10 +211,15 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     let right_area = cols[2];
 
     // 3. Render horizontal divider line: ├──────────┬──────────┤ (btop++ style)
-    let (h_char, v_char, cross_top, cross_bot, cross_left, cross_right) = match app.config.border_style {
-        config::BorderStyleChoice::Double => ("═", "║", "╦", "╩", "╠", "╣"),
-        config::BorderStyleChoice::Thick => ("━", "┃", "┳", "┻", "┣", "┫"),
-        _ => ("─", "│", "┬", "┴", "├", "┤"),
+    // On ASCII consoles the double/thick junctions do not exist: plain `-`/`|`/`+`.
+    let (h_char, v_char, cross_top, cross_bot, cross_left, cross_right): (&str, &str, &str, &str, &str, &str) = if app.term_caps.ascii {
+        (g.hline, g.vline, g.tee_top, g.tee_bottom, g.tee_left, g.tee_right)
+    } else {
+        match app.config.border_style {
+            config::BorderStyleChoice::Double => ("═", "║", "╦", "╩", "╠", "╣"),
+            config::BorderStyleChoice::Thick => ("━", "┃", "┳", "┻", "┣", "┫"),
+            _ => ("─", "│", "┬", "┴", "├", "┤"),
+        }
     };
 
     // Left junction on outer box border
@@ -327,11 +335,11 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 match setting_kind {
                     config::SettingKind::Cycle => {
                         Line::from(vec![
-                            Span::styled("←", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(g.arrow_left, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                             Span::styled(" ", Style::default().bg(highlight_bg)),
                             Span::styled(val_centered, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                             Span::styled(" ", Style::default().bg(highlight_bg)),
-                            Span::styled("→", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(g.arrow_right, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                         ])
                     }
                     config::SettingKind::TextInput => {
@@ -343,9 +351,9 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                     }
                     config::SettingKind::Action => {
                         Line::from(vec![
-                            Span::styled("↵ ", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(format!("{} ", g.enter), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                             Span::styled(val_centered, Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
-                            Span::styled(" ↵", Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
+                            Span::styled(format!(" {}", g.enter), Style::default().fg(Color::White).bg(highlight_bg).add_modifier(Modifier::BOLD)),
                         ])
                     }
                 }
@@ -398,16 +406,16 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                     setting.desc_intro(),
                     extra_hint,
                     header,
-                    config::format_setting_options_list(&choices, &current)
+                    config::format_setting_options_list_with(&choices, &current, &g)
                 ),
             )
         }
         Some(SettingId::LocalDirectory) => (
             SettingId::LocalDirectory.desc_title(),
             format!(
-                "{}\nOpen the file explorer ([{}]) to inspect its tree structure.\n\nPress [{}] to edit the path, then [{}] to confirm or [{}] to cancel.\n\nCurrent path:\n  ▶ {} (active)",
+                "{}\nOpen the file explorer ([{}]) to inspect its tree structure.\n\nPress [{}] to edit the path, then [{}] to confirm or [{}] to cancel.\n\nCurrent path:\n  {} {} (active)",
                 SettingId::LocalDirectory.desc_intro(),
-                k_files, k_enter, k_enter, k_esc, app.config.local_dir
+                k_files, k_enter, k_enter, k_esc, g.bullet_active, app.config.local_dir
             ),
         ),
         Some(SettingId::RemoteStorage) => {
@@ -416,14 +424,14 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 "No remotes found in rclone.conf — run `rclone config` to create one.".to_string()
             } else {
                 let list: Vec<String> = remotes.iter().take(8).map(|r| r.human_label()).collect();
-                format!("Detected remotes:\n{}", config::format_setting_options_list(&list, &app.config.remote))
+                format!("Detected remotes:\n{}", config::format_setting_options_list_with(&list, &app.config.remote, &g))
             };
             (
                 SettingId::RemoteStorage.desc_title(),
                 format!(
-                    "{}\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.\n\nCurrent remote:\n  ▶ {} (active)\n\n{}",
+                    "{}\n\nPress [{}] to edit the name, then [{}] to confirm or [{}] to cancel.\n\nCurrent remote:\n  {} {} (active)\n\n{}",
                     SettingId::RemoteStorage.desc_intro(),
-                    k_enter, k_enter, k_esc, app.remote_display(), remotes_hint
+                    k_enter, k_enter, k_esc, g.bullet_active, app.remote_display(), remotes_hint
                 ),
             )
         }
@@ -449,9 +457,9 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             (
                 SettingId::GoogleClientId.desc_title(),
                 format!(
-                    "{}\n\nPress [{}] to edit, then [{}] to confirm or [{}] to cancel.\nPress [Ctrl+V] to paste from clipboard.\n\nCurrent Client ID:\n  ▶ {}",
+                    "{}\n\nPress [{}] to edit, then [{}] to confirm or [{}] to cancel.\nPress [Ctrl+V] to paste from clipboard.\n\nCurrent Client ID:\n  {} {}",
                     SettingId::GoogleClientId.desc_intro(),
-                    k_enter, k_enter, k_esc, cur
+                    k_enter, k_enter, k_esc, g.bullet_active, cur
                 ),
             )
         }
@@ -461,9 +469,9 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
             (
                 SettingId::GoogleClientSecret.desc_title(),
                 format!(
-                    "{}\n\nPress [{}] to edit, then [{}] to confirm or [{}] to cancel.\nPress [Ctrl+V] to paste from clipboard.\n\nCurrent Client Secret:\n  ▶ {}",
+                    "{}\n\nPress [{}] to edit, then [{}] to confirm or [{}] to cancel.\nPress [Ctrl+V] to paste from clipboard.\n\nCurrent Client Secret:\n  {} {}",
                     SettingId::GoogleClientSecret.desc_intro(),
-                    k_enter, k_enter, k_esc, cur_display
+                    k_enter, k_enter, k_esc, g.bullet_active, cur_display
                 ),
             )
         }
@@ -491,8 +499,8 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     for para in desc_body.split('\n') {
         if para.is_empty() {
             desc_lines.push(Line::from(""));
-        } else if para.starts_with("  ▶ ") || para.starts_with("  • ") {
-            desc_lines.push(parse_option_line(para, theme));
+        } else if para.starts_with("  ▶ ") || para.starts_with("  • ") || para.starts_with("  > ") || para.starts_with("  * ") {
+            desc_lines.push(parse_option_line(para, theme, &g));
         } else {
             let mut spans = Vec::new();
             let mut rem = para;
@@ -519,7 +527,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
     // Smart auto-scroll if display height is heavily constrained
     let scroll_y = if desc_lines.len() > desc_inner.height as usize {
         let active_line_idx = desc_lines.iter().position(|l| {
-            l.spans.iter().any(|s| s.content.contains('▶') || s.content.contains("(active)"))
+            l.spans.iter().any(|s| s.content.contains("(active)"))
         }).unwrap_or(0);
 
         let max_scroll = (desc_lines.len() - desc_inner.height as usize) as u16;
@@ -537,20 +545,22 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
 }
 
 /// Parses and styles an options line (1 or multiple columns) preserving alignment and colors.
-fn parse_option_line(line: &str, theme: &ThemePalette) -> Line<'static> {
+fn parse_option_line(line: &str, theme: &ThemePalette, glyphs: &crate::term_caps::Glyphs) -> Line<'static> {
     let mut spans = Vec::new();
     let mut rem = line;
+    let active_pat = format!("{} ", glyphs.bullet_active);
+    let idle_pat = format!("{} ", glyphs.bullet_idle);
 
     while !rem.is_empty() {
-        let next_bullet = rem.match_indices("▶ ")
-            .chain(rem.match_indices("• "))
+        let next_bullet = rem.match_indices(active_pat.as_str())
+            .chain(rem.match_indices(idle_pat.as_str()))
             .min_by_key(|&(idx, _)| idx);
 
         if let Some((pos, bullet_str)) = next_bullet {
             if pos > 0 {
                 spans.push(Span::raw(rem[..pos].to_string()));
             }
-            let is_active = bullet_str == "▶ ";
+            let is_active = bullet_str == active_pat;
             let bullet_style = if is_active {
                 Style::default().fg(theme.green).add_modifier(Modifier::BOLD)
             } else {
@@ -560,8 +570,8 @@ fn parse_option_line(line: &str, theme: &ThemePalette) -> Line<'static> {
 
             rem = &rem[pos + bullet_str.len()..];
 
-            let next_end = rem.match_indices("▶ ")
-                .chain(rem.match_indices("• "))
+            let next_end = rem.match_indices(active_pat.as_str())
+                .chain(rem.match_indices(idle_pat.as_str()))
                 .min_by_key(|&(idx, _)| idx)
                 .map(|(idx, _)| idx)
                 .unwrap_or(rem.len());
@@ -656,19 +666,8 @@ pub fn format_scrolled_input_with_cursor(buf: &str, cursor_pos: usize, max_w: us
     }
 }
 
-fn superscript_digit(n: usize) -> &'static str {
-    match n {
-        1 => "¹",
-        2 => "²",
-        3 => "³",
-        4 => "⁴",
-        5 => "⁵",
-        6 => "⁶",
-        7 => "⁷",
-        8 => "⁸",
-        9 => "⁹",
-        _ => "",
-    }
+fn superscript_digit(ascii: bool, n: usize) -> &'static str {
+    crate::term_caps::Glyphs::tab_digit(ascii, n)
 }
 
 

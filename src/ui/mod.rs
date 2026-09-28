@@ -24,6 +24,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::term_caps::Glyphs;
 use dashboard::render_dashboard;
 use footer::render_footer;
 use popups::render_popups;
@@ -107,6 +108,7 @@ pub fn render_scrollbar_custom(
     pos: usize,
     visible: usize,
     theme: &crate::ui::theme::ThemePalette,
+    glyphs: &Glyphs,
     hitboxes: &mut Vec<crate::app::Hitbox>,
     target: crate::app::ScrollbarTarget,
 ) {
@@ -117,14 +119,14 @@ pub fn render_scrollbar_custom(
     let buf = f.buffer_mut();
 
     // Up arrow
-    buf.set_string(scroll_x, top_y, "↑", Style::default().fg(theme.text_muted));
+    buf.set_string(scroll_x, top_y, glyphs.arrow_up, Style::default().fg(theme.text_muted));
     hitboxes.push(crate::app::Hitbox {
         rect: Rect { x: scroll_x, y: top_y, width: 1, height: 1 },
         action: crate::app::HitAction::ScrollbarArrowUp(target),
     });
 
     // Down arrow
-    buf.set_string(scroll_x, bot_y, "↓", Style::default().fg(theme.text_muted));
+    buf.set_string(scroll_x, bot_y, glyphs.arrow_down, Style::default().fg(theme.text_muted));
     hitboxes.push(crate::app::Hitbox {
         rect: Rect { x: scroll_x, y: bot_y, width: 1, height: 1 },
         action: crate::app::HitAction::ScrollbarArrowDown(target),
@@ -138,7 +140,7 @@ pub fn render_scrollbar_custom(
     let track_color = crate::ui::theme::color_with_opacity(theme.separator, 0.20, None);
     let track_style = Style::default().fg(track_color);
     for y in (top_y + 1)..bot_y {
-        buf.set_string(scroll_x, y, "│", track_style);
+        buf.set_string(scroll_x, y, glyphs.vline, track_style);
     }
 
     // Hitbox for the entire track (click or drag)
@@ -173,7 +175,7 @@ pub fn render_scrollbar_custom(
             } else {
                 ratatui::style::Color::Rgb(200, 205, 215)
             };
-            buf.set_string(scroll_x, y, "█", Style::default().fg(color));
+            buf.set_string(scroll_x, y, glyphs.bar_fill, Style::default().fg(color));
         }
     }
 }
@@ -188,6 +190,7 @@ pub fn render_scrollbar(
     pos: usize,
     visible: usize,
     theme: &crate::ui::theme::ThemePalette,
+    glyphs: &Glyphs,
     hitboxes: &mut Vec<crate::app::Hitbox>,
     target: crate::app::ScrollbarTarget,
 ) {
@@ -197,7 +200,7 @@ pub fn render_scrollbar(
     let scroll_x = area.x + area.width.saturating_sub(2);
     let top_y = area.y + 1;
     let bot_y = area.y + area.height.saturating_sub(2);
-    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
+    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, glyphs, hitboxes, target);
 }
 
 /// Scrollbar integrated into an inner pane (without own border, e.g. left pane in filters or explorer)
@@ -210,6 +213,7 @@ pub fn render_scrollbar_pane(
     pos: usize,
     visible: usize,
     theme: &crate::ui::theme::ThemePalette,
+    glyphs: &Glyphs,
     hitboxes: &mut Vec<crate::app::Hitbox>,
     target: crate::app::ScrollbarTarget,
 ) {
@@ -219,5 +223,5 @@ pub fn render_scrollbar_pane(
     let scroll_x = pane.x + pane.width.saturating_sub(1);
     let top_y = pane.y;
     let bot_y = pane.y + pane.height.saturating_sub(1);
-    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, hitboxes, target);
+    render_scrollbar_custom(f, scroll_x, top_y, bot_y, total, pos, visible, theme, glyphs, hitboxes, target);
 }

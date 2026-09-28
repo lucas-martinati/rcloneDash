@@ -202,9 +202,9 @@ pub fn render_disks_cloud_box(
         compact_dir.push(Span::styled(" ", Style::default()));
         let mut line3_compact = compact_dir;
         line3_compact.push(Span::styled(format!("({})", count_str), Style::default().fg(theme.text_muted)));
-        line3_compact.push(Span::styled(" │ Safety: ", Style::default().fg(theme.text_muted)));
+        line3_compact.push(Span::styled(format!(" {vline} Safety: ", vline = app.glyphs().vline), Style::default().fg(theme.text_muted)));
         line3_compact.push(Span::styled(format!("{} ", cloud_net), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
-        line3_compact.push(Span::styled("│ bw: ", Style::default().fg(theme.text_muted)));
+        line3_compact.push(Span::styled(format!("{vline} bw: ", vline = app.glyphs().vline), Style::default().fg(theme.text_muted)));
         line3_compact.push(Span::styled(bwlimit_str, Style::default().fg(theme.text_bright)));
         lines.push(Line::from(line3_compact));
     }
@@ -238,6 +238,7 @@ pub fn render_metrics_box(
     });
 
     let bg = app.border_glyphs();
+    let vline = app.glyphs().vline;
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_type(app.border_type())
@@ -313,9 +314,9 @@ pub fn render_metrics_box(
     let line1_spans = vec![
         Span::styled("Status:   ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{} {} ", status_dot, status_label), Style::default().fg(status_col).add_modifier(Modifier::BOLD)),
-        Span::styled("│ Last: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{vline} Last: "), Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", last_sync_str), Style::default().fg(theme.text_bright)),
-        Span::styled("│ Next: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{vline} Next: "), Style::default().fg(theme.text_muted)),
         Span::styled(next_sync_str, Style::default().fg(theme.text_bright)),
     ];
 
@@ -366,7 +367,7 @@ pub fn render_metrics_box(
         let mut line2_compact = vec![
             Span::styled("Today: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{} ok ", ok_today), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("│ Rel: ", Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{vline} Rel: "), Style::default().fg(theme.text_muted).add_modifier(Modifier::BOLD)),
         ];
         line2_compact.extend(rel_bar);
         line2_compact.push(Span::styled(

@@ -187,8 +187,8 @@ fn render_step_rclone(
         } else {
             Style::default().fg(theme.text_bright).bg(theme.border).add_modifier(Modifier::BOLD)
         };
-        let btn_text = " [ Next: Choose Remote → (Enter) ] ";
-        btn_spans.push(Span::styled(btn_text, style));
+        let btn_text = format!(" [ Next: Choose Remote {} (Enter) ] ", app.glyphs().arrow_right);
+        btn_spans.push(Span::styled(btn_text.clone(), style));
 
         hitboxes.push(Hitbox {
             rect: Rect {
@@ -335,11 +335,11 @@ fn render_step_remote(
         Style::default().fg(theme.text_muted).bg(theme.border)
     };
     let wants_google = state.wants_google_step();
-    let btn_cont = if wants_google { " [ Next: Google API → (Enter) ] " } else { " [ Save & Finish (Enter) ] " };
+    let btn_cont = if wants_google { format!(" [ Next: Google API {} (Enter) ] ", app.glyphs().arrow_right) } else { " [ Save & Finish (Enter) ] ".to_string() };
     let btn_skip = " [ Skip (Esc) ] ";
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(btn_cont, cont_style),
+            Span::styled(btn_cont.clone(), cont_style),
             Span::raw("  "),
             Span::styled(btn_skip, skip_style),
         ])),
@@ -376,7 +376,7 @@ fn render_step_remote(
             Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD),
         ))];
         for r in remotes.iter().take(5) {
-            let marker = if r.display_name() == state.remote_input { "▶" } else { "•" };
+            let marker = if r.display_name() == state.remote_input { app.glyphs().bullet_active } else { app.glyphs().bullet_idle };
             let col = if r.is_drive() { theme.green } else { theme.text_bright };
             v.push(Line::from(vec![
                 Span::styled(format!("  {} ", marker), Style::default().fg(col).add_modifier(Modifier::BOLD)),

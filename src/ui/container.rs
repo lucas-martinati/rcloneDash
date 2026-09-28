@@ -249,9 +249,10 @@ pub fn render_modal_container<'a>(
             spans.push(Span::styled(bg.bot_left, Style::default().fg(border_col)));
             let up_col = if nav.up_active { theme.red } else { theme.text_muted };
             let down_col = if nav.down_active { theme.red } else { theme.text_muted };
-            spans.push(Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)));
+            let glyphs = app.glyphs();
+            spans.push(Span::styled(glyphs.arrow_up, Style::default().fg(up_col).add_modifier(Modifier::BOLD)));
             spans.push(Span::styled(format!(" {} ", nav.label), Style::default().fg(Color::White)));
-            spans.push(Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)));
+            spans.push(Span::styled(glyphs.arrow_down, Style::default().fg(down_col).add_modifier(Modifier::BOLD)));
         }
 
         if let Some(actions) = cfg.action_shortcuts {

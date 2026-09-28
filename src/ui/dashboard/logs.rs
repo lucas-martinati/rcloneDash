@@ -70,11 +70,12 @@ pub fn render_logs_panel(
     };
 
     let bg = app.border_glyphs();
+    let glyphs = app.glyphs();
     let left_bottom = Line::from(vec![
         Span::styled(bg.bot_left, Style::default().fg(border_color)),
-        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(glyphs.arrow_up, Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" scroll ", Style::default().fg(Color::White)),
-        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
+        Span::styled(glyphs.arrow_down, Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled(bg.bot_right, Style::default().fg(border_color)),
     ]);
     let right_bottom = Line::from(vec![
@@ -111,7 +112,7 @@ pub fn render_logs_panel(
         },
         action: HitAction::LogFilterPrev,
     });
-    title_spans.push(Span::styled("←", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    title_spans.push(Span::styled(glyphs.arrow_left, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     cur_hit_x += 1;
 
     // Filter label: e.g. " All " / " Files " / " Problems "
@@ -142,7 +143,7 @@ pub fn render_logs_panel(
         },
         action: HitAction::LogFilterNext,
     });
-    title_spans.push(Span::styled("→", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
+    title_spans.push(Span::styled(glyphs.arrow_right, Style::default().fg(theme.red).add_modifier(Modifier::BOLD)));
     cur_hit_x += 1;
 
     title_spans.push(Span::styled(format!("{}{}", bg.top_right, bg.top_left), Style::default().fg(border_color)));
@@ -208,6 +209,7 @@ pub fn render_logs_panel(
         current_pos,
         visible_height,
         theme,
+        &app.glyphs(),
         hitboxes,
         crate::app::ScrollbarTarget::Logs,
     );

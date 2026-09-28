@@ -55,12 +55,15 @@ impl TermCaps {
         }
     }
 
-    /// Non-terminal pipe: no colors, no animation, ASCII glyphs.
+    /// Non-terminal pipe: no colors, no animation. Glyphs stay Unicode: a
+    /// pipe preserves UTF-8 bytes, the ASCII fallback is only for
+    /// charset-limited terminals (Linux console, non-UTF-8 locale), never
+    /// for pipes.
     pub fn plain() -> Self {
         Self {
             color: ColorLevel::None,
             live: false,
-            ascii: true,
+            ascii: false,
         }
     }
 
@@ -332,6 +335,165 @@ pub fn downgrade_color(color: Color, level: ColorLevel) -> Color {
     }
 }
 
+/// Centralized glyph set: every Unicode character drawn by the updater or
+/// the dashboard goes through here, so TTY mode can swap in pure-ASCII
+/// fallbacks without touching call sites. The Unicode variants are exactly
+/// the characters historically used, hence no visual change by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Glyphs {
+    pub bar_fill: &'static str,
+    pub bar_empty: &'static str,
+    pub diamond: &'static str,
+    pub bullet_active: &'static str,
+    pub bullet_idle: &'static str,
+    pub check: &'static str,
+    pub cross: &'static str,
+    pub spark: &'static str,
+    pub arrow_left: &'static str,
+    pub arrow_right: &'static str,
+    pub arrow_up: &'static str,
+    pub arrow_down: &'static str,
+    pub enter: &'static str,
+    pub vline: &'static str,
+    pub hline: &'static str,
+    pub corner_tl: &'static str,
+    pub corner_bl: &'static str,
+    pub tee_top: &'static str,
+    pub tee_bottom: &'static str,
+    pub tee_left: &'static str,
+    pub tee_right: &'static str,
+}
+
+impl Glyphs {
+    pub fn new(ascii: bool) -> Self {
+        if ascii {
+            Self::ascii()
+        } else {
+            Self::unicode()
+        }
+    }
+
+    pub fn unicode() -> Self {
+        Self {
+            bar_fill: "█",
+            bar_empty: "░",
+            diamond: "◇",
+            bullet_active: "▶",
+            bullet_idle: "•",
+            check: "✔",
+            cross: "✖",
+            spark: "✨",
+            arrow_left: "←",
+            arrow_right: "→",
+            arrow_up: "↑",
+            arrow_down: "↓",
+            enter: "↵",
+            vline: "│",
+            hline: "─",
+            corner_tl: "┌",
+            corner_bl: "└",
+            tee_top: "┬",
+            tee_bottom: "┴",
+            tee_left: "├",
+            tee_right: "┤",
+        }
+    }
+
+    /// Pure-ASCII fallbacks (`is_ascii()` holds for every field). Display
+    /// widths match the Unicode variants one-for-one, except `spark`: `✨`
+    /// is a double-width emoji only ever used at end of line, where
+    /// alignment does not matter.
+    pub fn ascii() -> Self {
+        Self {
+            bar_fill: "#",
+            bar_empty: "-",
+            diamond: "o",
+            bullet_active: ">",
+            bullet_idle: "*",
+            check: "v",
+            cross: "x",
+            spark: "*",
+            arrow_left: "<",
+            arrow_right: ">",
+            arrow_up: "^",
+            arrow_down: "v",
+            enter: ">",
+            vline: "|",
+            hline: "-",
+            corner_tl: "+",
+            corner_bl: "+",
+            tee_top: "+",
+            tee_bottom: "+",
+            tee_left: "+",
+            tee_right: "+",
+        }
+    }
+
+    /// Tab index digit (`¹`/`²` in the settings tab bar).
+    pub fn tab_digit(ascii: bool, n: usize) -> &'static str {
+        if ascii {
+            match n {
+                1 => "1",
+                2 => "2",
+                3 => "3",
+                4 => "4",
+                5 => "5",
+                6 => "6",
+                7 => "7",
+                8 => "8",
+                _ => "9",
+            }
+        } else {
+            match n {
+                1 => "¹",
+                2 => "²",
+                3 => "³",
+                4 => "⁴",
+                5 => "⁵",
+                6 => "⁶",
+                7 => "⁷",
+                8 => "⁸",
+                _ => "⁹",
+            }
+        }
+    }
+
+    /// All drawable fields, for exhaustive tests.
+    pub fn all_fields(&self) -> [&'static str; 21] {
+        [
+            self.bar_fill,
+            self.bar_empty,
+            self.diamond,
+            self.bullet_active,
+            self.bullet_idle,
+            self.check,
+            self.cross,
+            self.spark,
+            self.arrow_left,
+            self.arrow_right,
+            self.arrow_up,
+            self.arrow_down,
+            self.enter,
+            self.vline,
+            self.hline,
+            self.corner_tl,
+            self.corner_bl,
+            self.tee_top,
+            self.tee_bottom,
+            self.tee_left,
+            self.tee_right,
+        ]
+    }
+}
+
+impl TermCaps {
+    /// Glyph set matching these capabilities (ASCII on Linux console /
+    /// non-UTF-8 locale).
+    pub fn glyphs(&self) -> Glyphs {
+        Glyphs::new(self.ascii)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -557,7 +719,6 @@ mod tests {
             Color::Reset
         );
     }
-
     #[test]
     fn test_downgrade_none_resets_everything() {
         assert_eq!(
@@ -573,5 +734,81 @@ mod tests {
             downgrade_color(Color::Reset, ColorLevel::None),
             Color::Reset
         );
+    }
+
+    #[test]
+    fn test_glyphs_unicode_keeps_historical_characters() {
+        // No visual change by default: the Unicode set must be exactly the
+        // characters the UI has always drawn.
+        let g = Glyphs::unicode();
+        assert_eq!(g.bar_fill, "█");
+        assert_eq!(g.bar_empty, "░");
+        assert_eq!(g.diamond, "◇");
+        assert_eq!(g.bullet_active, "▶");
+        assert_eq!(g.bullet_idle, "•");
+        assert_eq!(g.check, "✔");
+        assert_eq!(g.cross, "✖");
+        assert_eq!(g.spark, "✨");
+        assert_eq!(g.arrow_left, "←");
+        assert_eq!(g.arrow_right, "→");
+        assert_eq!(g.arrow_up, "↑");
+        assert_eq!(g.arrow_down, "↓");
+        assert_eq!(g.enter, "↵");
+        assert_eq!(g.vline, "│");
+        assert_eq!(g.hline, "─");
+        assert_eq!(g.corner_tl, "┌");
+        assert_eq!(g.corner_bl, "└");
+    }
+
+    #[test]
+    fn test_glyphs_ascii_is_pure_ascii() {
+        let g = Glyphs::ascii();
+        for field in g.all_fields() {
+            assert!(!field.is_empty(), "ASCII glyph must not be empty");
+            assert!(
+                field.is_ascii(),
+                "ASCII fallback must be pure ASCII, got {:?}",
+                field
+            );
+        }
+        assert_eq!(Glyphs::tab_digit(true, 1), "1");
+        assert_eq!(Glyphs::tab_digit(true, 2), "2");
+        assert!(Glyphs::tab_digit(true, 2).is_ascii());
+    }
+
+    #[test]
+    fn test_glyphs_ascii_keeps_display_width() {
+        use unicode_width::UnicodeWidthStr;
+        let uni = Glyphs::unicode();
+        let asc = Glyphs::ascii();
+        // Alignment-critical pairs: bars, markers, arrows, lines, corners.
+        // (`spark` ✨ is double-width but only ever ends a line.)
+        for (u, a) in uni
+            .all_fields()
+            .iter()
+            .zip(asc.all_fields().iter())
+            .filter(|(u, _)| **u != "✨")
+        {
+            assert_eq!(
+                u.width(),
+                a.width(),
+                "ASCII fallback {:?} must keep display width of {:?}",
+                a,
+                u
+            );
+        }
+        assert_eq!(Glyphs::tab_digit(false, 1).width(), 1);
+        assert_eq!(Glyphs::tab_digit(true, 1).width(), 1);
+    }
+
+    #[test]
+    fn test_term_caps_resolve_ascii_glyphs() {
+        let env = env_of(&[("TERM", "linux")]);
+        let caps = TermCaps::detect_from(&env, true);
+        assert!(caps.ascii);
+        assert_eq!(caps.glyphs(), Glyphs::ascii());
+        let env = env_of(&[("TERM", "xterm-256color"), ("LANG", "en_US.UTF-8")]);
+        let caps = TermCaps::detect_from(&env, true);
+        assert_eq!(caps.glyphs(), Glyphs::unicode());
     }
 }

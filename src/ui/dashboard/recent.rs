@@ -72,7 +72,7 @@ pub fn render_recent_files_panel(
                 let path_spans = format_path_spans(path, is_selected, app.ctrl_mode, theme, None);
 
                 if is_selected {
-                    let cursor = Span::styled("▶ ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+                    let cursor = Span::styled(format!("{} ", app.glyphs().bullet_active), Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                     let badge = Span::styled(format!("{} ", badge_text), Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                     let size_span = Span::styled(size, Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                     let time_span = Span::styled(time, Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
@@ -135,11 +135,12 @@ pub fn render_recent_files_panel(
     };
 
     let bg = app.border_glyphs();
+    let glyphs = app.glyphs();
     let mut bottom_spans = vec![
         Span::styled(bg.bot_left, Style::default().fg(border_color)),
-        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(glyphs.arrow_up, Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" select ", Style::default().fg(Color::White)),
-        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
+        Span::styled(glyphs.arrow_down, Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
     ];
     bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "open", key_col, opn_col));
@@ -171,7 +172,7 @@ pub fn render_recent_files_panel(
     let filter_w = if app.is_filtering_recent {
         top_spans.push(Span::styled("filter: ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
         top_spans.push(Span::styled(&app.recent_filter, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)));
-        top_spans.push(Span::styled("█", Style::default().fg(theme.highlight)));
+        top_spans.push(Span::styled(glyphs.bar_fill, Style::default().fg(theme.highlight)));
         8 + app.recent_filter.chars().count() as u16 + 1
     } else if !app.recent_filter.is_empty() {
         top_spans.push(Span::styled("filter: ", Style::default().fg(theme.text_muted)));
@@ -248,6 +249,7 @@ pub fn render_recent_files_panel(
         offset,
         max_show,
         theme,
+        &app.glyphs(),
         hitboxes,
         crate::app::ScrollbarTarget::RecentFiles,
     );

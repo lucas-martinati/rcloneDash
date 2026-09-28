@@ -21,6 +21,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
     };
 
     let bg = app.border_glyphs();
+    let vline = app.glyphs().vline;
     let title_line = Line::from(vec![
         Span::styled(bg.top_left, Style::default().fg(theme.accent)),
         Span::styled("synchronization in progress", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
@@ -71,7 +72,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
                 };
                 crate::ui::theme::color_with_opacity(theme.border, arrow_opacity, None)
             };
-            stepper_spans.push(Span::styled(" → ", Style::default().fg(arrow_color)));
+            stepper_spans.push(Span::styled(format!(" {} ", app.glyphs().arrow_right), Style::default().fg(arrow_color)));
         }
         let (icon, style) = if i < app.live.phase_index {
             ("✓", Style::default().fg(theme.green).add_modifier(Modifier::BOLD))
@@ -104,11 +105,11 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         vec![
             Span::styled("Phase: ", Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", phase_name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::styled("│ Checks: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Checks: "), Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", checks), Style::default().fg(theme.text_bright)),
-            Span::styled("│ Progress: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Progress: "), Style::default().fg(theme.text_muted)),
             Span::styled("— ", Style::default().fg(theme.text_muted)),
-            Span::styled("│ Status: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Status: "), Style::default().fg(theme.text_muted)),
             Span::styled(status_text, Style::default().fg(theme.yellow)),
         ]
     } else if app.live.phase_index == 3 {
@@ -121,11 +122,11 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         let mut spans = vec![
             Span::styled("Transferred: ", Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} / {} ", done, total), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-            Span::styled("│ Speed: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Speed: "), Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", speed), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("│ Files: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Files: "), Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", files), Style::default().fg(theme.text_bright)),
-            Span::styled("│ Progress: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Progress: "), Style::default().fg(theme.text_muted)),
             Span::styled(pct_str, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         ];
         if !app.live.transfer.eta.is_empty() {
@@ -140,13 +141,13 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
         vec![
             Span::styled("Phase: ", Style::default().fg(theme.text_muted)),
             Span::styled("Updating Listings ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::styled("│ Files: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Files: "), Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", files), Style::default().fg(theme.text_bright)),
-            Span::styled("│ Transferred: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Transferred: "), Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", done), Style::default().fg(theme.text_bright)),
-            Span::styled("│ Progress: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Progress: "), Style::default().fg(theme.text_muted)),
             Span::styled(format!("{} ", pct_str), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
-            Span::styled("│ Status: ", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{vline} Status: "), Style::default().fg(theme.text_muted)),
             Span::styled("Finalizing and saving listings...", Style::default().fg(theme.yellow)),
         ]
     };

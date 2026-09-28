@@ -358,7 +358,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 ]
             } else if summary.has_errors {
                 vec![
-                    Span::styled("✖ ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", app.glyphs().cross), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled("Errors detected during simulation ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled("(see details in execution logs below)", Style::default().fg(theme.text_muted)),
                 ]
@@ -491,6 +491,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             actual_scroll,
             actual_visible_height,
             theme,
+            &app.glyphs(),
             hitboxes,
             crate::app::ScrollbarTarget::DryRun,
         );
@@ -514,7 +515,7 @@ fn render_confirm_sync_modal(
 
     let mut confirm_spans =
         KeybindingRegistry::format_shortcut_label("Y / Enter", "confirm", theme.green, Color::White);
-    confirm_spans.insert(0, Span::styled("▶ ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
+    confirm_spans.insert(0, Span::styled(format!("{} ", app.glyphs().bullet_active), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)));
 
     let inner = render_modal_container(
         f,
@@ -626,7 +627,7 @@ fn render_confirm_sync_modal(
         Line::from(vec![
             Span::styled("marker: ", Style::default().fg(theme.text_muted)),
             Span::styled(".force-sync", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("  → guard launches bisync unconditionally", Style::default().fg(theme.text_muted)),
+            Span::styled(format!("  {} guard launches bisync unconditionally", app.glyphs().arrow_right), Style::default().fg(theme.text_muted)),
         ]),
         Line::from(""),
         Line::from(vec![

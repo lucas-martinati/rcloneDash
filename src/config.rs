@@ -9,7 +9,12 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Formateur unifié pour afficher la liste des options avec indication claire de la valeur active.
 /// Prise en charge automatique d'une grille à 2 colonnes alignée pour les listes étendues (> 8 options).
-pub fn format_setting_options_list<T: AsRef<str>>(choices: &[T], current: &str) -> String {
+/// Le jeu de glyphes suit les capacités du terminal (repli ASCII sur console TTY).
+pub fn format_setting_options_list_with<T: AsRef<str>>(
+    choices: &[T],
+    current: &str,
+    glyphs: &crate::term_caps::Glyphs,
+) -> String {
     if choices.is_empty() {
         return String::new();
     }
@@ -28,9 +33,9 @@ pub fn format_setting_options_list<T: AsRef<str>>(choices: &[T], current: &str) 
             .map(|c| {
                 let s = c.as_ref();
                 if is_item_active(s) {
-                    format!("  ▶ {} (active)", s)
+                    format!("  {} {} (active)", glyphs.bullet_active, s)
                 } else {
-                    format!("  • {}", s)
+                    format!("  {} {}", glyphs.bullet_idle, s)
                 }
             })
             .collect::<Vec<_>>()
@@ -77,11 +82,11 @@ pub fn format_setting_options_list<T: AsRef<str>>(choices: &[T], current: &str) 
                 if idx < formatted.len() {
                     let (s, active) = &formatted[idx];
                     let item: String = if col == 0 {
-                        if *active { format!("  ▶ {} (active)", s) } else { format!("  • {}", s) }
+                        if *active { format!("  {} {} (active)", glyphs.bullet_active, s) } else { format!("  {} {}", glyphs.bullet_idle, s) }
                     } else if *active {
-                        format!("▶ {} (active)", s)
+                        format!("{} {} (active)", glyphs.bullet_active, s)
                     } else {
-                        format!("• {}", s)
+                        format!("{} {}", glyphs.bullet_idle, s)
                     };
 
                     if col + 1 < num_cols && (r + (col + 1) * num_rows) < formatted.len() {
@@ -1294,8 +1299,10 @@ mod tests {
 
     #[test]
     fn test_format_setting_options_list_columns_and_precision() {
+        use crate::term_caps::Glyphs;
+        let uni = Glyphs::unicode();
         // Liste courte (<= 8 éléments) : 1 colonne verticale
-        let timer_formatted = format_setting_options_list(TIMER_INTERVAL_OPTIONS, "15min");
+        let timer_formatted = format_setting_options_list_with(TIMER_INTERVAL_OPTIONS, "15min", &uni);
         assert_eq!(timer_formatted.lines().count(), 7);
         assert!(timer_formatted.contains("  ▶ 15min (active)"));
         assert!(timer_formatted.contains("  • 10min"));
@@ -1303,7 +1310,7 @@ mod tests {
 
         // stats_interval (7 éléments) : 1 colonne verticale
         let choices = stats_interval_options();
-        let formatted_1s = format_setting_options_list(&choices, "1s");
+        let formatted_1s = format_setting_options_list_with(&choices, "1s", &uni);
         assert_eq!(formatted_1s.lines().count(), 7);
         assert!(formatted_1s.contains("▶ 1s (active)"));
         assert!(formatted_1s.contains("• 5s"));
@@ -1315,6 +1322,18 @@ mod tests {
         assert!(!formatted_1s.contains("▶ 15s (active)"));
         assert!(formatted_1s.contains("• 10s"));
         assert!(formatted_1s.contains("• 15s"));
+
+        // Repli ASCII : mêmes lignes, marqueurs `>` / `*`, alignement conservé.
+        let ascii = Glyphs::ascii();
+        let timer_ascii = format_setting_options_list_with(TIMER_INTERVAL_OPTIONS, "15min", &ascii);
+        assert_eq!(timer_ascii.lines().count(), 7);
+        assert!(timer_ascii.contains("  > 15min (active)"));
+        assert!(timer_ascii.contains("  * 10min"));
+        assert!(timer_ascii.lines().count() == timer_formatted.lines().count());
+        for (a, u) in timer_ascii.lines().zip(timer_formatted.lines()) {
+            use unicode_width::UnicodeWidthStr;
+            assert_eq!(a.width(), u.width());
+        }
     }
 
     #[test]

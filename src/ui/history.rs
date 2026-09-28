@@ -41,14 +41,14 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         Span::styled(format!("{} ", run.id), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         Span::styled(" on ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} at {} ", run.date, run.time), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-        Span::styled("│ Duration: ", Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} Duration: ", app.glyphs().vline), Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", run.duration), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ]), None));
 
-    let (status_str, status_color) = match run.status {
-        RunStatus::Success => ("✔ SUCCESS", theme.green),
-        RunStatus::Failed => ("✗ FAILED", theme.red),
-        RunStatus::Skipped => ("⊘ SKIPPED (No changes)", theme.text_muted),
+    let (status_str, status_color): (String, _) = match run.status {
+        RunStatus::Success => (format!("{} SUCCESS", app.glyphs().check), theme.green),
+        RunStatus::Failed => ("✗ FAILED".to_string(), theme.red),
+        RunStatus::Skipped => ("⊘ SKIPPED (No changes)".to_string(), theme.text_muted),
     };
 
     all_lines.push((Line::from(vec![
@@ -56,7 +56,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         Span::styled(status_str, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
     ]), None));
 
-    all_lines.push((Line::from(Span::styled("─".repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
+    all_lines.push((Line::from(Span::styled(app.glyphs().hline.repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
 
     // Erreurs
     if !run.errors.is_empty() {
@@ -73,7 +73,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             for (i, part) in wrapped.into_iter().enumerate() {
                 if i == 0 {
                     all_lines.push((Line::from(vec![
-                        Span::styled("   • ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                        Span::styled(format!("   {} ", app.glyphs().bullet_idle), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                         Span::styled(part, Style::default().fg(theme.red)),
                     ]), None));
                 } else {
@@ -84,7 +84,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 }
             }
         }
-        all_lines.push((Line::from(Span::styled("─".repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
+        all_lines.push((Line::from(Span::styled(app.glyphs().hline.repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
     }
 
     let affected_files = run.all_affected_files();
@@ -102,7 +102,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 _ => ("[~] Modified", theme.yellow),
             };
 
-            let prefix = if is_selected { " ▶ " } else { "   " };
+            let prefix = if is_selected { format!(" {} ", app.glyphs().bullet_active) } else { "   ".to_string() };
             let highlight_bg = Color::Rgb(90, 32, 32);
 
             let mut line_spans = if is_selected {
@@ -233,6 +233,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         scroll,
         visible_height,
         theme,
+        &app.glyphs(),
         hitboxes,
         crate::app::ScrollbarTarget::HistoryDetails(run_idx),
     );

@@ -113,24 +113,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--check-update" => {
                 let style = updater::ConsoleStyle::with_mode(cli_tty_mode(tty_override));
-                println!("  ┌─ {}", style.bold_red("rcloneDash Update Check"));
-                println!("  │");
-                println!("  {}  Checking for updates...", style.bold_cyan("◇"));
+                let g = style.caps.glyphs();
+                println!("  {}{} {}", g.corner_tl, g.hline, style.bold_red("rcloneDash Update Check"));
+                println!("  {}", g.vline);
+                println!("  {}  Checking for updates...", style.bold_cyan(g.diamond));
                 match updater::check_for_updates().await {
                     Ok(Some(info)) => {
-                        println!("  │  Current version: {}", style.gray(&format!("v{}", info.current_version)));
-                        println!("  │  Latest version:  {}", style.bold(&format!("v{}", info.latest_version)));
-                        println!("  │");
-                        println!("  └─ {}", style.bold_green(&format!("🚀 Update available: v{}! Run: rclonedash --update", info.latest_version)));
+                        println!("  {}  Current version: {}", g.vline, style.gray(&format!("v{}", info.current_version)));
+                        println!("  {}  Latest version:  {}", g.vline, style.bold(&format!("v{}", info.latest_version)));
+                        println!("  {}", g.vline);
+                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("🚀 Update available: v{}! Run: rclonedash --update", info.latest_version)));
                     }
                     Ok(None) => {
-                        println!("  │  v{} is already installed", env!("CARGO_PKG_VERSION"));
-                        println!("  │");
-                        println!("  └─ {}", style.bold_green("✅ rcloneDash is up to date."));
+                        println!("  {}  v{} is already installed", g.vline, env!("CARGO_PKG_VERSION"));
+                        println!("  {}", g.vline);
+                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green("✅ rcloneDash is up to date."));
                     }
                     Err(e) => {
-                        println!("  │");
-                        eprintln!("  └─ {}", style.bold_red(&format!("⚠️  Could not check for updates: {}", e)));
+                        println!("  {}", g.vline);
+                        eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("⚠️  Could not check for updates: {}", e)));
                     }
                 }
                 return Ok(());
@@ -138,33 +139,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--update" | "-u" => {
                 let mode = cli_tty_mode(tty_override);
                 let style = updater::ConsoleStyle::with_mode(mode);
-                println!("  ┌─ {}", style.bold_red("rcloneDash Updater"));
-                println!("  │");
-                println!("  {}  Checking for latest release...", style.bold_cyan("◇"));
+                let g = style.caps.glyphs();
+                println!("  {}{} {}", g.corner_tl, g.hline, style.bold_red("rcloneDash Updater"));
+                println!("  {}", g.vline);
+                println!("  {}  Checking for latest release...", style.bold_cyan(g.diamond));
                 match updater::check_for_updates().await {
                     Ok(Some(info)) => {
-                        println!("  │  Found {} (current: {})", style.bold(&format!("v{}", info.latest_version)), style.gray(&format!("v{}", info.current_version)));
-                        println!("  │");
+                        println!("  {}  Found {} (current: {})", g.vline, style.bold(&format!("v{}", info.latest_version)), style.gray(&format!("v{}", info.current_version)));
+                        println!("  {}", g.vline);
                         match updater::download_and_install_update(&info, mode).await {
                             Ok(()) => {
-                                println!("  │");
-                                println!("  └─ {}", style.bold_green(&format!("✨ Successfully updated to v{}!", info.latest_version)));
+                                println!("  {}", g.vline);
+                                println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("✨ Successfully updated to v{}!", info.latest_version)));
                             }
                             Err(e) => {
-                                println!("  │");
-                                eprintln!("  └─ {}", style.bold_red(&format!("❌ Update failed: {}", e)));
+                                println!("  {}", g.vline);
+                                eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("❌ Update failed: {}", e)));
                                 std::process::exit(1);
                             }
                         }
                     }
                     Ok(None) => {
-                        println!("  │  v{} is already installed", env!("CARGO_PKG_VERSION"));
-                        println!("  │");
-                        println!("  └─ {}", style.bold_green("✅ rcloneDash is already on the latest version."));
+                        println!("  {}  v{} is already installed", g.vline, env!("CARGO_PKG_VERSION"));
+                        println!("  {}", g.vline);
+                        println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green("✅ rcloneDash is already on the latest version."));
                     }
                     Err(e) => {
-                        println!("  │");
-                        eprintln!("  └─ {}", style.bold_red(&format!("❌ Update check failed: {}", e)));
+                        println!("  {}", g.vline);
+                        eprintln!("  {}{} {}", g.corner_bl, g.hline, style.bold_red(&format!("❌ Update check failed: {}", e)));
                         std::process::exit(1);
                     }
                 }

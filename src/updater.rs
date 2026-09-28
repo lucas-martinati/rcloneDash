@@ -1,6 +1,6 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::term_caps::{TermCaps, TtyMode};
+use crate::term_caps::{Glyphs, TermCaps, TtyMode};
 
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {
@@ -80,17 +80,24 @@ pub const PROGRESS_BAR_WIDTH: usize = 30;
 
 /// One wizard step header: `◇  <text>...` (cyan diamond on TTY).
 pub fn step_line(style: &ConsoleStyle, text: &str) -> String {
-    format!("  {}  {}", style.bold_cyan("◇"), text)
+    let g = style.caps.glyphs();
+    format!("  {}  {}", style.bold_cyan(g.diamond), text)
 }
 
 /// One indented detail line: `│  <text>`.
-pub fn detail_line(text: &str) -> String {
-    format!("  │  {}", text)
+pub fn detail_line(style: &ConsoleStyle, text: &str) -> String {
+    format!("  {}  {}", style.caps.glyphs().vline, text)
 }
 
 /// Splits progress into display percentage and bar glyphs.
 /// Unknown or empty totals render as `---%` with an empty bar.
+/// Unicode variant (see [`progress_parts_in`] for the ASCII fallback).
 pub fn progress_parts(downloaded: u64, total: Option<u64>) -> (String, String) {
+    progress_parts_in(downloaded, total, &Glyphs::unicode())
+}
+
+/// [`progress_parts`] with an explicit glyph set (ASCII on TTY consoles).
+pub fn progress_parts_in(downloaded: u64, total: Option<u64>, glyphs: &Glyphs) -> (String, String) {
     match total {
         Some(tot) if tot > 0 => {
             let pct = (downloaded as f64 / tot as f64).clamp(0.0, 1.0);
@@ -98,10 +105,14 @@ pub fn progress_parts(downloaded: u64, total: Option<u64>) -> (String, String) {
             let empty = PROGRESS_BAR_WIDTH.saturating_sub(filled);
             (
                 format!("{:>3.0}%", pct * 100.0),
-                format!("{}{}", "█".repeat(filled), "░".repeat(empty)),
+                format!(
+                    "{}{}",
+                    glyphs.bar_fill.repeat(filled),
+                    glyphs.bar_empty.repeat(empty)
+                ),
             )
         }
-        _ => ("---%".to_string(), "░".repeat(PROGRESS_BAR_WIDTH)),
+        _ => ("---%".to_string(), glyphs.bar_empty.repeat(PROGRESS_BAR_WIDTH)),
     }
 }
 
@@ -116,11 +127,12 @@ pub fn progress_parts(downloaded: u64, total: Option<u64>) -> (String, String) {
 pub fn progress_line(style: &ConsoleStyle, downloaded: u64, total: Option<u64>, speed: f64, done: bool) -> String {
     // A zero total carries no information (e.g. Content-Length: 0):
     // treat it like an unknown one.
+    let glyphs = style.caps.glyphs();
     let unknown_total = total.is_none_or(|t| t == 0);
     let (pct_str, bar) = if done && unknown_total {
-        ("100%".to_string(), "█".repeat(PROGRESS_BAR_WIDTH))
+        ("100%".to_string(), glyphs.bar_fill.repeat(PROGRESS_BAR_WIDTH))
     } else {
-        progress_parts(downloaded, total)
+        progress_parts_in(downloaded, total, &glyphs)
     };
     let pct = if pct_str == "100%" {
         style.bold_green(&pct_str)
@@ -134,7 +146,8 @@ pub fn progress_line(style: &ConsoleStyle, downloaded: u64, total: Option<u64>, 
     let speed_info = format!("{}/s", format_size(speed as u64));
 
     format!(
-        "  │  {}[{}]{} {}  {} ({})",
+        "  {}  {}[{}]{} {}  {} ({})",
+        glyphs.vline,
         if style.colored() { "\x1b[32m" } else { "" },
         bar,
         if style.colored() { "\x1b[0m" } else { "" },
@@ -332,10 +345,10 @@ pub async fn download_and_install_update(info: &UpdateInfo, mode: TtyMode) -> Re
         let speed = if elapsed_secs > 0.0 { downloaded as f64 / elapsed_secs } else { 0.0 };
         finish_progress(&style, downloaded, total, speed);
     } else {
-        println!("{}", detail_line(&format!("Downloaded {}", format_size(downloaded))));
+        println!("{}", detail_line(&style, &format!("Downloaded {}", format_size(downloaded))));
     }
 
-    println!("  │");
+    println!("  {}", style.caps.glyphs().vline);
 
     if is_deb {
         println!("{}", step_line(&style, "Updating system Debian package (/usr/bin/rclonedash)..."));
@@ -354,7 +367,7 @@ pub async fn download_and_install_update(info: &UpdateInfo, mode: TtyMode) -> Re
 
         match status {
             Ok(st) if st.success() => {
-                println!("{}", detail_line("Debian package updated successfully"));
+                println!("{}", detail_line(&style, "Debian package updated successfully"));
                 Ok(())
             }
             _ => Err(format!(
@@ -390,7 +403,7 @@ pub async fn download_and_install_update(info: &UpdateInfo, mode: TtyMode) -> Re
                     let _ = tokio::fs::remove_dir_all(&extract_dir).await;
                     match inst {
                         Ok(ist) if ist.success() => {
-                            println!("{}", detail_line("Updated all components successfully (user configuration preserved)"));
+                            println!("{}", detail_line(&style, "Updated all components successfully (user configuration preserved)"));
                             Ok(())
                         }
                         _ => Err("Installer script failed during update".to_string()),
@@ -422,7 +435,7 @@ pub async fn download_and_install_update(info: &UpdateInfo, mode: TtyMode) -> Re
             let _ = std::fs::remove_file(&tmp_dest);
             return Err(format!("Failed to set permissions: {}", e));
         }
-        println!("{}", detail_line("Applied executable permissions (0755)"));
+        println!("{}", detail_line(&style, "Applied executable permissions (0755)"));
 
         // Atomic replace
         if let Err(e) = std::fs::rename(&tmp_dest, &current_exe) {
@@ -435,7 +448,7 @@ pub async fn download_and_install_update(info: &UpdateInfo, mode: TtyMode) -> Re
             }
             return Err(format!("Failed to replace executable: {}", e));
         }
-        println!("{}", detail_line("Replaced binary atomically"));
+        println!("{}", detail_line(&style, "Replaced binary atomically"));
         Ok(())
     }
 }
@@ -455,17 +468,19 @@ pub async fn demo_update_flow(mode: TtyMode) {
     let style = ConsoleStyle::with_mode(mode);
     let current = env!("CARGO_PKG_VERSION");
     let latest = demo_latest_version(current);
+    let g = style.caps.glyphs();
 
-    println!("  ┌─ {}", style.bold_red("rcloneDash Updater (demo)"));
-    println!("  │");
+    println!("  {}{} {}", g.corner_tl, g.hline, style.bold_red("rcloneDash Updater (demo)"));
+    println!("  {}", g.vline);
     println!("{}", step_line(&style, "Checking for latest release..."));
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     println!(
-        "  │  Found {} (current: {})",
+        "  {}  Found {} (current: {})",
+        g.vline,
         style.bold(&format!("v{}", latest)),
         style.gray(&format!("v{}", current))
     );
-    println!("  │");
+    println!("  {}", g.vline);
     println!(
         "{}",
         step_line(&style, &format!("Downloading rcloneDash {}...", style.bold(&format!("v{}", latest))))
@@ -491,14 +506,14 @@ pub async fn demo_update_flow(mode: TtyMode) {
         println!("{}", progress_line(&style, total, Some(total), 1_152_000.0, true));
     }
 
-    println!("  │");
+    println!("  {}", g.vline);
     println!("{}", step_line(&style, "Extracting release package..."));
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     println!("{}", step_line(&style, "Updating binary, systemd services, desktop entry, and icon..."));
     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-    println!("  │");
-    println!("  └─ {}", style.bold_green(&format!("✨ Successfully updated to v{}!", latest)));
-    println!("{}", detail_line(&style.gray("demo mode — nothing was downloaded or installed")));
+    println!("  {}", g.vline);
+    println!("  {}{} {}", g.corner_bl, g.hline, style.bold_green(&format!("{} Successfully updated to v{}!", g.spark, latest)));
+    println!("{}", detail_line(&style, &style.gray("demo mode — nothing was downloaded or installed")));
 }
 
 #[cfg(test)]
@@ -649,7 +664,30 @@ mod tests {
     fn test_step_and_detail_lines() {
         let style = ConsoleStyle::from_caps(TermCaps::plain());
         assert_eq!(step_line(&style, "Checking for latest release..."), "  ◇  Checking for latest release...");
-        assert_eq!(detail_line("hello"), "  │  hello");
+        assert_eq!(detail_line(&style, "hello"), "  │  hello");
+    }
+
+    #[test]
+    fn test_ascii_caps_use_fallback_glyphs_with_same_width() {
+        use unicode_width::UnicodeWidthStr;
+        let ascii_caps = TermCaps {
+            ascii: true,
+            ..TermCaps::plain()
+        };
+        let style = ConsoleStyle::from_caps(ascii_caps);
+        assert_eq!(step_line(&style, "Checking..."), "  o  Checking...");
+        assert_eq!(detail_line(&style, "hello"), "  |  hello");
+
+        let half = "#".repeat(15);
+        let half_empty = "-".repeat(15);
+        let line = progress_line(&style, 1024, Some(2048), 1024.0, false);
+        let expected = format!("  |  [{half}{half_empty}]  50%  1.0 KB / 2.0 KB (1.0 KB/s)");
+        assert_eq!(line, expected);
+
+        // Same display width as the Unicode variant: alignment is preserved.
+        let uni = ConsoleStyle::from_caps(TermCaps::plain());
+        let uni_line = progress_line(&uni, 1024, Some(2048), 1024.0, false);
+        assert_eq!(line.width(), uni_line.width());
     }
 
     #[test]

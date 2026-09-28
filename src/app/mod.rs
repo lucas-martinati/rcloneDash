@@ -610,6 +610,11 @@ impl App {
     }
 
     pub fn border_type(&self) -> BorderType {
+        // Linux console / non-UTF-8: rounded/double/thick corners do not
+        // exist there — plain box drawing (present in console fonts).
+        if self.term_caps.ascii {
+            return BorderType::Plain;
+        }
         self.config.border_style.to_border_type()
     }
 
@@ -631,7 +636,15 @@ impl App {
     }
 
     pub fn border_glyphs(&self) -> crate::config::BorderGlyphs {
+        if self.term_caps.ascii {
+            return crate::config::BorderStyleChoice::Sharp.glyphs();
+        }
         self.config.border_style.glyphs()
+    }
+
+    /// Glyph set matching the resolved terminal capabilities.
+    pub fn glyphs(&self) -> crate::term_caps::Glyphs {
+        self.term_caps.glyphs()
     }
 
     // ───── EditState helpers ─────

@@ -2166,6 +2166,42 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
+    async fn test_settings_ascii_glyphs_render() {
+        // Forced TTY caps: the settings modal must draw ASCII fallbacks
+        // (no panic, borders fall back to Plain).
+        let mut app = App::new();
+        app.term_caps = crate::term_caps::TermCaps {
+            color: crate::term_caps::ColorLevel::Ansi16,
+            live: false,
+            ascii: true,
+        };
+        assert_eq!(app.border_type(), BorderType::Plain);
+        app.modal = Modal::Settings;
+        app.settings_tab = 1;
+        app.settings_selected_idx = 0;
+
+        let backend = ratatui::backend::TestBackend::new(130, 40);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal.draw(|f| {
+            crate::ui::render(f, &mut app);
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let rendered_text: String = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        // ASCII option bullets replace ▶ / • in the description panel.
+        assert!(rendered_text.contains("> "), "ASCII active bullet must be drawn");
+        assert!(!rendered_text.contains('▶'), "No Unicode bullet must remain in settings");
+        assert!(!rendered_text.contains('•'), "No Unicode idle bullet must remain in settings");
+    }
+
+    #[tokio::test]
     async fn test_toggle_boxes_and_focus_adjustment() {
         // toggle_box()/save_config() écrivent dash-config.json : sérialiser.
         let _guard = config::test_support::hold_test_config_lock();

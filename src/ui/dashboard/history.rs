@@ -63,11 +63,12 @@ pub fn render_history_panel(
     };
 
     let bg = app.border_glyphs();
+    let glyphs = app.glyphs();
     let mut left_bottom_spans = vec![
         Span::styled(bg.bot_left, Style::default().fg(border_color)),
-        Span::styled("↑", Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
+        Span::styled(glyphs.arrow_up, Style::default().fg(up_col).add_modifier(Modifier::BOLD)),
         Span::styled(" select ", Style::default().fg(Color::White)),
-        Span::styled("↓", Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
+        Span::styled(glyphs.arrow_down, Style::default().fg(down_col).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{}{}", bg.bot_right, bg.bot_left), Style::default().fg(border_color)),
     ];
     left_bottom_spans.extend(crate::ui::keys::KeybindingRegistry::format_shortcut_label("↵", "details", key_col, det_col));
@@ -198,7 +199,7 @@ pub fn render_history_panel(
             let err_val = "0";
 
             if is_selected {
-                let cursor = Span::styled("▶ ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+                let cursor = Span::styled(format!("{} ", glyphs.bullet_active), Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                 table_rows.push(Row::new(vec![
                     Cell::from(Line::from(vec![cursor, Span::styled(time_str, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))])),
                     Cell::from(Span::styled(status_str, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
@@ -223,10 +224,10 @@ pub fn render_history_panel(
         } else {
             let past_idx = if is_syncing { item_idx - 1 } else { item_idx };
             if let Some(run) = app.past_runs.get(past_idx) {
-                let (status_badge, status_color) = match run.status {
-                    RunStatus::Success => ("✔ Success", theme.green),
-                    RunStatus::Failed => ("✗ Error", theme.red),
-                    RunStatus::Skipped => ("⊘ Skipped", theme.text_muted),
+                let (status_badge, status_color): (String, _) = match run.status {
+                    RunStatus::Success => (format!("{} Success", glyphs.check), theme.green),
+                    RunStatus::Failed => ("✗ Error".to_string(), theme.red),
+                    RunStatus::Skipped => ("⊘ Skipped".to_string(), theme.text_muted),
                 };
 
                 let time_short = if run.date == chrono::Local::now().format("%Y-%m-%d").to_string() {
@@ -238,7 +239,7 @@ pub fn render_history_panel(
                 let err_color = if run.errors.is_empty() { theme.text_muted } else { theme.red };
 
                 if is_selected {
-                    let cursor = Span::styled("▶ ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+                    let cursor = Span::styled(format!("{} ", glyphs.bullet_active), Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
                     table_rows.push(Row::new(vec![
                         Cell::from(Line::from(vec![cursor, Span::styled(time_short, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))])),
                         Cell::from(Span::styled(status_badge, Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
@@ -306,6 +307,7 @@ pub fn render_history_panel(
         offset,
         visible_rows,
         theme,
+        &app.glyphs(),
         hitboxes,
         crate::app::ScrollbarTarget::History,
     );
