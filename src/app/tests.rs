@@ -2272,26 +2272,36 @@ use crate::monitor::history::{PastRun, RunStatus};
     #[test]
     fn test_tty_logo_is_all_red() {
         use ratatui::style::Color;
-        // In ASCII (TTY) mode the gray shading would degrade to gray tones:
-        // every drawn logo cell is plain red instead.
+        // In ASCII (TTY) mode blocks stay plain red while the 3D shading
+        // behind keeps its gray gradient.
         let backend = ratatui::backend::TestBackend::new(90, 6);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|f| crate::ui::menu::render_logo(f, f.area(), true))
             .unwrap();
         let buffer = terminal.backend().buffer();
-        let mut drawn = 0;
+        let mut blocks = 0;
+        let mut shades = 0;
         for y in 0..buffer.area.height {
             for x in 0..buffer.area.width {
                 let cell = &buffer[(x, y)];
                 if cell.symbol().trim().is_empty() {
                     continue;
                 }
-                drawn += 1;
-                assert_eq!(cell.fg, Color::Red, "tty logo cell {:?} must be red", cell.symbol());
+                if cell.symbol() == "█" {
+                    blocks += 1;
+                    assert_eq!(cell.fg, Color::Red, "tty logo block must be red");
+                } else {
+                    shades += 1;
+                    assert!(
+                        matches!(cell.fg, Color::Rgb(r, g, b) if r == g && g == b),
+                        "tty logo shading must stay gray, got {:?}",
+                        cell.fg
+                    );
+                }
             }
         }
-        assert!(drawn > 0, "logo must draw something");
+        assert!(blocks > 0 && shades > 0, "logo must draw blocks and shading");
 
         // Unicode mode keeps the red gradient (first row brightest).
         let backend = ratatui::backend::TestBackend::new(90, 6);

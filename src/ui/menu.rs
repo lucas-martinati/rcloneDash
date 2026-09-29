@@ -145,15 +145,15 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
     }
 }
 
-/// Branding logo. In ASCII (TTY) mode the gray shading would degrade to
-/// gray tones, so the whole logo is drawn in plain red instead.
+/// Branding logo. In ASCII (TTY) mode the blocks stay plain red while the
+/// 3D shading behind keeps its gray gradient (readable gray tones, unlike
+/// a gray/red mix on reduced palettes).
 pub fn render_logo(f: &mut Frame, area: Rect, ascii: bool) {
     let mut header_lines = Vec::new();
     for (z, (fg, line_str)) in LOGO_RCLONEDASH.iter().enumerate() {
         let bg_val = (120u32).saturating_sub((z as u32) * 12) as u8;
         let bg_color = Color::Rgb(bg_val, bg_val, bg_val);
         let red = if ascii { Color::Red } else { *fg };
-        let shade = if ascii { Color::Red } else { bg_color };
         let mut spans = Vec::new();
         for ch in line_str.chars() {
             // Opaque background: the logo floats over the dashboard, where
@@ -162,7 +162,7 @@ pub fn render_logo(f: &mut Frame, area: Rect, ascii: bool) {
             if ch == '█' {
                 spans.push(Span::styled(ch.to_string(), Style::default().fg(red).bg(Color::Reset).add_modifier(Modifier::BOLD)));
             } else if ch != ' ' {
-                spans.push(Span::styled(ch.to_string(), Style::default().fg(shade).bg(Color::Reset)));
+                spans.push(Span::styled(ch.to_string(), Style::default().fg(bg_color).bg(Color::Reset)));
             } else {
                 spans.push(Span::styled(" ".to_string(), Style::default().bg(Color::Reset)));
             }
