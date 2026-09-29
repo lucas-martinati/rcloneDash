@@ -1,6 +1,6 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::term_caps::{Glyphs, TermCaps, TtyMode};
+use crate::term_caps::{Glyphs, TermCaps};
 
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {
@@ -24,14 +24,6 @@ impl ConsoleStyle {
     pub fn new() -> Self {
         Self {
             caps: TermCaps::detect(),
-        }
-    }
-
-    /// Style honoring an explicit [`TtyMode`] (CLI flag / config), resolved
-    /// against the real terminal.
-    pub fn with_mode(mode: TtyMode) -> Self {
-        Self {
-            caps: TermCaps::resolve(mode),
         }
     }
 

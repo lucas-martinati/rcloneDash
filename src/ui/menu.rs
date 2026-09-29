@@ -153,7 +153,9 @@ pub fn render_logo(f: &mut Frame, area: Rect) {
         let mut spans = Vec::new();
         for ch in line_str.chars() {
             if ch == '█' {
-                spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).add_modifier(Modifier::BOLD)));
+                // Opaque background: the logo floats over the dashboard, and
+                // a selected (red) row behind would swallow red glyphs.
+                spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).bg(Color::Reset).add_modifier(Modifier::BOLD)));
             } else if ch != ' ' {
                 spans.push(Span::styled(ch.to_string(), Style::default().fg(bg_color)));
             } else {
@@ -193,6 +195,7 @@ fn render_ascii_button(
                 *line,
                 Style::default()
                     .fg(color)
+                    .bg(Color::Reset)
                     .add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() }),
             ))
         })

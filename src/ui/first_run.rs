@@ -7,8 +7,20 @@ use ratatui::{
 };
 
 use crate::app::{App, FirstRunField, FirstRunState, FirstRunStep, HitAction, Hitbox, RcloneInstallStatus};
+use crate::term_caps::ColorLevel;
 use crate::ui::container::{centered_fixed_rect, render_modal_container, ModalContainerConfig};
 use crate::ui::theme::ThemePalette;
+
+/// Focused-button base style (black on bright color). Under NO_COLOR the
+/// colors vanish, so the focused button is inverted instead — otherwise
+/// focused and idle buttons become identical.
+fn focused_button(bg: Color, no_color: bool) -> Style {
+    let mut style = Style::default().fg(Color::Black).bg(bg).add_modifier(Modifier::BOLD);
+    if no_color {
+        style = style.add_modifier(Modifier::REVERSED);
+    }
+    style
+}
 
 pub fn first_run_modal_dimensions(screen: Rect, show_help: bool) -> (u16, u16) {
     let width = if screen.width >= 92 {
@@ -29,6 +41,7 @@ pub fn render_first_run_modal(
     theme: &ThemePalette,
     hitboxes: &mut Vec<Hitbox>,
 ) {
+    let g = app.glyphs();
     let screen = f.area();
     let (width, height) = first_run_modal_dimensions(screen, state.show_help);
     let area = centered_fixed_rect(width, height, screen);
@@ -43,26 +56,26 @@ pub fn render_first_run_modal(
     let actions: Vec<Vec<Span>> = match state.step {
         FirstRunStep::RcloneCheck => match state.rclone_status {
             RcloneInstallStatus::Installed(_) => vec![
-                KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "continue", theme.green, Color::White),
+                KeybindingRegistry::format_shortcut_label(g.enter, "continue", theme.green, Color::White),
             ],
             RcloneInstallStatus::Installing => vec![
-                KeybindingRegistry::format_shortcut_label(app.glyphs().hourglass, "installing...", theme.cyan, Color::White),
+                KeybindingRegistry::format_shortcut_label(g.hourglass, "installing...", theme.cyan, Color::White),
             ],
             RcloneInstallStatus::NotInstalled | RcloneInstallStatus::Failed(_) => vec![
-                KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "install", theme.cyan, Color::White),
+                KeybindingRegistry::format_shortcut_label(g.enter, "install", theme.cyan, Color::White),
                 KeybindingRegistry::format_shortcut_label("Tab", "switch", theme.accent, Color::White),
                 KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.yellow, Color::White),
             ],
         },
         FirstRunStep::RemoteSetup => vec![
             KeybindingRegistry::format_shortcut_label("Tab", "navigate", theme.accent, Color::White),
-            KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "continue", theme.green, Color::White),
+            KeybindingRegistry::format_shortcut_label(g.enter, "continue", theme.green, Color::White),
             KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.red, Color::White),
         ],
         FirstRunStep::GoogleCredentials => vec![
             KeybindingRegistry::format_shortcut_label("Tab", "navigate", theme.accent, Color::White),
             KeybindingRegistry::format_shortcut_label("Ctrl+V", "paste", theme.cyan, Color::White),
-            KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "confirm", theme.green, Color::White),
+            KeybindingRegistry::format_shortcut_label(g.enter, "confirm", theme.green, Color::White),
             KeybindingRegistry::format_shortcut_label("?", if state.show_help { "hide guide" } else { "guide" }, theme.yellow, Color::White),
             KeybindingRegistry::format_shortcut_label("Esc", "skip", theme.red, Color::White),
         ],
@@ -103,6 +116,7 @@ fn render_step_rclone(
     area: Rect,
     hitboxes: &mut Vec<Hitbox>,
 ) {
+    let g = app.glyphs();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -126,7 +140,7 @@ fn render_step_rclone(
     let (badge_style, badge_text, desc_lines) = match &state.rclone_status {
         RcloneInstallStatus::Installed(ver) => (
             Style::default().fg(Color::Black).bg(theme.green).add_modifier(Modifier::BOLD),
-            format!(" {} RCLONE DETECTED ", app.glyphs().check),
+            format!(" {} RCLONE DETECTED ", g.check),
             vec![
                 Line::from(vec![
                     Span::styled("Binary detected: ", Style::default().fg(theme.text_muted)),
@@ -136,7 +150,7 @@ fn render_step_rclone(
         ),
         RcloneInstallStatus::NotInstalled => (
             Style::default().fg(Color::Black).bg(theme.yellow).add_modifier(Modifier::BOLD),
-            format!(" {} RCLONE NOT FOUND ", app.glyphs().warn_plain),
+            format!(" {} RCLONE NOT FOUND ", g.warn_plain),
             vec![
                 Line::from(Span::styled("rclone was not found in PATH or ~/.local/bin/rclone.", Style::default().fg(theme.yellow))),
                 Line::from("You can install it automatically right now without sudo privileges."),
@@ -144,14 +158,14 @@ fn render_step_rclone(
         ),
         RcloneInstallStatus::Installing => (
             Style::default().fg(Color::Black).bg(theme.cyan).add_modifier(Modifier::BOLD),
-            format!(" {} INSTALLING RCLONE... ", app.glyphs().hourglass),
+            format!(" {} INSTALLING RCLONE... ", g.hourglass),
             vec![
                 Line::from(Span::styled("Downloading official precompiled binary to ~/.local/bin/rclone...", Style::default().fg(theme.cyan))),
             ],
         ),
         RcloneInstallStatus::Failed(err) => (
             Style::default().fg(Color::White).bg(theme.red).add_modifier(Modifier::BOLD),
-            format!(" {} INSTALLATION FAILED ", app.glyphs().fail),
+            format!(" {} INSTALLATION FAILED ", g.fail),
             vec![
                 Line::from(Span::styled(err.as_str(), Style::default().fg(theme.red))),
             ],
@@ -179,15 +193,23 @@ fn render_step_rclone(
     let is_installing = matches!(state.rclone_status, RcloneInstallStatus::Installing);
 
     let mut btn_spans = Vec::new();
+    let no_color = app.term_caps.color == ColorLevel::None;
+    // Idle buttons lose their slate background outside truecolor: in
+    // Ansi16 both muted text and slate collapse onto Gray (invisible).
+    let idle_bg = if app.term_caps.color == ColorLevel::Ansi16 {
+        Color::Reset
+    } else {
+        theme.border
+    };
 
     if is_installed {
         let is_focused = state.active_field == FirstRunField::ContinueButton;
         let style = if is_focused {
-            Style::default().fg(Color::Black).bg(theme.green).add_modifier(Modifier::BOLD)
+            focused_button(theme.green, no_color)
         } else {
-            Style::default().fg(theme.text_bright).bg(theme.border).add_modifier(Modifier::BOLD)
+            Style::default().fg(theme.text_bright).bg(idle_bg).add_modifier(Modifier::BOLD)
         };
-        let btn_text = format!(" [ Next: Choose Remote {} (Enter) ] ", app.glyphs().arrow_right);
+        let btn_text = format!(" [ Next: Choose Remote {} (Enter) ] ", g.arrow_right);
         btn_spans.push(Span::styled(btn_text.clone(), style));
 
         hitboxes.push(Hitbox {
@@ -205,9 +227,9 @@ fn render_step_rclone(
         // Install button
         let is_install_focused = state.active_field == FirstRunField::InstallRcloneButton;
         let inst_style = if is_install_focused {
-            Style::default().fg(Color::Black).bg(theme.cyan).add_modifier(Modifier::BOLD)
+            focused_button(theme.cyan, no_color)
         } else {
-            Style::default().fg(theme.text_bright).bg(theme.border).add_modifier(Modifier::BOLD)
+            Style::default().fg(theme.text_bright).bg(idle_bg).add_modifier(Modifier::BOLD)
         };
         let inst_text = " [ Install Rclone Now (Enter) ] ";
         btn_spans.push(Span::styled(inst_text, inst_style));
@@ -226,9 +248,9 @@ fn render_step_rclone(
         // Skip button
         let is_skip_focused = state.active_field == FirstRunField::SkipRcloneButton;
         let skip_style = if is_skip_focused {
-            Style::default().fg(Color::Black).bg(theme.yellow).add_modifier(Modifier::BOLD)
+            focused_button(theme.yellow, no_color)
         } else {
-            Style::default().fg(theme.text_muted).bg(theme.border)
+            Style::default().fg(theme.text_muted).bg(idle_bg)
         };
         let skip_text = " [ Skip for now (Esc) ] ";
         btn_spans.push(Span::styled(skip_text, skip_style));
@@ -256,6 +278,7 @@ fn render_step_remote(
     area: Rect,
     hitboxes: &mut Vec<Hitbox>,
 ) {
+    let g = app.glyphs();
     let remotes = crate::rclone::list_remotes();
     let has_drive = remotes.iter().any(|r| r.is_drive());
 
@@ -301,14 +324,14 @@ fn render_step_remote(
     } else {
         let max_w = inner_in.width as usize;
         let text = if is_active {
-            crate::ui::settings::format_scrolled_input_with_cursor(&state.remote_input, state.remote_cursor, max_w, app.glyphs().ellipsis)
+            crate::ui::settings::format_scrolled_input_with_cursor(&state.remote_input, state.remote_cursor, max_w, g.ellipsis)
         } else {
             state.remote_input.clone()
         };
         // Badge du type détecté
         let kind = crate::rclone::remote_type(&state.remote_input);
         let kind_owned: String = match kind.as_deref() {
-            Some("drive") => format!("  [Google Drive {}]", app.glyphs().done),
+            Some("drive") => format!("  [Google Drive {}]", g.done),
             Some(k) => format!("  [{}]", k),
             None => "  [unknown — run `rclone config`?]".to_string(),
         };
@@ -322,20 +345,28 @@ fn render_step_remote(
 
     // 3. Buttons
     let btn_area = chunks[2];
+    let no_color = app.term_caps.color == ColorLevel::None;
+    // Idle buttons lose their slate background outside truecolor: in
+    // Ansi16 both muted text and slate collapse onto Gray (invisible).
+    let idle_bg = if app.term_caps.color == ColorLevel::Ansi16 {
+        Color::Reset
+    } else {
+        theme.border
+    };
     let is_cont = state.active_field == FirstRunField::RemoteContinueButton;
     let is_skip = state.active_field == FirstRunField::RemoteSkipButton;
     let cont_style = if is_cont {
-        Style::default().fg(Color::Black).bg(theme.green).add_modifier(Modifier::BOLD)
+        focused_button(theme.green, no_color)
     } else {
-        Style::default().fg(theme.text_bright).bg(theme.border).add_modifier(Modifier::BOLD)
+        Style::default().fg(theme.text_bright).bg(idle_bg).add_modifier(Modifier::BOLD)
     };
     let skip_style = if is_skip {
-        Style::default().fg(Color::Black).bg(theme.yellow).add_modifier(Modifier::BOLD)
+        focused_button(theme.yellow, no_color)
     } else {
-        Style::default().fg(theme.text_muted).bg(theme.border)
+        Style::default().fg(theme.text_muted).bg(idle_bg)
     };
     let wants_google = state.wants_google_step();
-    let btn_cont = if wants_google { format!(" [ Next: Google API {} (Enter) ] ", app.glyphs().arrow_right) } else { " [ Save & Finish (Enter) ] ".to_string() };
+    let btn_cont = if wants_google { format!(" [ Next: Google API {} (Enter) ] ", g.arrow_right) } else { " [ Save & Finish (Enter) ] ".to_string() };
     let btn_skip = " [ Skip (Esc) ] ";
     f.render_widget(
         Paragraph::new(Line::from(vec![
@@ -376,7 +407,7 @@ fn render_step_remote(
             Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD),
         ))];
         for r in remotes.iter().take(5) {
-            let marker = if r.display_name() == state.remote_input { app.glyphs().bullet_active } else { app.glyphs().bullet_idle };
+            let marker = if r.display_name() == state.remote_input { g.bullet_active } else { g.bullet_idle };
             let col = if r.is_drive() { theme.green } else { theme.text_bright };
             v.push(Line::from(vec![
                 Span::styled(format!("  {} ", marker), Style::default().fg(col).add_modifier(Modifier::BOLD)),
@@ -407,6 +438,7 @@ fn render_step_google(
     area: Rect,
     hitboxes: &mut Vec<Hitbox>,
 ) {
+    let g = app.glyphs();
     let constraints = if state.show_help {
         vec![
             Constraint::Length(4), // Explanatory banner
@@ -433,8 +465,8 @@ fn render_step_google(
     // 1. Explanatory banner with text wrapping
     let quota_info = vec![
         Line::from(Span::styled("Why use your own Google Cloud Console credentials?", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))),
-        Line::from(format!("{} By default, rclone uses a shared public ID causing 403 Rate Limit errors.", app.glyphs().bullet_idle)),
-        Line::from(format!("{} A custom Client ID gives you a dedicated personal quota (1,000 req/100s).", app.glyphs().bullet_idle)),
+        Line::from(format!("{} By default, rclone uses a shared public ID causing 403 Rate Limit errors.", g.bullet_idle)),
+        Line::from(format!("{} A custom Client ID gives you a dedicated personal quota (1,000 req/100s).", g.bullet_idle)),
     ];
     f.render_widget(Paragraph::new(quota_info).wrap(Wrap { trim: true }), chunks[0]);
 
@@ -462,7 +494,7 @@ fn render_step_google(
     } else {
         let max_w = id_inner.width as usize;
         let text = if is_id_active {
-            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_id, state.client_id_cursor, max_w, app.glyphs().ellipsis)
+            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_id, state.client_id_cursor, max_w, g.ellipsis)
         } else {
             state.client_id.clone()
         };
@@ -499,9 +531,9 @@ fn render_step_google(
     } else {
         let max_w = sec_inner.width as usize;
         let text = if is_sec_active {
-            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_secret, state.client_secret_cursor, max_w, app.glyphs().ellipsis)
+            crate::ui::settings::format_scrolled_input_with_cursor(&state.client_secret, state.client_secret_cursor, max_w, g.ellipsis)
         } else {
-            app.glyphs().bullet_idle.repeat(state.client_secret.chars().count())
+            g.bullet_idle.repeat(state.client_secret.chars().count())
         };
         Line::from(Span::styled(text, Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)))
     };
@@ -514,26 +546,34 @@ fn render_step_google(
 
     // 4. Action buttons (compact & responsive)
     let btn_area = chunks[3];
+    let no_color = app.term_caps.color == ColorLevel::None;
+    // Idle buttons lose their slate background outside truecolor: in
+    // Ansi16 both muted text and slate collapse onto Gray (invisible).
+    let idle_bg = if app.term_caps.color == ColorLevel::Ansi16 {
+        Color::Reset
+    } else {
+        theme.border
+    };
     let is_save_focused = state.active_field == FirstRunField::SaveCredentialsButton;
     let is_skip_focused = state.active_field == FirstRunField::SkipCredentialsButton;
     let is_help_focused = state.active_field == FirstRunField::ToggleHelpButton;
 
     let save_style = if is_save_focused {
-        Style::default().fg(Color::Black).bg(theme.green).add_modifier(Modifier::BOLD)
+        focused_button(theme.green, no_color)
     } else {
-        Style::default().fg(theme.text_bright).bg(theme.border).add_modifier(Modifier::BOLD)
+        Style::default().fg(theme.text_bright).bg(idle_bg).add_modifier(Modifier::BOLD)
     };
 
     let skip_style = if is_skip_focused {
-        Style::default().fg(Color::Black).bg(theme.yellow).add_modifier(Modifier::BOLD)
+        focused_button(theme.yellow, no_color)
     } else {
-        Style::default().fg(theme.text_muted).bg(theme.border)
+        Style::default().fg(theme.text_muted).bg(idle_bg)
     };
 
     let help_style = if is_help_focused {
-        Style::default().fg(Color::Black).bg(theme.cyan).add_modifier(Modifier::BOLD)
+        focused_button(theme.cyan, no_color)
     } else {
-        Style::default().fg(theme.cyan).bg(theme.border)
+        Style::default().fg(theme.cyan).bg(idle_bg)
     };
 
     let btn_save = " [ Save & Complete Setup (Enter) ] ";

@@ -118,9 +118,9 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     let parent = p.parent().and_then(|p| p.to_str()).unwrap_or("");
                     let parent_clean = parent.trim_start_matches('/').trim_end_matches('/');
                     if parent_clean.is_empty() {
-                        "📁 ./".to_string()
+                        format!("{} ./", app.glyphs().folder)
                     } else {
-                        format!("📁 {}/", parent_clean)
+                        format!("{} {}/", app.glyphs().folder, parent_clean)
                     }
                 } else {
                     entry.name.clone()

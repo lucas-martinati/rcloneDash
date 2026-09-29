@@ -2134,6 +2134,14 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert_eq!(app.term_caps, crate::term_caps::TermCaps::full());
     }
 
+    #[tokio::test]
+    async fn test_effective_tty_mode_prefers_override() {
+        let mut app = App::new();
+        assert_eq!(app.effective_tty_mode(), app.config.tty_mode);
+        app.tty_mode_override = Some(crate::term_caps::TtyMode::Off);
+        assert_eq!(app.effective_tty_mode(), crate::term_caps::TtyMode::Off);
+    }
+
     #[test]
     fn test_display_value_covers_all_setting_choices() {
         // Locks display_value() against GraphStyleChoice::name() (and any
@@ -2262,14 +2270,57 @@ use crate::monitor::history::{PastRun, RunStatus};
     }
 
     #[tokio::test]
+    async fn test_first_run_focus_stays_visible_without_colors() {
+        // Focused wizard buttons differ from idle ones only by background:
+        // under NO_COLOR the focused button is inverted instead.
+        let mut app = App::new();
+        app.term_caps = crate::term_caps::TermCaps {
+            color: crate::term_caps::ColorLevel::None,
+            live: false,
+            ascii: true,
+        };
+        app.modal = Modal::FirstRun(Box::new(crate::app::FirstRunState {
+            step: crate::app::FirstRunStep::RemoteSetup,
+            rclone_status: crate::app::RcloneInstallStatus::Installed("1.99".into()),
+            remote_input: "GoogleDrive:".into(),
+            remote_cursor: 12,
+            client_id: String::new(),
+            client_secret: String::new(),
+            active_field: crate::app::FirstRunField::RemoteContinueButton,
+            show_help: false,
+            client_id_cursor: 0,
+            client_secret_cursor: 0,
+        }));
+
+        let backend = ratatui::backend::TestBackend::new(100, 30);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal.draw(|f| {
+            crate::ui::render(f, &mut app);
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let reversed = (0..buffer.area.height)
+            .flat_map(|y| (0..buffer.area.width).map(move |x| &buffer[(x, y)]))
+            .filter(|c| c.modifier.contains(ratatui::style::Modifier::REVERSED))
+            .count();
+        assert!(reversed > 0, "focused wizard button must stay visible via REVERSED");
+    }
+
+    #[tokio::test]
     async fn test_ascii_render_denylist_across_screens() {
-        // Allowlist: in ascii mode only pure ASCII and box drawing may
-        // reach the screen (box drawing is kept for TERM=linux consoles,
-        // whose fonts include it). The branding logo is the only remaining
-        // '█' source, so only logo screens allow it. Explicitly allowed
-        // residuals: decorative emoji, latin-1 '·' (filter marker) and '—'
-        // inside English prose; everything else must go through Glyphs.
-        const ALLOWED_RESIDUAL: [char; 9] = ['💻', '☁', '📊', '🛡', '📜', '📦', '⏱', '·', '—'];
+        // Allowlist: in ascii mode only pure ASCII and single-line box
+        // drawing may reach the screen (kept for TERM=linux consoles, whose
+        // fonts include it; the code never emits double/thick junctions in
+        // ascii mode). The branding logo is the only remaining '█' source,
+        // so only logo screens allow it. Explicitly allowed residuals:
+        // latin-1 '·' (filter marker) and '—' inside English prose.
+        const ALLOWED_BOX: [char; 10] = ['─', '│', '┌', '┐', '└', '┘', '┬', '┴', '├', '┤'];
+        // The branding logo (double-line 3D art) is intentionally left
+        // untouched: logo screens tolerate its charset on top of the above.
+        const LOGO_CHARS: [char; 12] = [
+            '█', '═', '║', '╔', '╗', '╚', '╝', '╦', '╩', '╠', '╣', '┼',
+        ];
+        const ALLOWED_RESIDUAL: [char; 2] = ['·', '—'];
         let ascii_caps = crate::term_caps::TermCaps {
             color: crate::term_caps::ColorLevel::Ansi16,
             live: false,
@@ -2342,42 +2393,50 @@ use crate::monitor::history::{PastRun, RunStatus};
             }
         }
         for (caps, modal, tab, idx, w, h, allow_logo) in cases {
-        let mut app = App::new();
+            let mut app = App::new();
             app.term_caps = caps;
+            // Isolate from the real ~/GoogleDrive: user file names may hold
+            // any Unicode (e.g. French folder names) and must not fail the
+            // allowlist — only UI-drawn glyphs are covered.
+            let empty_dir = std::env::temp_dir().join("rclonedash_ascii_test_empty");
+            let _ = std::fs::create_dir_all(&empty_dir);
+            app.config.local_dir = empty_dir.to_string_lossy().to_string();
+            app.reload_files();
             app.modal = modal.clone();
             app.settings_tab = tab;
             app.settings_selected_idx = idx;
-            if modal == Modal::None || matches!(modal, Modal::HistoryDetails(_)) {
-                // Force scrollbars, graph and status rows onto the dashboard.
-                app.live.log_lines = (0..200).map(|i| format!("log line {}", i)).collect();
-                app.past_runs = vec![
-                    PastRun {
-                        id: 1,
-                        date: "2026-09-18".into(),
-                        time: "08:00".into(),
-                        duration: "10s".into(),
-                        status: RunStatus::Success,
-                        files_copied: vec![],
-                        files_modified: vec![],
-                        files_deleted: vec![],
-                        errors: vec![],
-                        synced_files: vec![],
-                    },
-                    PastRun {
-                        id: 2,
-                        date: "2026-09-18".into(),
-                        time: "08:15".into(),
-                        duration: "20s".into(),
-                        status: RunStatus::Failed,
-                        files_copied: vec![],
-                        files_modified: vec![],
-                        files_deleted: vec![],
-                        errors: vec!["boom".into()],
-                        synced_files: vec![],
-                    },
-                ];
-                app.selected_run_idx = Some(0);
-            }
+            // Deterministic fixtures behind every screen: the dashboard
+            // background renders real journal/file data otherwise.
+            // Force scrollbars, graph and status rows onto the dashboard.
+            app.live.log_lines = (0..200).map(|i| format!("log line {}", i)).collect();
+            app.past_runs = vec![
+                PastRun {
+                    id: 1,
+                    date: "2026-09-18".into(),
+                    time: "08:00".into(),
+                    duration: "10s".into(),
+                    status: RunStatus::Success,
+                    files_copied: vec!["a.txt".into()],
+                    files_modified: vec![],
+                    files_deleted: vec![],
+                    errors: vec![],
+                    synced_files: vec![],
+                },
+                PastRun {
+                    id: 2,
+                    date: "2026-09-18".into(),
+                    time: "08:15".into(),
+                    duration: "20s".into(),
+                    status: RunStatus::Failed,
+                    files_copied: vec![],
+                    files_modified: vec![],
+                    files_deleted: vec![],
+                    errors: vec!["boom".into()],
+                    synced_files: vec![],
+                },
+            ];
+            app.selected_run_idx = Some(0);
+            app.recent_selected_idx = Some(0);
 
             let backend = ratatui::backend::TestBackend::new(w, h);
             let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -2398,8 +2457,8 @@ use crate::monitor::history::{PastRun, RunStatus};
                 let bad: Vec<char> = text
                     .chars()
                     .filter(|c| !c.is_ascii())
-                    .filter(|c| !('\u{2500}'..='\u{257F}').contains(c))
-                    .filter(|c| !(allow_logo && *c == '█'))
+                    .filter(|c| !ALLOWED_BOX.contains(c))
+                    .filter(|c| !(allow_logo && LOGO_CHARS.contains(c)))
                     .filter(|c| !ALLOWED_RESIDUAL.contains(c))
                     .collect();
                 assert!(

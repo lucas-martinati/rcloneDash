@@ -29,7 +29,7 @@ pub fn render_active_sync_section(f: &mut Frame, app: &App, theme: &ThemePalette
     ]);
 
     let right_title = Line::from(vec![
-        Span::styled("⏱ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{} ", app.glyphs().clock), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
         Span::styled(format!("{} ", elapsed), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
     ]);
 

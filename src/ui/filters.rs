@@ -111,6 +111,7 @@ pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitb
 
 fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, hitboxes: &mut Vec<Hitbox>) {
     let visible_height = area.height as usize;
+    let g = app.glyphs();
     if visible_height == 0 {
         return;
     }
@@ -183,11 +184,11 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     };
 
                     let line = Line::from(vec![
-                        Span::styled(format!("{} ", app.glyphs().edit), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
-                        Span::styled(format!("{:2} {} ", i + 1, app.glyphs().vline), Style::default().fg(theme.yellow)),
+                        Span::styled(format!("{} ", g.edit), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+                        Span::styled(format!("{:2} {} ", i + 1, g.vline), Style::default().fg(theme.yellow)),
                         Span::styled("[ ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                         Span::styled(buf.to_string(), Style::default().fg(text_col).add_modifier(Modifier::BOLD)),
-                        Span::styled(app.glyphs().bar_fill, Style::default().fg(theme.yellow).add_modifier(Modifier::RAPID_BLINK)),
+                        Span::styled(g.bar_fill, Style::default().fg(theme.yellow).add_modifier(Modifier::RAPID_BLINK)),
                         Span::styled(" ]", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     ]);
                     ListItem::new(line).style(crate::term_caps::selected_style(Color::Rgb(45, 30, 60), app.term_caps.color))
@@ -251,7 +252,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
                     };
 
                     let cursor_span = if is_selected {
-                        Span::styled(format!("{} ", app.glyphs().bullet_active), Style::default().fg(theme.purple).add_modifier(Modifier::BOLD))
+                        Span::styled(format!("{} ", g.bullet_active), Style::default().fg(theme.purple).add_modifier(Modifier::BOLD))
                     } else {
                         Span::styled("  ", Style::default())
                     };
@@ -307,6 +308,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
 }
 
 fn render_filters_help(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect, _hitboxes: &mut Vec<Hitbox>) {
+    let g = app.glyphs();
     let lines = vec![
         Line::from(vec![
             Span::styled(" FILTER SYNTAX ", Style::default().fg(theme.purple).add_modifier(Modifier::BOLD)),
@@ -339,15 +341,15 @@ fn render_filters_help(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rec
             Span::styled("    # Project archive rules", Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC)),
         ]),
         Line::from(""),
-        Line::from(Span::styled(app.glyphs().hline.repeat(area.width.saturating_sub(2) as usize), Style::default().fg(theme.border))),
+        Line::from(Span::styled(g.hline.repeat(area.width.saturating_sub(2) as usize), Style::default().fg(theme.border))),
         Line::from(""),
-        Line::from(Span::styled(format!("{} Exclusions ignore matching files", app.glyphs().bullet_idle), Style::default().fg(theme.text_bright))),
+        Line::from(Span::styled(format!("{} Exclusions ignore matching files", g.bullet_idle), Style::default().fg(theme.text_bright))),
         Line::from(Span::styled("  and folders during synchronization.", Style::default().fg(theme.text_muted))),
         Line::from(""),
-        Line::from(Span::styled(format!("{} Inclusions take priority over", app.glyphs().bullet_idle), Style::default().fg(theme.text_bright))),
+        Line::from(Span::styled(format!("{} Inclusions take priority over", g.bullet_idle), Style::default().fg(theme.text_bright))),
         Line::from(Span::styled("  subsequent exclusion patterns.", Style::default().fg(theme.text_muted))),
         Line::from(""),
-        Line::from(Span::styled(format!("{} All changes are saved automatically", app.glyphs().bullet_idle), Style::default().fg(theme.cyan))),
+        Line::from(Span::styled(format!("{} All changes are saved automatically", g.bullet_idle), Style::default().fg(theme.cyan))),
         Line::from(Span::styled(format!("  to ~/.config/rclone/{}", crate::config::filters_display_name()), Style::default().fg(theme.text_muted))),
         Line::from(Span::styled("  and applied on next bisync run.", Style::default().fg(theme.text_muted))),
     ];

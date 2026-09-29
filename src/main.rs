@@ -39,7 +39,10 @@ use term_caps::TtyMode;
 /// Extracts the global `--tty-mode=auto|on|off` (or `--tty-mode <mode>`)
 /// flag. Returns the override plus the remaining args (program name kept at
 /// index 0). The flag wins over `dash-config.json` and is never saved.
-fn parse_tty_override(args: &[String]) -> (Option<TtyMode>, Vec<String>) {
+/// Returns `Err` on an invalid value instead of exiting, so it stays unit
+/// testable (`main` turns it into exit code 2).
+fn parse_tty_override(args: &[String]) -> Result<(Option<TtyMode>, Vec<String>), String> {
+    let valid = || TtyMode::options().join(", ");
     let mut tty_override = None;
     let mut rest = Vec::with_capacity(args.len());
     if let Some(first) = args.first() {
@@ -53,23 +56,18 @@ fn parse_tty_override(args: &[String]) -> (Option<TtyMode>, Vec<String>) {
             match args.get(i).and_then(|v| TtyMode::parse(v)) {
                 Some(m) => tty_override = Some(m),
                 None => {
-                    eprintln!(
-                        "Invalid --tty-mode value: expected one of: {}",
-                        TtyMode::options().join(", ")
-                    );
-                    std::process::exit(2);
+                    return Err(format!("Invalid --tty-mode value: expected one of: {}", valid()));
                 }
             }
         } else if let Some(v) = a.strip_prefix("--tty-mode=") {
             match TtyMode::parse(v) {
                 Some(m) => tty_override = Some(m),
                 None => {
-                    eprintln!(
+                    return Err(format!(
                         "Invalid --tty-mode value '{}': expected one of: {}",
                         v,
-                        TtyMode::options().join(", ")
-                    );
-                    std::process::exit(2);
+                        valid()
+                    ));
                 }
             }
         } else {
@@ -77,7 +75,7 @@ fn parse_tty_override(args: &[String]) -> (Option<TtyMode>, Vec<String>) {
         }
         i += 1;
     }
-    (tty_override, rest)
+    Ok((tty_override, rest))
 }
 
 /// Effective TTY mode for CLI (updater) paths: flag first, config fallback.
@@ -89,18 +87,22 @@ fn cli_tty_mode(tty_override: Option<TtyMode>) -> TtyMode {
 /// explicit `--tty-mode=off` forces colors even when piped or NO_COLOR
 /// (like `ls --color=always`).
 fn cli_style(tty_override: Option<TtyMode>) -> updater::ConsoleStyle {
-    let mut style = updater::ConsoleStyle::with_mode(cli_tty_mode(tty_override));
-    if tty_override == Some(TtyMode::Off) {
-        style.caps.color = term_caps::ColorLevel::TrueColor;
-    }
-    style
+    let mode = cli_tty_mode(tty_override);
+    let forced = tty_override == Some(TtyMode::Off);
+    updater::ConsoleStyle::from_caps(term_caps::TermCaps::resolve_forced(mode, forced))
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Handle command-line arguments (before initializing TUI / raw mode)
     let args: Vec<String> = std::env::args().collect();
-    let (tty_override, args) = parse_tty_override(&args);
+    let (tty_override, args) = match parse_tty_override(&args) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
     let force_first_run = args.iter().any(|a| a == "--first-run" || a == "--wizard");
 
     if args.len() > 1 && !force_first_run {
@@ -390,5 +392,41 @@ fn handle_single_event(
             Ok(true)
         }
         _ => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn test_parse_tty_override_forms() {
+        // `=` form keeps the other args in order.
+        let (mode, rest) = parse_tty_override(&argv(&["rclonedash", "--tty-mode=on", "--update"])).unwrap();
+        assert_eq!(mode, Some(TtyMode::On));
+        assert_eq!(rest, argv(&["rclonedash", "--update"]));
+
+        // Space form.
+        let (mode, rest) = parse_tty_override(&argv(&["rclonedash", "--tty-mode", "off"])).unwrap();
+        assert_eq!(mode, Some(TtyMode::Off));
+        assert_eq!(rest, argv(&["rclonedash"]));
+
+        // Last flag wins.
+        let (mode, _) =
+            parse_tty_override(&argv(&["rclonedash", "--tty-mode=on", "--tty-mode=auto"])).unwrap();
+        assert_eq!(mode, Some(TtyMode::Auto));
+
+        // Invalid values and a missing value are errors (main exits 2).
+        assert!(parse_tty_override(&argv(&["rclonedash", "--tty-mode=bogus"])).is_err());
+        assert!(parse_tty_override(&argv(&["rclonedash", "--tty-mode"])).is_err());
+
+        // No flag: passthrough.
+        let (mode, rest) = parse_tty_override(&argv(&["rclonedash", "--update"])).unwrap();
+        assert_eq!(mode, None);
+        assert_eq!(rest, argv(&["rclonedash", "--update"]));
     }
 }

@@ -48,6 +48,7 @@ pub fn render_history_graph_multiline(
     }
 
     let chart_height = height.saturating_sub(1).max(1);
+    let glyphs = Glyphs::new(ascii);
     let col_width = if width >= 50 { 2 } else { 1 };
     let gap = 1;
     let col_total_width = col_width + gap;
@@ -76,11 +77,11 @@ pub fn render_history_graph_multiline(
 
     // --- Line 0: Header with stats and selection info ---
     let mut header_spans = Vec::new();
-    header_spans.push(Span::styled("⏱ DURATION ", Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
+    header_spans.push(Span::styled(format!("{}DURATION ", glyphs.clock), Style::default().fg(theme.highlight).add_modifier(Modifier::BOLD)));
 
     if let Some(sel) = selected_idx {
         if let Some(r) = past_runs.get(sel) {
-            let dot = Glyphs::new(ascii).dot;
+            let dot = glyphs.dot;
             let sep = if ascii { "-" } else { "·" };
             let status_span = match r.status {
                 RunStatus::Success => Span::styled(format!("{} OK", dot), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),

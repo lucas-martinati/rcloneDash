@@ -241,6 +241,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
 use crate::monitor::DryRunSummary;
 
 fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
+    let g = app.glyphs();
     let area = centered_rect(82, 85, f.area());
 
     // Le résumé se calcule sur les lignes brutes (cf. dry_run_raw_logs) :
@@ -258,7 +259,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         None
     } else if app.dry_run_logs.is_empty() {
         Some(vec![
-            KeybindingRegistry::format_shortcut_label(&format!("{}, r", app.glyphs().enter), "start", theme.green, Color::White),
+            KeybindingRegistry::format_shortcut_label(&format!("{}, r", g.enter), "start", theme.green, Color::White),
         ])
     } else {
         Some(vec![
@@ -266,13 +267,14 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         ])
     };
 
+    let dry_title = format!("{} Dry-Run Simulation", g.shield);
     let inner = render_modal_container(
         f,
         app,
         theme,
         area,
         ModalContainerConfig {
-            title_prefix: "🛡 Dry-Run Simulation",
+            title_prefix: &dry_title,
             title_color: Some(theme.cyan),
             nav_arrows: Some(NavArrowsConfig {
                 label: "scroll",
@@ -317,7 +319,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         .border_type(app.border_type())
         .border_style(Style::default().fg(theme.border))
         .title(Line::from(vec![
-            Span::styled(" 📊 ", Style::default().fg(theme.cyan)),
+            Span::styled(format!(" {} ", g.chart), Style::default().fg(theme.cyan)),
             Span::styled("Simulation Summary", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
             Span::styled(" ", Style::default()),
         ]));
@@ -333,7 +335,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             // Line 1: Ready status
             summary_lines.push(Line::from(vec![
                 Span::styled(
-                    format!("{} ", app.glyphs().dot_open),
+                    format!("{} ", g.dot_open),
                     Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
@@ -349,10 +351,10 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             // Line 2: Scope description
             if s_inner.height >= 2 {
                 summary_lines.push(Line::from(vec![
-                    Span::styled("💻 Local (Path 2) ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("{} ", app.glyphs().swap), Style::default().fg(theme.text_muted)),
-                    Span::styled("☁ Remote (Path 1)", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("   {}   Filter rules and rclone config active", app.glyphs().vline), Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("{} Local (Path 2) ", g.pc), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", g.swap), Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("{} Remote (Path 1)", g.cloud), Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("   {}   Filter rules and rclone config active", g.vline), Style::default().fg(theme.text_muted)),
                 ]));
             }
 
@@ -361,19 +363,19 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             // Line 1: Overall status banner
             let status_spans = if app.dry_run_running {
                 vec![
-                    Span::styled(format!("{} ", app.glyphs().dot), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", g.dot), Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     Span::styled("Simulation in progress: ", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     Span::styled("rclone bisync --dry-run analyzing differences...", Style::default().fg(theme.text_bright)),
                 ]
             } else if summary.has_errors {
                 vec![
-                    Span::styled(format!("{} ", app.glyphs().cross), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", g.cross), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled("Errors detected during simulation ", Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                     Span::styled("(see details in execution logs below)", Style::default().fg(theme.text_muted)),
                 ]
             } else if summary.total_changes() == 0 {
                 vec![
-                    Span::styled(format!("{} ", app.glyphs().check), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", g.check), Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                     Span::styled("Folders are in sync: ", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                     Span::styled("No differences detected between Local & Remote.", Style::default().fg(theme.text_bright)),
                 ]
@@ -381,7 +383,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 let p2_tot = summary.path2_new + summary.path2_modified + summary.path2_deleted;
                 let p1_tot = summary.path1_new + summary.path1_modified + summary.path1_deleted;
                 vec![
-                    Span::styled(format!("{} ", app.glyphs().bolt), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} ", g.bolt), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("{} planned difference(s) detected: ", summary.total_changes()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("{} local action(s), {} remote action(s)", p2_tot, p1_tot), Style::default().fg(theme.text_bright)),
                 ]
@@ -391,18 +393,18 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             // Line 2: Breakdown by path
             if s_inner.height >= 2 {
                 summary_lines.push(Line::from(vec![
-                    Span::styled("💻 Local (Path 2): ", Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("{} Local (Path 2): ", g.pc), Style::default().fg(theme.cyan).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("+{} new ", summary.path2_new), Style::default().fg(if summary.path2_new > 0 { theme.green } else { theme.text_muted }).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", g.vline), Style::default().fg(theme.border)),
                     Span::styled(format!("~{} mod ", summary.path2_modified), Style::default().fg(if summary.path2_modified > 0 { theme.yellow } else { theme.text_muted })),
-                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", g.vline), Style::default().fg(theme.border)),
                     Span::styled(format!("-{} del", summary.path2_deleted), Style::default().fg(if summary.path2_deleted > 0 { theme.red } else { theme.text_muted })),
-                    Span::styled(format!("   {}   ", app.glyphs().vline), Style::default().fg(theme.border)),
-                    Span::styled("☁ Remote (Path 1): ", Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("   {}   ", g.vline), Style::default().fg(theme.border)),
+                    Span::styled(format!("{} Remote (Path 1): ", g.cloud), Style::default().fg(theme.blue).add_modifier(Modifier::BOLD)),
                     Span::styled(format!("+{} new ", summary.path1_new), Style::default().fg(if summary.path1_new > 0 { theme.green } else { theme.text_muted }).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", g.vline), Style::default().fg(theme.border)),
                     Span::styled(format!("~{} mod ", summary.path1_modified), Style::default().fg(if summary.path1_modified > 0 { theme.yellow } else { theme.text_muted })),
-                    Span::styled(format!("{} ", app.glyphs().vline), Style::default().fg(theme.border)),
+                    Span::styled(format!("{} ", g.vline), Style::default().fg(theme.border)),
                     Span::styled(format!("-{} del", summary.path1_deleted), Style::default().fg(if summary.path1_deleted > 0 { theme.red } else { theme.text_muted })),
                 ]));
             }
@@ -414,9 +416,9 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
                 summary_lines.push(Line::from(vec![
                     Span::styled("Checks: ", Style::default().fg(theme.text_muted)),
                     Span::styled(format!("{} ", summary.checks), Style::default().fg(theme.text_bright)),
-                    Span::styled(format!("{} Volume: ", app.glyphs().vline), Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("{} Volume: ", g.vline), Style::default().fg(theme.text_muted)),
                     Span::styled(format!("{} ", bytes_str), Style::default().fg(theme.text_bright)),
-                    Span::styled(format!("{} Elapsed: ", app.glyphs().vline), Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("{} Elapsed: ", g.vline), Style::default().fg(theme.text_muted)),
                     Span::styled(format!("{} ", elapsed_str), Style::default().fg(theme.yellow)),
                 ]));
             }
@@ -432,7 +434,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         .border_type(app.border_type())
         .border_style(Style::default().fg(theme.border))
         .title(Line::from(vec![
-            Span::styled(" 📜 ", Style::default().fg(theme.cyan)),
+            Span::styled(format!(" {} ", g.doc), Style::default().fg(theme.cyan)),
             Span::styled("Execution Logs", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
             Span::styled(" ", Style::default()),
         ]));
@@ -452,28 +454,28 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
             vec![
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("  🛡  ", Style::default().fg(theme.cyan)),
+                    Span::styled(format!("  {}  ", g.shield), Style::default().fg(theme.cyan)),
                     Span::styled("DRY-RUN SIMULATION", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
                     Span::styled(" — Bidirectional Sync Preview", Style::default().fg(theme.text_muted)),
                 ]),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.cyan)),
+                    Span::styled(format!("  {} ", g.bullet_idle), Style::default().fg(theme.cyan)),
                     Span::styled("Executes ", Style::default().fg(theme.text_bright)),
                     Span::styled("rclone bisync --dry-run", Style::default().fg(theme.yellow).add_modifier(Modifier::BOLD)),
                     Span::styled(" with your active configuration and filters.", Style::default().fg(theme.text_bright)),
                 ]),
                 Line::from(vec![
-                    Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.cyan)),
+                    Span::styled(format!("  {} ", g.bullet_idle), Style::default().fg(theme.cyan)),
                     Span::styled("Compares Local (Path 2) and Remote (Path 1) safely without modifying any files.", Style::default().fg(theme.text_muted)),
                 ]),
                 Line::from(vec![
-                    Span::styled(format!("  {} ", app.glyphs().bullet_idle), Style::default().fg(theme.cyan)),
+                    Span::styled(format!("  {} ", g.bullet_idle), Style::default().fg(theme.cyan)),
                     Span::styled("Planned additions, modifications, and deletions will be listed here in real-time.", Style::default().fg(theme.text_muted)),
                 ]),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(format!("  {} Press ", app.glyphs().arrow_right), Style::default().fg(theme.text_muted)),
+                    Span::styled(format!("  {} Press ", g.arrow_bold), Style::default().fg(theme.text_muted)),
                     Span::styled("[Enter]", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
                     Span::styled(" or ", Style::default().fg(theme.text_muted)),
                     Span::styled("[r]", Style::default().fg(theme.green).add_modifier(Modifier::BOLD)),
@@ -581,7 +583,7 @@ fn render_confirm_sync_modal(
         .border_type(app.border_type())
         .border_style(Style::default().fg(theme.border))
         .title(Line::from(vec![
-            Span::styled(" 📦 ", Style::default().fg(theme.accent)),
+            Span::styled(format!(" {} ", app.glyphs().package), Style::default().fg(theme.accent)),
             Span::styled("Scope", Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
             Span::styled(" ", Style::default()),
         ]));
@@ -593,7 +595,7 @@ fn render_confirm_sync_modal(
         let max_w = card_inner.width as usize;
         let raw_scope = format!("{}  {}  {}", app.config.local_dir, app.glyphs().swap, app.config.remote);
         let mut scope_spans = vec![
-            Span::styled(format!("💻 Local {} ☁ Remote: ", app.glyphs().swap), Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{} Local {} {} Remote: ", app.glyphs().pc, app.glyphs().swap, app.glyphs().cloud), Style::default().fg(theme.text_muted)),
         ];
         scope_spans.extend(crate::ui::theme::truncate_with_fade_spans(
             &raw_scope,
@@ -733,7 +735,7 @@ fn render_confirm_resync_modal(
         let max_w = card_inner.width as usize;
         let raw_scope = format!("{}  {}  {}", app.config.local_dir, app.glyphs().swap, app.config.remote);
         let mut scope_spans = vec![
-            Span::styled(format!("💻 Local {} ☁ Remote: ", app.glyphs().swap), Style::default().fg(theme.text_muted)),
+            Span::styled(format!("{} Local {} {} Remote: ", app.glyphs().pc, app.glyphs().swap, app.glyphs().cloud), Style::default().fg(theme.text_muted)),
         ];
         scope_spans.extend(crate::ui::theme::truncate_with_fade_spans(
             &raw_scope,

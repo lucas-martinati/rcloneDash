@@ -236,11 +236,17 @@ impl App {
                 self.config.border_style = if forward { self.config.border_style.next() } else { self.config.border_style.prev() };
                 self.set_toast(format!("Border style: {}", self.config.border_style.name()));
                 self.save_current_settings();
+                if self.term_caps.ascii {
+                    self.set_toast("Border style saved (plain borders in TTY mode)");
+                }
             }
             config::SettingId::GraphStyle => {
                 self.config.graph_style = if forward { self.config.graph_style.next() } else { self.config.graph_style.prev() };
                 self.set_toast(format!("Graph style: {}", self.config.graph_style.name()));
                 self.save_current_settings();
+                if self.term_caps.ascii {
+                    self.set_toast("Graph style saved (ASCII graphs in TTY mode)");
+                }
             }
             config::SettingId::TtyMode => {
                 self.config.tty_mode = if forward { self.config.tty_mode.next() } else { self.config.tty_mode.prev() };

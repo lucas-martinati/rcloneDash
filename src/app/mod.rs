@@ -7,7 +7,7 @@ use crate::config::{self, AppConfig};
 use crate::fs_tree::{self, FileEntry};
 use crate::monitor::{fetch_past_runs, spawn_log_streamer, PastRun, RunStatus, SharedStreamer, StreamerState};
 use crate::systemd::{self, get_service_info, ServiceInfo, ServiceState};
-use crate::term_caps::{ColorLevel, TermCaps, TtyMode};
+use crate::term_caps::{TermCaps, TtyMode};
 use crate::ui::theme::ThemeChoice;
 
 
@@ -628,20 +628,22 @@ impl App {
     }
 
     /// Recomputes [`Self::term_caps`] from the effective TTY mode and the
-    /// real terminal. Call after config load, CLI override, or cycling.
+    /// real terminal. A no-op in tests (deterministic `full()` caps); an
+    /// explicit `--tty-mode=off` override forces colors even piped.
+    /// Single source of truth: every refresh goes through here, so the
+    /// force flag can never be lost by a later refresh.
     pub fn refresh_term_caps(&mut self) {
-        self.term_caps = TermCaps::resolve(self.effective_tty_mode());
+        #[cfg(not(test))]
+        {
+            let forced = self.tty_mode_override == Some(TtyMode::Off);
+            self.term_caps = TermCaps::resolve_forced(self.effective_tty_mode(), forced);
+        }
     }
 
     /// Applies a CLI `--tty-mode` override (kept out of the saved config).
-    /// An explicit `off` forces colors even piped or NO_COLOR
-    /// (like `ls --color=always`).
     pub fn apply_tty_override(&mut self, mode: TtyMode) {
         self.tty_mode_override = Some(mode);
         self.refresh_term_caps();
-        if mode == TtyMode::Off {
-            self.term_caps.color = ColorLevel::TrueColor;
-        }
     }
 
     pub fn border_glyphs(&self) -> crate::config::BorderGlyphs {

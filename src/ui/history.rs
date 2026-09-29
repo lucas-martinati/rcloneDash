@@ -34,6 +34,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     }
 
     let run = &app.past_runs[run_idx];
+    let g = app.glyphs();
     let mut all_lines: Vec<(Line, Option<usize>)> = Vec::new(); // (line, option<file_idx>)
 
     // En-tête du run
@@ -42,14 +43,14 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         Span::styled(format!("{} ", run.id), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         Span::styled(" on ", Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} at {} ", run.date, run.time), Style::default().fg(theme.text_bright).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{} Duration: ", app.glyphs().vline), Style::default().fg(theme.text_muted)),
+        Span::styled(format!("{} Duration: ", g.vline), Style::default().fg(theme.text_muted)),
         Span::styled(format!("{} ", run.duration), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
     ]), None));
 
     let (status_str, status_color): (String, _) = match run.status {
-        RunStatus::Success => (format!("{} SUCCESS", app.glyphs().check), theme.green),
-        RunStatus::Failed => (format!("{} FAILED", app.glyphs().fail), theme.red),
-        RunStatus::Skipped => (format!("{} SKIPPED (No changes)", app.glyphs().skip), theme.text_muted),
+        RunStatus::Success => (format!("{} SUCCESS", g.check), theme.green),
+        RunStatus::Failed => (format!("{} FAILED", g.fail), theme.red),
+        RunStatus::Skipped => (format!("{} SKIPPED (No changes)", g.skip), theme.text_muted),
     };
 
     all_lines.push((Line::from(vec![
@@ -57,7 +58,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
         Span::styled(status_str, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
     ]), None));
 
-    all_lines.push((Line::from(Span::styled(app.glyphs().hline.repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
+    all_lines.push((Line::from(Span::styled(g.hline.repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
 
     // Erreurs
     if !run.errors.is_empty() {
@@ -74,7 +75,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
             for (i, part) in wrapped.into_iter().enumerate() {
                 if i == 0 {
                     all_lines.push((Line::from(vec![
-                        Span::styled(format!("   {} ", app.glyphs().bullet_idle), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
+                        Span::styled(format!("   {} ", g.bullet_idle), Style::default().fg(theme.red).add_modifier(Modifier::BOLD)),
                         Span::styled(part, Style::default().fg(theme.red)),
                     ]), None));
                 } else {
@@ -85,13 +86,13 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 }
             }
         }
-        all_lines.push((Line::from(Span::styled(app.glyphs().hline.repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
+        all_lines.push((Line::from(Span::styled(g.hline.repeat(area.width.saturating_sub(4) as usize), Style::default().fg(theme.border))), None));
     }
 
     let affected_files = run.all_affected_files();
     if !affected_files.is_empty() {
         all_lines.push((Line::from(vec![
-            Span::styled(format!(" 📁 AFFECTED FILES ({}):", affected_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(format!(" {} AFFECTED FILES ({}):", g.folder, affected_files.len()), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         ]), None));
 
         for (idx, (action, path)) in affected_files.iter().enumerate() {
@@ -103,7 +104,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
                 _ => ("[~] Modified", theme.yellow),
             };
 
-            let prefix = if is_selected { format!(" {} ", app.glyphs().bullet_active) } else { "   ".to_string() };
+            let prefix = if is_selected { format!(" {} ", g.bullet_active) } else { "   ".to_string() };
             let highlight = selected_style(Color::Rgb(90, 32, 32), app.term_caps.color);
 
             let mut line_spans = if is_selected {
@@ -148,7 +149,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     let mut actions = Vec::new();
 
     if has_files {
-        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label(app.glyphs().enter, "Open", theme.highlight, Color::White));
+        actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label(g.enter, "Open", theme.highlight, Color::White));
         let mode_label = if app.ctrl_mode { "File" } else { "Folder" };
         actions.push(crate::ui::keys::KeybindingRegistry::format_shortcut_label("Ctrl+X", mode_label, theme.highlight, Color::White));
     }

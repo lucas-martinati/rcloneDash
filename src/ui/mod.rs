@@ -24,7 +24,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::term_caps::{downgrade_color, ColorLevel, TermCaps};
+use crate::term_caps::{downgrade_bg, downgrade_color, ColorLevel, TermCaps};
 use dashboard::render_dashboard;
 use footer::render_footer;
 use popups::render_popups;
@@ -100,7 +100,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     if level != ColorLevel::TrueColor {
         for cell in f.buffer_mut().content.iter_mut() {
             cell.fg = downgrade_color(cell.fg, level);
-            cell.bg = downgrade_color(cell.bg, level);
+            cell.bg = downgrade_bg(cell.bg, level);
         }
     }
 }

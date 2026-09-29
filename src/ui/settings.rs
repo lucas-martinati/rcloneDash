@@ -583,8 +583,12 @@ fn parse_option_line(line: &str, theme: &ThemePalette, glyphs: &crate::term_caps
     let idle_pat = format!("{} ", glyphs.bullet_idle);
 
     while !rem.is_empty() {
+        // Bullets only count at line start or after column padding (2+
+        // spaces): a `>` inside a label ("History > Logs") or a `*` inside
+        // text must not split the line in ASCII mode.
         let next_bullet = rem.match_indices(active_pat.as_str())
             .chain(rem.match_indices(idle_pat.as_str()))
+            .filter(|(idx, _)| *idx == 0 || rem[..*idx].ends_with("  "))
             .min_by_key(|&(idx, _)| idx);
 
         if let Some((pos, bullet_str)) = next_bullet {
@@ -603,6 +607,7 @@ fn parse_option_line(line: &str, theme: &ThemePalette, glyphs: &crate::term_caps
 
             let next_end = rem.match_indices(active_pat.as_str())
                 .chain(rem.match_indices(idle_pat.as_str()))
+                .filter(|(idx, _)| *idx == 0 || rem[..*idx].ends_with("  "))
                 .min_by_key(|&(idx, _)| idx)
                 .map(|(idx, _)| idx)
                 .unwrap_or(rem.len());
@@ -699,6 +704,41 @@ pub fn format_scrolled_input_with_cursor(buf: &str, cursor_pos: usize, max_w: us
 
 fn superscript_digit(ascii: bool, n: usize) -> &'static str {
     crate::term_caps::Glyphs::tab_digit(ascii, n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn span_texts(line: &Line) -> Vec<String> {
+        line.spans.iter().map(|s| s.content.to_string()).collect()
+    }
+
+    #[test]
+    fn test_parse_option_line_ignores_inner_ascii_bullets() {
+        use crate::ui::theme::ThemeChoice;
+        let glyphs = crate::term_caps::Glyphs::ascii();
+        let theme = ThemeChoice::TokyoNight.palette();
+        // The `>` inside the label must not split the line: exactly one
+        // bullet span, label intact.
+        let line = parse_option_line("  > History > Logs (active)", &theme, &glyphs);
+        assert_eq!(span_texts(&line), vec!["  ", "> ", "History > Logs", " (active)"]);
+        // Same for the idle marker inside text.
+        let line = parse_option_line("  * a * b", &theme, &glyphs);
+        assert_eq!(span_texts(&line), vec!["  ", "* ", "a * b"]);
+        // Multi-column padding still separates items.
+        let line = parse_option_line("> a  > b (active)", &theme, &glyphs);
+        assert_eq!(span_texts(&line), vec!["> ", "a", "  ", "> ", "b", " (active)"]);
+    }
+
+    #[test]
+    fn test_parse_option_line_unicode_unchanged() {
+        use crate::ui::theme::ThemeChoice;
+        let glyphs = crate::term_caps::Glyphs::unicode();
+        let theme = ThemeChoice::TokyoNight.palette();
+        let line = parse_option_line("  ▶ 15min (active)", &theme, &glyphs);
+        assert_eq!(span_texts(&line), vec!["  ", "▶ ", "15min", " (active)"]);
+    }
 }
 
 

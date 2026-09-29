@@ -150,13 +150,36 @@ impl TermCaps {
         }
     }
 
-    /// [`TtyMode`] resolution against the real process environment.
+    /// Polite [`TtyMode`] resolution against the real process environment
+    /// (no forcing; see [`TermCaps::resolve_forced`]).
     pub fn resolve(mode: TtyMode) -> Self {
+        Self::resolve_forced(mode, false)
+    }
+
+    /// Like [`TermCaps::resolve_from`], but an explicit user force (the
+    /// `--tty-mode=off` CLI flag) lifts colors to `TrueColor` even piped or
+    /// `NO_COLOR` — like `ls --color=always`. Pure and testable via `env`.
+    pub fn resolve_forced_from(
+        mode: TtyMode,
+        env: &impl Fn(&str) -> Option<String>,
+        is_terminal: bool,
+        forced: bool,
+    ) -> Self {
+        let mut caps = Self::resolve_from(mode, env, is_terminal);
+        if forced && mode == TtyMode::Off {
+            caps.color = ColorLevel::TrueColor;
+        }
+        caps
+    }
+
+    /// [`TermCaps::resolve_forced_from`] against the real process environment.
+    pub fn resolve_forced(mode: TtyMode, forced: bool) -> Self {
         use std::io::IsTerminal;
-        Self::resolve_from(
+        Self::resolve_forced_from(
             mode,
             &|k: &str| std::env::var(k).ok(),
             std::io::stdout().is_terminal(),
+            forced,
         )
     }
 }
@@ -272,16 +295,22 @@ const CUBE_LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
 /// (pure black → 16, near-white → 231).
 fn rgb_to_ansi256_index(r: u8, g: u8, b: u8) -> u8 {
     if r == g && g == b {
-        // Gray ramp covers 8-238; past its midpoint with white (246) the
-        // cube's white end (231) is closer. Capped so the index can never
-        // overflow past 255 (248 used to compute 232 + 24).
-        if r < 8 {
-            16
-        } else if r > 246 {
-            231
-        } else {
-            232 + (r - 8) / 10
+        let v = r;
+        // Exact cube gray when v sits on a cube level, else the closer of
+        // the ramp entry and the cube approximation (e.g. 5..7 resolve to
+        // the ramp start 232 with error 1..3, not to black with error 5..7).
+        let qi = quantize_channel(v);
+        let mut best_idx = 16 + 43 * qi;
+        let mut best_err = (v as i16 - CUBE_LEVELS[qi as usize] as i16).unsigned_abs();
+        for k in 0..24u8 {
+            let val = 8 + 10 * k;
+            let err = (v as i16 - val as i16).unsigned_abs();
+            if err < best_err {
+                best_err = err;
+                best_idx = 232 + k;
+            }
         }
+        best_idx
     } else {
         16 + 36 * quantize_channel(r) + 6 * quantize_channel(g) + quantize_channel(b)
     }
@@ -339,6 +368,36 @@ fn nearest_ansi16(r: u8, g: u8, b: u8) -> Color {
         }
     }
     best
+}
+
+/// Reduces a background color to what `level` can display. Same as
+/// [`downgrade_color`], except `Ansi16` only uses the 8 dark colors: bright
+/// backgrounds (`DarkGray`, `Light*`) blink or are ignored on real Linux
+/// consoles (VGA text blink bit), so they are never emitted.
+pub fn downgrade_bg(color: Color, level: ColorLevel) -> Color {
+    match (color, level) {
+        (_, ColorLevel::Ansi16) => {
+            let (r, g, b) = match color {
+                Color::Rgb(r, g, b) => (r, g, b),
+                Color::Indexed(idx) => ansi256_index_to_rgb(idx),
+                _ => return color,
+            };
+            let mut best = ANSI16_TABLE[0].0;
+            let mut best_dist = u32::MAX;
+            for (candidate, (tr, tg, tb)) in ANSI16_TABLE.iter().take(8) {
+                let dr = r as i32 - *tr as i32;
+                let dg = g as i32 - *tg as i32;
+                let db = b as i32 - *tb as i32;
+                let dist = (dr * dr + dg * dg + db * db) as u32;
+                if dist < best_dist {
+                    best_dist = dist;
+                    best = *candidate;
+                }
+            }
+            best
+        }
+        _ => downgrade_color(color, level),
+    }
 }
 
 /// Reduces a single color to what `level` can display:
@@ -410,11 +469,6 @@ pub struct Glyphs {
     pub hline: &'static str,
     pub corner_tl: &'static str,
     pub corner_bl: &'static str,
-    pub tee_top: &'static str,
-    pub tee_bottom: &'static str,
-    pub tee_left: &'static str,
-    pub tee_right: &'static str,
-    /// Stepper "done" tick (distinct from [`Glyphs::check`]).
     pub done: &'static str,
     /// Alternate cross used by history status badges.
     pub fail: &'static str,
@@ -441,10 +495,22 @@ pub struct Glyphs {
     pub swap: &'static str,
     /// Refresh banner icon.
     pub refresh: &'static str,
+    /// Heavy right arrow (distinct from [`Glyphs::arrow_right`]).
+    pub arrow_bold: &'static str,
     /// Space-key cap label.
     pub space: &'static str,
     /// Truncation marker.
     pub ellipsis: &'static str,
+    /// Decorative icons, dropped (empty) in ASCII mode.
+    pub pc: &'static str,
+    pub cloud: &'static str,
+    pub chart: &'static str,
+    pub shield: &'static str,
+    pub doc: &'static str,
+    pub package: &'static str,
+    pub clock: &'static str,
+    /// Folder icon, dropped (empty) in ASCII mode.
+    pub folder: &'static str,
 }
 
 impl Glyphs {
@@ -475,10 +541,6 @@ impl Glyphs {
             hline: "─",
             corner_tl: "┌",
             corner_bl: "└",
-            tee_top: "┬",
-            tee_bottom: "┴",
-            tee_left: "├",
-            tee_right: "┤",
             done: "✓",
             fail: "✗",
             skip: "⊘",
@@ -494,8 +556,17 @@ impl Glyphs {
             warn_plain: "⚠",
             swap: "⇄",
             refresh: "⟳",
+            arrow_bold: "➔",
             space: "␣",
             ellipsis: "…",
+            pc: "💻",
+            cloud: "☁",
+            chart: "📊",
+            shield: "🛡",
+            doc: "📜",
+            package: "📦",
+            clock: "⏱",
+            folder: "📁",
         }
     }
 
@@ -522,10 +593,6 @@ impl Glyphs {
             hline: "-",
             corner_tl: "+",
             corner_bl: "+",
-            tee_top: "+",
-            tee_bottom: "+",
-            tee_left: "+",
-            tee_right: "+",
             done: "v",
             fail: "x",
             skip: "-",
@@ -541,8 +608,17 @@ impl Glyphs {
             warn_plain: "!",
             swap: "<>",
             refresh: "@",
+            arrow_bold: ">",
             space: "Space",
             ellipsis: ".",
+            pc: "",
+            cloud: "",
+            chart: "",
+            shield: "",
+            doc: "",
+            package: "",
+            clock: "",
+            folder: "",
         }
     }
 
@@ -558,7 +634,7 @@ impl Glyphs {
                 6 => "6",
                 7 => "7",
                 8 => "8",
-                _ => "9",
+                _ => "",
             }
         } else {
             match n {
@@ -570,52 +646,104 @@ impl Glyphs {
                 6 => "⁶",
                 7 => "⁷",
                 8 => "⁸",
-                _ => "⁹",
+                _ => "",
             }
         }
     }
 
-    /// All drawable fields, for exhaustive tests.
-    pub fn all_fields(&self) -> [&'static str; 38] {
+    /// All drawable fields, for exhaustive tests. The destructure below is
+    /// deliberately exhaustive (no `..`): adding a field fails to compile
+    /// here until it is also listed in the returned array.
+    pub fn all_fields(&self) -> [&'static str; 43] {
+        let Glyphs {
+            bar_fill,
+            bar_empty,
+            diamond,
+            bullet_active,
+            bullet_idle,
+            check,
+            cross,
+            spark,
+            arrow_left,
+            arrow_right,
+            arrow_up,
+            arrow_down,
+            enter,
+            vline,
+            hline,
+            corner_tl,
+            corner_bl,
+            done,
+            fail,
+            skip,
+            edit,
+            dot,
+            dot_open,
+            rocket,
+            ok_emoji,
+            fail_emoji,
+            warn,
+            bolt,
+            hourglass,
+            warn_plain,
+            swap,
+            refresh,
+            arrow_bold,
+            space,
+            ellipsis,
+            pc,
+            cloud,
+            chart,
+            shield,
+            doc,
+            package,
+            clock,
+            folder,
+        } = *self;
         [
-            self.bar_fill,
-            self.bar_empty,
-            self.diamond,
-            self.bullet_active,
-            self.bullet_idle,
-            self.check,
-            self.cross,
-            self.spark,
-            self.arrow_left,
-            self.arrow_right,
-            self.arrow_up,
-            self.arrow_down,
-            self.enter,
-            self.vline,
-            self.hline,
-            self.corner_tl,
-            self.corner_bl,
-            self.tee_top,
-            self.tee_bottom,
-            self.tee_left,
-            self.tee_right,
-            self.done,
-            self.fail,
-            self.skip,
-            self.edit,
-            self.dot,
-            self.dot_open,
-            self.rocket,
-            self.ok_emoji,
-            self.fail_emoji,
-            self.warn,
-            self.bolt,
-            self.hourglass,
-            self.warn_plain,
-            self.swap,
-            self.refresh,
-            self.space,
-            self.ellipsis,
+            bar_fill,
+            bar_empty,
+            diamond,
+            bullet_active,
+            bullet_idle,
+            check,
+            cross,
+            spark,
+            arrow_left,
+            arrow_right,
+            arrow_up,
+            arrow_down,
+            enter,
+            vline,
+            hline,
+            corner_tl,
+            corner_bl,
+            done,
+            fail,
+            skip,
+            edit,
+            dot,
+            dot_open,
+            rocket,
+            ok_emoji,
+            fail_emoji,
+            warn,
+            bolt,
+            hourglass,
+            warn_plain,
+            swap,
+            refresh,
+            arrow_bold,
+            space,
+            ellipsis,
+            pc,
+            cloud,
+            chart,
+            shield,
+            doc,
+            package,
+            clock,
+            folder,
         ]
     }
 }
@@ -803,6 +931,23 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_forced_off_ignores_pipe_and_no_color() {
+        // Explicit `--tty-mode=off` forces TrueColor even without capability.
+        let env = env_of(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")]);
+        let caps = TermCaps::resolve_forced_from(TtyMode::Off, &env, false, true);
+        assert_eq!(caps.color, ColorLevel::TrueColor);
+        assert!(!caps.live);
+        assert!(!caps.ascii);
+
+        // Unforced or other modes behave like the polite resolution.
+        let caps = TermCaps::resolve_forced_from(TtyMode::Off, &env, false, false);
+        assert_eq!(caps.color, ColorLevel::None);
+        let caps = TermCaps::resolve_forced_from(TtyMode::On, &env, false, true);
+        assert_eq!(caps.color, ColorLevel::None);
+        assert!(caps.ascii);
+    }
+
+    #[test]
     fn test_tty_mode_auto_is_detection() {
         let env = env_of(&[("TERM", "linux")]);
         let auto = TermCaps::resolve_from(TtyMode::Auto, &env, true);
@@ -881,12 +1026,54 @@ mod tests {
             assert!((16..=255).contains(&idx), "gray {} -> index {}", v, idx);
         }
         assert_eq!(rgb_to_ansi256_index(0, 0, 0), 16);
-        assert_eq!(rgb_to_ansi256_index(7, 7, 7), 16);
+        assert_eq!(rgb_to_ansi256_index(4, 4, 4), 16);
+        assert_eq!(rgb_to_ansi256_index(5, 5, 5), 232);
+        assert_eq!(rgb_to_ansi256_index(7, 7, 7), 232);
         assert_eq!(rgb_to_ansi256_index(8, 8, 8), 232);
+        // Exact cube levels resolve to the cube, not the ramp.
+        assert_eq!(rgb_to_ansi256_index(95, 95, 95), 59);
+        assert_eq!(rgb_to_ansi256_index(135, 135, 135), 102);
+        assert_eq!(rgb_to_ansi256_index(175, 175, 175), 145);
         assert_eq!(rgb_to_ansi256_index(246, 246, 246), 255);
         assert_eq!(rgb_to_ansi256_index(247, 247, 247), 231);
         assert_eq!(rgb_to_ansi256_index(248, 248, 248), 231);
         assert_eq!(rgb_to_ansi256_index(255, 255, 255), 231);
+    }
+
+    #[test]
+    fn test_downgrade_bg_stays_within_dark_eight_in_ansi16() {
+        // Bright backgrounds blink or are ignored on Linux consoles: only
+        // the 8 dark colors may come out of an Ansi16 background reduction.
+        let dark8 = [
+            Color::Black,
+            Color::Red,
+            Color::Green,
+            Color::Yellow,
+            Color::Blue,
+            Color::Magenta,
+            Color::Cyan,
+            Color::Gray,
+        ];
+        for v in (0..=255u8).step_by(7) {
+            let bg = downgrade_bg(Color::Rgb(v, v / 2, v / 3), ColorLevel::Ansi16);
+            assert!(
+                dark8.contains(&bg),
+                "Ansi16 bg of {} must stay dark, got {:?}",
+                v,
+                bg
+            );
+        }
+        // The settings maroon lands on Black rather than DarkGray.
+        assert_eq!(
+            downgrade_bg(Color::Rgb(95, 30, 30), ColorLevel::Ansi16),
+            Color::Black
+        );
+        // Other levels behave like the foreground reduction.
+        assert_eq!(
+            downgrade_bg(Color::Rgb(95, 30, 30), ColorLevel::Ansi256),
+            Color::Indexed(52)
+        );
+        assert_eq!(downgrade_bg(Color::Red, ColorLevel::Ansi16), Color::Red);
     }
 
     #[test]
@@ -994,19 +1181,36 @@ mod tests {
         assert_eq!(g.warn_plain, "⚠");
         assert_eq!(g.swap, "⇄");
         assert_eq!(g.refresh, "⟳");
+        assert_eq!(g.arrow_bold, "➔");
         assert_eq!(g.space, "␣");
         assert_eq!(g.ellipsis, "…");
+        assert_eq!(g.pc, "💻");
+        assert_eq!(g.cloud, "☁");
+        assert_eq!(g.chart, "📊");
+        assert_eq!(g.shield, "🛡");
+        assert_eq!(g.doc, "📜");
+        assert_eq!(g.package, "📦");
+        assert_eq!(g.clock, "⏱");
+        assert_eq!(g.folder, "📁");
     }
 
     #[test]
     fn test_glyphs_ascii_is_pure_ascii() {
+        let uni = Glyphs::unicode();
         let g = Glyphs::ascii();
-        for field in g.all_fields() {
-            assert!(!field.is_empty(), "ASCII glyph must not be empty");
+        // Decorative icons are dropped (empty) in ASCII mode; everything
+        // else must be pure ASCII.
+        const DROPPED: [&str; 8] = ["💻", "☁", "📊", "🛡", "📜", "📦", "⏱", "📁"];
+        for (u, a) in uni.all_fields().iter().zip(g.all_fields().iter()) {
             assert!(
-                field.is_ascii(),
+                a.is_ascii(),
                 "ASCII fallback must be pure ASCII, got {:?}",
-                field
+                a
+            );
+            assert!(
+                !a.is_empty() || DROPPED.contains(u),
+                "ASCII fallback must not be empty (was {:?})",
+                u
             );
         }
         assert_eq!(Glyphs::tab_digit(true, 1), "1");
@@ -1024,7 +1228,19 @@ mod tests {
         // ⚠️) only ever end a line, where alignment does not matter; the
         // remaining exceptions only appear in flowing text or centered
         // badges: hourglass ("..."), swap ("<>") and the Space key ("Space").
-        const WIDTH_FLEXIBLE: [(&str, &str); 3] = [("⏳", "..."), ("⇄", "<>"), ("␣", "Space")];
+        const WIDTH_FLEXIBLE: [(&str, &str); 11] = [
+            ("⏳", "..."),
+            ("⇄", "<>"),
+            ("␣", "Space"),
+            ("💻", ""),
+            ("☁", ""),
+            ("📊", ""),
+            ("🛡", ""),
+            ("📜", ""),
+            ("📦", ""),
+            ("⏱", ""),
+            ("📁", ""),
+        ];
         for (u, a) in uni.all_fields().iter().zip(asc.all_fields().iter()) {
             if let Some((_, expected)) = WIDTH_FLEXIBLE.iter().find(|(wu, _)| wu == u) {
                 assert_eq!(a, expected);

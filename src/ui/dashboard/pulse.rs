@@ -107,9 +107,9 @@ pub fn render_pulse_line(f: &mut Frame, app: &App, theme: &ThemePalette, area: R
                 app.live.transfer.elapsed.clone()
             };
             let right_text = if max_w < 60 {
-                format!(" ⏱ {}", elapsed_str)
+                format!(" {} {}", app.glyphs().clock, elapsed_str)
             } else {
-                format!(" ⏱ {} elapsed", elapsed_str)
+                format!(" {} {} elapsed", app.glyphs().clock, elapsed_str)
             };
 
             let left_w = Line::from(line_spans.clone()).width();
