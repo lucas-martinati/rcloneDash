@@ -34,7 +34,7 @@ pub fn render_settings_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hit
                 Constraint::Length(box_h),
             ])
             .split(container_area);
-        crate::ui::menu::render_logo(f, v_chunks[0]);
+        crate::ui::menu::render_logo(f, v_chunks[0], app.term_caps.ascii);
         let mut ver_spans = vec![
             Span::styled(format!("v{}", config::APP_VERSION), Style::default().fg(Color::Rgb(165, 170, 185)).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
         ];

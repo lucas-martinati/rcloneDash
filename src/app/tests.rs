@@ -2269,6 +2269,44 @@ use crate::monitor::history::{PastRun, RunStatus};
         assert!(reversed_cells > 0, "selected row must stay visible via REVERSED");
     }
 
+    #[test]
+    fn test_tty_logo_is_all_red() {
+        use ratatui::style::Color;
+        // In ASCII (TTY) mode the gray shading would degrade to gray tones:
+        // every drawn logo cell is plain red instead.
+        let backend = ratatui::backend::TestBackend::new(90, 6);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| crate::ui::menu::render_logo(f, f.area(), true))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let mut drawn = 0;
+        for y in 0..buffer.area.height {
+            for x in 0..buffer.area.width {
+                let cell = &buffer[(x, y)];
+                if cell.symbol().trim().is_empty() {
+                    continue;
+                }
+                drawn += 1;
+                assert_eq!(cell.fg, Color::Red, "tty logo cell {:?} must be red", cell.symbol());
+            }
+        }
+        assert!(drawn > 0, "logo must draw something");
+
+        // Unicode mode keeps the red gradient (first row brightest).
+        let backend = ratatui::backend::TestBackend::new(90, 6);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| crate::ui::menu::render_logo(f, f.area(), false))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let first_block = (0..buffer.area.width)
+            .map(|x| &buffer[(x, 0)])
+            .find(|c| c.symbol() == "█")
+            .expect("logo must contain blocks");
+        assert_eq!(first_block.fg, Color::Rgb(230, 37, 37));
+    }
+
     #[tokio::test]
     async fn test_first_run_focus_stays_visible_without_colors() {
         // Focused wizard buttons differ from idle ones only by background:

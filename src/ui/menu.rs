@@ -100,8 +100,8 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
         ])
         .split(area);
 
-    // 1. Render logo without black background
-    render_logo(f, chunks[0]);
+    // 1. Render logo (opaque cells, transparent centering padding)
+    render_logo(f, chunks[0], app.term_caps.ascii);
 
     // 2. Centered version line
     let mut ver_spans = vec![
@@ -145,21 +145,26 @@ pub fn render_menu_modal(f: &mut Frame, app: &App, _theme: &ThemePalette, hitbox
     }
 }
 
-pub fn render_logo(f: &mut Frame, area: Rect) {
+/// Branding logo. In ASCII (TTY) mode the gray shading would degrade to
+/// gray tones, so the whole logo is drawn in plain red instead.
+pub fn render_logo(f: &mut Frame, area: Rect, ascii: bool) {
     let mut header_lines = Vec::new();
     for (z, (fg, line_str)) in LOGO_RCLONEDASH.iter().enumerate() {
         let bg_val = (120u32).saturating_sub((z as u32) * 12) as u8;
         let bg_color = Color::Rgb(bg_val, bg_val, bg_val);
+        let red = if ascii { Color::Red } else { *fg };
+        let shade = if ascii { Color::Red } else { bg_color };
         let mut spans = Vec::new();
         for ch in line_str.chars() {
+            // Opaque background: the logo floats over the dashboard, where
+            // a selected row behind would swallow matching glyphs (red on
+            // red in TTY mode, red on maroon otherwise).
             if ch == '█' {
-                // Opaque background: the logo floats over the dashboard, and
-                // a selected (red) row behind would swallow red glyphs.
-                spans.push(Span::styled(ch.to_string(), Style::default().fg(*fg).bg(Color::Reset).add_modifier(Modifier::BOLD)));
+                spans.push(Span::styled(ch.to_string(), Style::default().fg(red).bg(Color::Reset).add_modifier(Modifier::BOLD)));
             } else if ch != ' ' {
-                spans.push(Span::styled(ch.to_string(), Style::default().fg(bg_color)));
+                spans.push(Span::styled(ch.to_string(), Style::default().fg(shade).bg(Color::Reset)));
             } else {
-                spans.push(Span::raw(" "));
+                spans.push(Span::styled(" ".to_string(), Style::default().bg(Color::Reset)));
             }
         }
         header_lines.push(Line::from(spans));

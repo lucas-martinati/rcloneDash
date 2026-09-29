@@ -129,7 +129,7 @@ pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &
                 .split(container_area);
 
             // 1. Logo 3D RCLONEDASH au-dessus de la boîte d'aide
-            crate::ui::menu::render_logo(f, v_chunks[0]);
+            crate::ui::menu::render_logo(f, v_chunks[0], app.term_caps.ascii);
 
             // Version
             let mut ver_spans = vec![
