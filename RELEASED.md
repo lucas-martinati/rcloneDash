@@ -1,5 +1,28 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.34] - Mode TTY façon btop++ & Aperçu de l'Updater
+
+Sur la console Linux (`TERM=linux`, sans X/Wayland), l'interface reste **en couleur** : palette 16 couleurs ANSI, glyphes de repli ASCII et logo rouge uni, au lieu de caractères vides ou illisibles. L'updater gagne un mode de démonstration visuelle (`--update-demo`), et le nouveau réglage `tty_mode` (`auto | on | off`, aussi en CLI via `--tty-mode`) contrôle le tout.
+
+---
+
+### 🌟 Nouveautés et Améliorations
+
+#### 1. 🖥️ Mode TTY (console Linux)
+- **Détection en trois axes** : niveau de couleur (`NO_COLOR` → aucun, `TERM=linux` → 16 couleurs, `COLORTERM` → truecolor), animation en place (seulement sur terminal) et repli ASCII (console Linux ou locale non UTF-8).
+- **`on` reste en couleur** : ce n'est pas un mode sans couleur, c'est la palette 16 couleurs ANSI + glyphes ASCII (`#-`, `> * v x o *`, `< > ^ v`, bordures simples).
+- **Réglage persistant** : `tty_mode` dans l'onglet Apparence (défaut `auto`) et `--tty-mode=auto|on|off` en CLI, prioritaire sur la config.
+
+#### 2. 🎨 Couleurs Dégradées en un Seul Point
+- La palette reste en truecolor pendant le rendu (dégradés et fondus intacts), puis **chaque cellule est réduite une fois** à la palette du terminal — `NO_COLOR` devient vraiment honnête, y compris les couleurs codées en dur.
+- Sélection systématiquement visible : fond rouge en 16 couleurs, inversion vidéo sans couleur.
+
+#### 3. ✨ Updater : `--update-demo` & Robustesse
+- **Aperçu visuel** : `rclonedash --update-demo` simule tout le flux de mise à jour sans réseau ni écriture (barre vivante sur terminal, ligne unique en pipe).
+- **Corrigés au passage** : dépassement d'index de la rampe de gris, sélections invisibles, logo absorbé par les lignes sélectionnées — verrouillés par tests (162 tests, allowlist ASCII sur 13 écrans).
+
+---
+
 ## [v1.0.33] - Généralisation Multi-Provider & Détection du Type de Remote
 
 Cette version affranchit RcloneDash de son centrage historique sur Google Drive : un nouveau module d'introspection (`rclone.rs`) lit le type réel de chaque remote dans `rclone.conf`, et toutes les options spécifiques à Drive (Client ID/Secret, flags `--drive-*`, étape API du wizard) ne sont proposées que pour les remotes `type = drive`. Les remotes S3, Dropbox, SFTP et autres fonctionnent désormais sans options parasites, avec un assistant de premier lancement en 3 étapes et des filtres d'exclusion génériques.
