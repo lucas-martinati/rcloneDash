@@ -11,6 +11,7 @@ use crate::monitor::history::RunStatus;
 use crate::term_caps::selected_style;
 use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
+use crate::ui::ScrollState;
 
 pub fn render_history_details_modal(f: &mut Frame, app: &App, run_idx: usize, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(78, 74, f.area());
@@ -231,9 +232,7 @@ pub fn render_run_details(f: &mut Frame, app: &App, run_idx: usize, theme: &Them
     crate::ui::render_scrollbar(
         f,
         area,
-        total_lines,
-        scroll,
-        visible_height,
+        ScrollState { total: total_lines, pos: scroll, visible: visible_height },
         theme,
         &app.term_caps,
         hitboxes,

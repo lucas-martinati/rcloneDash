@@ -11,6 +11,7 @@ use crate::monitor::events::FileAction;
 use crate::monitor::history::RunStatus;
 use crate::term_caps::selected_style;
 use crate::ui::theme::ThemePalette;
+use crate::ui::ScrollState;
 
 /// Renders the History Panel with 2D duration bar graph, interactive runs table, and scrollbar.
 pub fn render_history_panel(
@@ -305,9 +306,7 @@ pub fn render_history_panel(
     crate::ui::render_scrollbar(
         f,
         area,
-        total_runs,
-        offset,
-        visible_rows,
+        ScrollState { total: total_runs, pos: offset, visible: visible_rows },
         theme,
         &app.term_caps,
         hitboxes,

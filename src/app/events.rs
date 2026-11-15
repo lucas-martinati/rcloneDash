@@ -205,8 +205,8 @@ impl App {
             }
             MouseEventKind::Drag(MouseButton::Left) => {
                 let row = mouse.row;
-                if let Some((target, top_y, track_height, total, visible, grab_offset)) = self.active_scrollbar_drag {
-                    self.apply_scrollbar_drag_to_row(target, row, top_y, track_height, total, visible, grab_offset);
+                if let Some(drag) = self.active_scrollbar_drag {
+                    self.apply_scrollbar_drag_to_row(drag, row);
                     return Action::None;
                 }
                 let col = mouse.column;
@@ -218,8 +218,9 @@ impl App {
                     {
                         if let HitAction::ScrollbarTrack { target, top_y, track_height, total, visible } = hb.action {
                             let grab_offset = self.compute_scrollbar_grab_offset(target, row, top_y, track_height, total, visible);
-                            self.active_scrollbar_drag = Some((target, top_y, track_height, total, visible, grab_offset));
-                            self.apply_scrollbar_drag_to_row(target, row, top_y, track_height, total, visible, grab_offset);
+                            let drag = ScrollbarDragState { target, top_y, track_height, total, visible, grab_offset };
+                            self.active_scrollbar_drag = Some(drag);
+                            self.apply_scrollbar_drag_to_row(drag, row);
                             return Action::None;
                         }
                     }
@@ -575,8 +576,9 @@ impl App {
             }
             HitAction::ScrollbarTrack { target, top_y, track_height, total, visible } => {
                 let grab_offset = self.compute_scrollbar_grab_offset(target, row, top_y, track_height, total, visible);
-                self.active_scrollbar_drag = Some((target, top_y, track_height, total, visible, grab_offset));
-                self.apply_scrollbar_drag_to_row(target, row, top_y, track_height, total, visible, grab_offset);
+                let drag = ScrollbarDragState { target, top_y, track_height, total, visible, grab_offset };
+                self.active_scrollbar_drag = Some(drag);
+                self.apply_scrollbar_drag_to_row(drag, row);
                 Action::None
             }
         }

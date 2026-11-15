@@ -262,6 +262,20 @@ pub enum HitAction {
     },
 }
 
+/// Snapshot of an ongoing scrollbar drag, captured at the moment the user clicks
+/// the track. `total` and `visible` are frozen at click time and may become
+/// stale if new items arrive during the drag (e.g. incoming log lines); this
+/// matches the behaviour of the previous implementation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScrollbarDragState {
+    pub target: ScrollbarTarget,
+    pub top_y: u16,
+    pub track_height: u16,
+    pub total: usize,
+    pub visible: usize,
+    pub grab_offset: u16,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AlertLevel {
     Error,
@@ -377,7 +391,7 @@ pub struct App {
     // Interactive item selection
     pub history_selected_file_idx: usize,
     pub recent_selected_idx: Option<usize>,
-    pub active_scrollbar_drag: Option<(ScrollbarTarget, u16, u16, usize, usize, u16)>,
+    pub active_scrollbar_drag: Option<ScrollbarDragState>,
 
     // Dual-layer hitbox manager (dashboard / modal)
     pub hit_mgr: HitboxManager,

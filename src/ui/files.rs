@@ -11,6 +11,7 @@ use crate::term_caps::selected_style;
 use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::keys::KeybindingRegistry;
 use crate::ui::theme::ThemePalette;
+use crate::ui::ScrollState;
 
 pub fn render_files_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(80, 75, f.area());
@@ -199,9 +200,7 @@ fn render_file_table(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     crate::ui::render_scrollbar_pane(
         f,
         area,
-        app.file_entries.len(),
-        start_idx,
-        visible_height,
+        ScrollState { total: app.file_entries.len(), pos: start_idx, visible: visible_height },
         theme,
         &app.term_caps,
         hitboxes,

@@ -1,5 +1,4 @@
 use super::*;
-
 use crate::monitor::history::{PastRun, RunStatus};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
@@ -969,7 +968,17 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // 3. Saut / Glissement (drag) sur la piste scrollbar
         // Piste de hauteur 10, offset 5 -> milieu
-        app.apply_scrollbar_drag_to_row(ScrollbarTarget::Logs, 5, 0, 10, 20, 5, 1);
+        app.apply_scrollbar_drag_to_row(
+            ScrollbarDragState {
+                target: ScrollbarTarget::Logs,
+                top_y: 0,
+                track_height: 10,
+                total: 20,
+                visible: 5,
+                grab_offset: 1,
+            },
+            5,
+        );
         assert!(app.logs_scroll > 0);
         assert!(!app.auto_scroll);
 
@@ -995,7 +1004,17 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.apply_scrollbar_step(ScrollbarTarget::History, true);
         assert_eq!(app.selected_run_idx, Some(0));
 
-        app.apply_scrollbar_drag_to_row(ScrollbarTarget::History, 9, 0, 10, 10, 4, 1);
+        app.apply_scrollbar_drag_to_row(
+            ScrollbarDragState {
+                target: ScrollbarTarget::History,
+                top_y: 0,
+                track_height: 10,
+                total: 10,
+                visible: 4,
+                grab_offset: 1,
+            },
+            9,
+        );
         assert_eq!(app.selected_run_idx, Some(9));
     }
 
@@ -1272,7 +1291,14 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // 1. Test is_dragging_scrollbar
         assert!(!app.is_dragging_scrollbar(ScrollbarTarget::History));
-        app.active_scrollbar_drag = Some((ScrollbarTarget::History, 5, 20, 50, 10, 0));
+        app.active_scrollbar_drag = Some(ScrollbarDragState {
+            target: ScrollbarTarget::History,
+            top_y: 5,
+            track_height: 20,
+            total: 50,
+            visible: 10,
+            grab_offset: 0,
+        });
         assert!(app.is_dragging_scrollbar(ScrollbarTarget::History));
         assert!(!app.is_dragging_scrollbar(ScrollbarTarget::RecentFiles));
         app.active_scrollbar_drag = None;
@@ -1282,13 +1308,33 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.history_viewport_height = 5;
         // Total 20 runs, viewport 5 -> max_offset = 15
         // Jump to bottom (row 9, top 0, height 10 -> ratio 1.0)
-        app.apply_scrollbar_drag_to_row(ScrollbarTarget::History, 9, 0, 10, 20, 5, 1);
+        app.apply_scrollbar_drag_to_row(
+            ScrollbarDragState {
+                target: ScrollbarTarget::History,
+                top_y: 0,
+                track_height: 10,
+                total: 20,
+                visible: 5,
+                grab_offset: 1,
+            },
+            9,
+        );
         assert_eq!(app.history_scroll_offset, 15);
         // Cursor at bottom of visible items: 15 + 5 - 1 = 19
         assert_eq!(app.selected_run_idx, Some(19));
 
         // Jump to top (row 0, top 0, height 10 -> ratio 0.0)
-        app.apply_scrollbar_drag_to_row(ScrollbarTarget::History, 0, 0, 10, 20, 5, 1);
+        app.apply_scrollbar_drag_to_row(
+            ScrollbarDragState {
+                target: ScrollbarTarget::History,
+                top_y: 0,
+                track_height: 10,
+                total: 20,
+                visible: 5,
+                grab_offset: 1,
+            },
+            0,
+        );
         assert_eq!(app.history_scroll_offset, 0);
         // Cursor at top of visible items: 0
         assert_eq!(app.selected_run_idx, Some(0));
@@ -1833,7 +1879,17 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.apply_scrollbar_step(ScrollbarTarget::Filters, false);
         assert_eq!(app.selected_filter_idx, 1);
 
-        app.apply_scrollbar_drag_to_row(ScrollbarTarget::Filters, 5, 0, 10, 20, 5, 1);
+        app.apply_scrollbar_drag_to_row(
+            ScrollbarDragState {
+                target: ScrollbarTarget::Filters,
+                top_y: 0,
+                track_height: 10,
+                total: 20,
+                visible: 5,
+                grab_offset: 1,
+            },
+            5,
+        );
         assert!(app.filter_scroll_offset > 0);
         assert!(app.selected_filter_idx >= app.filter_scroll_offset);
     }
@@ -1866,13 +1922,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // 2. Drag mouse down to row 10 (moved down by 4 rows)
         app.apply_scrollbar_drag_to_row(
-            ScrollbarTarget::Filters,
+            ScrollbarDragState { target: ScrollbarTarget::Filters, top_y, track_height, total, visible, grab_offset },
             10,
-            top_y,
-            track_height,
-            total,
-            visible,
-            grab_offset,
         );
         // available_travel = 20 - 4 = 16.
         // target_thumb_start = (10 - 5 - 1).min(16) = 4.
@@ -1885,13 +1936,8 @@ use crate::monitor::history::{PastRun, RunStatus};
 
         // 3. Drag further to bottom boundary: row 25
         app.apply_scrollbar_drag_to_row(
-            ScrollbarTarget::Filters,
+            ScrollbarDragState { target: ScrollbarTarget::Filters, top_y, track_height, total, visible, grab_offset },
             25,
-            top_y,
-            track_height,
-            total,
-            visible,
-            grab_offset,
         );
         assert_eq!(app.filter_scroll_offset, 40);
         assert_eq!(app.selected_filter_idx, 49);
@@ -1906,6 +1952,23 @@ use crate::monitor::history::{PastRun, RunStatus};
         app.scroll_filter_view_up(10);
         assert_eq!(app.filter_scroll_offset, 5);
         assert_eq!(app.selected_filter_idx, 7);
+    }
+
+    #[tokio::test]
+    async fn test_scrollbar_drag_u16_overflow_protection() {
+        let mut app = App::new();
+        // Non-regression: top_y close to u16::MAX with grab_offset and travel
+        // must not overflow / panic in debug mode.
+        let drag = ScrollbarDragState {
+            target: ScrollbarTarget::Logs,
+            top_y: u16::MAX - 5,
+            track_height: 50,
+            total: 100,
+            visible: 20,
+            grab_offset: 10,
+        };
+        app.apply_scrollbar_drag_to_row(drag, u16::MAX);
+        app.apply_scrollbar_drag_to_row(drag, 0);
     }
 
     #[tokio::test]

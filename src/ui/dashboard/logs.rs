@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::app::{App, FocusedPanel, HitAction, Hitbox, LogFilter};
 use crate::ui::theme::ThemePalette;
+use crate::ui::ScrollState;
 
 /// Renders the Live Logs streaming panel with interactive filter tabs and auto-scroll control.
 pub fn render_logs_panel(
@@ -205,9 +206,7 @@ pub fn render_logs_panel(
     crate::ui::render_scrollbar(
         f,
         area,
-        total_lines,
-        current_pos,
-        visible_height,
+        ScrollState { total: total_lines, pos: current_pos, visible: visible_height },
         theme,
         &app.term_caps,
         hitboxes,

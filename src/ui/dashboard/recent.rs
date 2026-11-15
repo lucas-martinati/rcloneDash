@@ -9,6 +9,7 @@ use ratatui::{
 use crate::app::{App, FocusedPanel, HitAction, Hitbox};
 use crate::term_caps::selected_style;
 use crate::ui::theme::ThemePalette;
+use crate::ui::ScrollState;
 
 /// Renders the Recent Files panel displaying recently transferred files with action badges.
 pub fn render_recent_files_panel(
@@ -246,9 +247,7 @@ pub fn render_recent_files_panel(
     crate::ui::render_scrollbar(
         f,
         area,
-        files_to_display.len(),
-        offset,
-        max_show,
+        ScrollState { total: files_to_display.len(), pos: offset, visible: max_show },
         theme,
         &app.term_caps,
         hitboxes,

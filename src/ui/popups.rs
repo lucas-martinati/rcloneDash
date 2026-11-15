@@ -15,6 +15,7 @@ use crate::ui::history::render_history_details_modal;
 use crate::ui::menu::render_menu_modal;
 use crate::ui::settings::render_settings_modal;
 use crate::ui::theme::ThemePalette;
+use crate::ui::ScrollState;
 
 pub fn render_popups(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     // 1. Modales
@@ -498,9 +499,7 @@ fn render_dry_run_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes
         crate::ui::render_scrollbar(
             f,
             logs_inner,
-            total_lines,
-            actual_scroll,
-            actual_visible_height,
+            ScrollState { total: total_lines, pos: actual_scroll, visible: actual_visible_height },
             theme,
             &app.term_caps,
             hitboxes,

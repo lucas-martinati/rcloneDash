@@ -316,8 +316,8 @@ impl App {
     }
 
     pub fn is_dragging_scrollbar(&self, target: ScrollbarTarget) -> bool {
-        if let Some((t, _, _, _, _, _)) = &self.active_scrollbar_drag {
-            *t == target
+        if let Some(drag) = &self.active_scrollbar_drag {
+            drag.target == target
         } else {
             false
         }
@@ -445,38 +445,34 @@ impl App {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn apply_scrollbar_drag_to_row(
-        &mut self,
-        target: ScrollbarTarget,
-        row: u16,
-        top_y: u16,
-        track_height: u16,
-        total: usize,
-        visible: usize,
-        grab_offset: u16,
-    ) {
-        if total <= visible || track_height == 0 {
+    pub fn apply_scrollbar_drag_to_row(&mut self, drag: ScrollbarDragState, row: u16) {
+        if drag.total <= drag.visible || drag.track_height == 0 {
             return;
         }
-        let current_pos = self.get_scrollbar_current_pos(target, total, visible);
-        let geom = crate::ui::scrollbar::ScrollbarGeometry::compute(total, visible, track_height as usize, current_pos);
+        let current_pos = self.get_scrollbar_current_pos(drag.target, drag.total, drag.visible);
+        let geom = crate::ui::scrollbar::ScrollbarGeometry::compute(drag.total, drag.visible, drag.track_height as usize, current_pos);
 
         if geom.available_travel == 0 {
             return;
         }
 
-        let ratio = if row <= top_y + grab_offset {
+        // Compute ratio in usize to avoid u16 overflow on large terminals.
+        let row = row as usize;
+        let top = drag.top_y as usize;
+        let grab = drag.grab_offset as usize;
+        let travel = geom.available_travel;
+
+        let ratio = if row <= top.saturating_add(grab) {
             0.0
-        } else if row >= top_y + grab_offset + geom.available_travel as u16 {
+        } else if row >= top.saturating_add(grab).saturating_add(travel) {
             1.0
         } else {
-            let click_offset = row.saturating_sub(top_y);
-            let target_thumb_start = (click_offset.saturating_sub(grab_offset) as usize).min(geom.available_travel);
-            (target_thumb_start as f64 / geom.available_travel as f64).clamp(0.0, 1.0)
+            let click_offset = row.saturating_sub(top);
+            let target_thumb_start = click_offset.saturating_sub(grab).min(travel);
+            (target_thumb_start as f64 / travel as f64).clamp(0.0, 1.0)
         };
 
-        self.apply_scrollbar_ratio(target, ratio, total, visible);
+        self.apply_scrollbar_ratio(drag.target, ratio, drag.total, drag.visible);
     }
 
 

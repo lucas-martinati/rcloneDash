@@ -10,6 +10,7 @@ use crate::app::{App, HitAction, Hitbox};
 use crate::config;
 use crate::ui::container::{centered_rect, render_modal_container, ModalContainerConfig, NavArrowsConfig};
 use crate::ui::theme::ThemePalette;
+use crate::ui::ScrollState;
 
 pub fn render_filters_modal(f: &mut Frame, app: &App, theme: &ThemePalette, hitboxes: &mut Vec<Hitbox>) {
     let area = centered_rect(82, 74, f.area());
@@ -297,9 +298,7 @@ fn render_rules_list(f: &mut Frame, app: &App, theme: &ThemePalette, area: Rect,
     crate::ui::render_scrollbar_pane(
         f,
         area,
-        total_count,
-        offset,
-        visible_height,
+        ScrollState { total: total_count, pos: offset, visible: visible_height },
         theme,
         &app.term_caps,
         hitboxes,
