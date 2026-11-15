@@ -1,5 +1,23 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.35] - Refactorisation et Fiabilisation du Défilement
+
+Cette version de maintenance apporte un nettoyage architectural de la gestion du défilement et des scrollbars, sans modification du comportement pour l'utilisateur.
+
+---
+
+### 🌟 Améliorations et Corrections
+
+#### 1. 🧼 Typage Fort et Nettoyage Clippy
+- **Groupement des paramètres** : Remplacement des tuples anonymes et des listes d'arguments positionnels par des structures explicites aux champs nommés (`ScrollState`, `ScrollbarTrackBounds`, `ScrollbarDragState`).
+- **Élimination des exceptions linter** : Suppression intégrale de tous les attributs `#[allow(clippy::too_many_arguments)]` du projet.
+
+#### 2. 🛡️ Robustesse Arithmétique
+- **Protection contre le dépassement `u16`** : Sécurisation du calcul de déplacement de la scrollbar sur les terminaux de très grande dimension par passage en arithmétique saturante `usize`.
+- **Test de non-régression** : Ajout d'une couverture de test dédiée validant la stabilité aux frontières numériques extrêmes.
+
+---
+
 ## [v1.0.34] - Mode TTY façon btop++ & Aperçu de l'Updater
 
 Sur la console Linux (`TERM=linux`, sans X/Wayland), l'interface reste **en couleur** : palette 16 couleurs ANSI, glyphes de repli ASCII et logo rouge uni, au lieu de caractères vides ou illisibles. L'updater gagne un mode de démonstration visuelle (`--update-demo`), et le nouveau réglage `tty_mode` (`auto | on | off`, aussi en CLI via `--tty-mode`) contrôle le tout.
