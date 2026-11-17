@@ -1,5 +1,29 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.36] - Optimisation Temps Réel, Pipeline Asynchrone & Sécurité Système
+
+Cette version apporte une refonte profonde du moteur interne de RcloneDash : consommation CPU et appels disque divisés drastiquement au repos, pipeline asynchrone Tokio unifié sans latence, écritures de configuration atomiques et durcissement de la gestion du terminal.
+
+---
+
+### 🌟 Nouveautés, Performances et Fiabilité
+
+#### 1. ⚡ Performances & Réduction Massive des Appels Système
+- **Rafraîchissement adaptatif intelligent** : Maintien du rendu fluide à 20 FPS pendant les synchronisations actives et passage automatique à 1 rendu/seconde au repos (calé sur la seconde exacte de l'horloge), réduisant de 95 % le travail de rendu inactif tout en conservant une réactivité immédiate au clavier et à la souris.
+- **Caches d'I/O et suppression des sous-processus bloquants** : Mise en cache courte de `statvfs` et des métadonnées des fichiers récents (éliminant jusqu'à ~2 000 appels `stat` par seconde), chargement instantané (`0 ms`) de l'historique de logs dès la première frame et résolution asynchrone de la durée de synchronisation sans appel `ps` dans le thread UI.
+- **Filtres pré-compilés (`CompiledFilters`) & flux versionné** : Compilation unique des expressions régulières d'exclusion par dossier (`O(filtres)` au lieu de `O(fichiers × filtres)`), matching de sous-chemins sans allocation et compteur de génération sur `StreamerState` évitant les copies inutiles du tampon de logs.
+
+#### 2. 🛡️ Fiabilité Terminal, Sécurité & Robustesse Système
+- **Restauration complète du terminal (`TerminalSessionGuard`)** : Ajout de `PopKeyboardEnhancementFlags` à la sortie normale (corrigeant l'état clavier sur Kitty, WezTerm, Ghostty et Foot) et garde RAII `Drop` garantissant la restauration du terminal en toute circonstance.
+- **Écritures atomiques et secrets protégés dès la création** : Sauvegarde de `dash-config.json`, `rclone-filters.txt`, `bwlimit.env` et `rclone.conf` via fichier temporaire synchronisé (`sync_all`) puis `rename` atomique, avec permissions `0600` appliquées dès l'ouverture pour `rclone.conf` et les journaux temporaires dans `$XDG_RUNTIME_DIR`.
+- **Corrections système** : Protection du comptage de fichiers contre les boucles infinies de liens symboliques (`file_type()`), gestion exacte du passage de minuit sur le compte à rebours `systemd`, prise en charge des flags dans `$EDITOR` / `$PAGER` (ex. `code --wait`, `less -FRX`) et récolte automatique des processus `xdg-open` / `gio`.
+
+#### 3. 🏗️ Architecture Modulaire & Tests Hermétiques
+- **Pipeline `BgEvent` unifié (`tokio::sync::mpsc`)** : Remplacement des 7 canaux de polling `std::sync::mpsc` et des créations répétées de threads OS par un canal asynchrone unique branché directement dans `tokio::select!`.
+- **Découpage modulaire de `app/events/`** : Scission du gestionnaire d'événements en sous-modules dédiés (`dashboard`, `modals`, `mouse`, `first_run`) avec factorisation de l'édition UTF-8 au curseur et suite de 170 tests hermétiques ~3× plus rapide.
+
+---
+
 ## [v1.0.35] - Refactorisation et Fiabilisation du Défilement
 
 Cette version de maintenance apporte un nettoyage architectural de la gestion du défilement et des scrollbars, sans modification du comportement pour l'utilisateur.
