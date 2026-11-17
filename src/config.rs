@@ -832,13 +832,65 @@ pub fn read_rclone_credentials(remote: &str) -> (Option<String>, Option<String>)
     (client_id, client_secret)
 }
 
+static TMP_FILE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Writes `content` to `path` atomically via a temporary sibling file, preventing
+/// truncated or corrupted configuration files on crash or full disk.
+/// On Unix, when `mode` is `Some(perm)`, the temporary file receives `perm` before
+/// any bytes are written so secret files (`rclone.conf`) are never world-readable.
+fn atomic_write_file(path: &Path, content: &[u8], mode: Option<u32>) -> Result<(), String> {
+    use std::io::Write;
+    use std::sync::atomic::Ordering;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "config".to_string());
+    let seq = TMP_FILE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp_name = format!(".{}.tmp.{}.{}", file_name, std::process::id(), seq);
+    let tmp_path = path.with_file_name(tmp_name);
+
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    if let Some(m) = mode {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(m);
+    }
+
+    let write_res = (|| -> Result<(), std::io::Error> {
+        let mut file = opts.open(&tmp_path)?;
+        #[cfg(unix)]
+        if let Some(m) = mode {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(m))?;
+        }
+        file.write_all(content)?;
+        file.sync_all()?;
+        Ok(())
+    })();
+
+    if let Err(e) = write_res {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e.to_string());
+    }
+
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e.to_string());
+    }
+
+    Ok(())
+}
+
 /// Writes or updates Google Drive OAuth credentials (client_id, client_secret) in rclone.conf for the specified remote.
-/// Ensures the file exists with secure 0600 permissions.
+/// Ensures the file is written atomically with secure 0600 permissions from creation.
 pub fn write_rclone_credentials(remote: &str, client_id: &str, client_secret: &str) -> Result<(), String> {
     let path = rclone_config_file();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
 
     let target_section_clean = remote.trim_end_matches(':').trim();
     let target_header = format!("[{}]", target_section_clean);
@@ -928,17 +980,7 @@ pub fn write_rclone_credentials(remote: &str, client_id: &str, client_secret: &s
         result.push('\n');
     }
 
-    fs::write(&path, result).map_err(|e| e.to_string())?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(e) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
-            eprintln!("Warning: Failed to set 0600 permissions on {}: {}", path.display(), e);
-        }
-    }
-
-    Ok(())
+    atomic_write_file(&path, result.as_bytes(), Some(0o600))
 }
 
 pub fn load_config() -> AppConfig {
@@ -959,11 +1001,8 @@ pub fn load_config() -> AppConfig {
 
 pub fn save_config(cfg: &AppConfig) -> Result<(), String> {
     let path = config_file();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
     let json = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())?;
+    atomic_write_file(&path, json.as_bytes(), None)?;
 
     if let Some(bw) = &cfg.bwlimit {
         save_bwlimit(bw)?;
@@ -981,6 +1020,10 @@ pub fn save_config(cfg: &AppConfig) -> Result<(), String> {
 
 #[cfg(not(test))]
 pub fn update_systemd_timer_interval(interval: &str) {
+    static RE_TIMER_SEC: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?m)^(OnUnitActiveSec|OnUnitInactiveSec)=.*$").unwrap()
+    });
+
     if interval.eq_ignore_ascii_case("never") {
         let _ = std::process::Command::new("systemctl")
             .args(["--user", "stop", "rclone-bisync.timer"])
@@ -992,10 +1035,9 @@ pub fn update_systemd_timer_interval(interval: &str) {
         let timer_path = home.join(".config/systemd/user/rclone-bisync.timer");
         if timer_path.exists() {
             if let Ok(content) = fs::read_to_string(&timer_path) {
-                let re = regex::Regex::new(r"(?m)^(OnUnitActiveSec|OnUnitInactiveSec)=.*$").unwrap();
-                let updated = re.replace_all(&content, format!("OnUnitInactiveSec={}", interval));
+                let updated = RE_TIMER_SEC.replace_all(&content, format!("OnUnitInactiveSec={}", interval));
                 if updated != content {
-                    let _ = fs::write(&timer_path, updated.as_bytes());
+                    let _ = atomic_write_file(&timer_path, updated.as_bytes(), None);
                     let _ = std::process::Command::new("systemctl")
                         .args(["--user", "daemon-reload"])
                         .output();
@@ -1028,15 +1070,12 @@ pub fn read_bwlimit() -> Option<String> {
 
 pub fn save_bwlimit(limit: &str) -> Result<(), String> {
     let path = bwlimit_file();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
     let content = if limit.trim().is_empty() || limit == "Désactivé" {
         "".to_string()
     } else {
         format!("RCLONE_BWLIMIT={}\n", limit.trim())
     };
-    fs::write(path, content).map_err(|e| e.to_string())
+    atomic_write_file(&path, content.as_bytes(), None)
 }
 
 pub fn read_filters() -> Vec<String> {
@@ -1053,15 +1092,12 @@ pub fn save_filters(filters: &[String]) -> Result<(), String> {
     // Écriture via le chemin canonique (voir `filters_write_file`) : une
     // sauvegarde migre implicitement un état legacy vers le nom générique.
     let path = filters_write_file();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
     let content = if filters.is_empty() {
         "".to_string()
     } else {
         filters.join("\n") + "\n"
     };
-    fs::write(path, content).map_err(|e| e.to_string())
+    atomic_write_file(&path, content.as_bytes(), None)
 }
 
 pub fn quota_cache_file() -> PathBuf {
@@ -1089,11 +1125,8 @@ pub fn load_quota_cache() -> Option<CloudQuotaCache> {
 
 pub fn save_quota_cache(quota: &CloudQuotaCache) -> Result<(), String> {
     let path = quota_cache_file();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
     let json = serde_json::to_string(quota).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())
+    atomic_write_file(&path, json.as_bytes(), None)
 }
 
 /// Outillage réservé aux tests : le dossier de config de test
@@ -1413,5 +1446,32 @@ mod tests {
 
         let cfg_completed: AppConfig = serde_json::from_str(completed_json).unwrap();
         assert_eq!(cfg_completed.first_run_completed, Some(true));
+    }
+
+    #[test]
+    fn test_atomic_write_file_permissions_and_cleanup() {
+        let tmp_dir = std::env::temp_dir().join(format!("rclonedash_atomic_test_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp_dir);
+        let target = tmp_dir.join("secret.conf");
+
+        atomic_write_file(&target, b"client_secret = top-secret\n", Some(0o600)).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "client_secret = top-secret\n");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "Secret config must have strict 0600 permissions");
+        }
+
+        // Verify no leftover .tmp files remain in directory
+        let remaining: Vec<_> = fs::read_dir(&tmp_dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(remaining, vec!["secret.conf".to_string()]);
+
+        let _ = fs::remove_dir_all(&tmp_dir);
     }
 }

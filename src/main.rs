@@ -198,29 +198,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Panic hook to cleanly restore terminal and mouse capture on crash
     let default_panic_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(
-            io::stdout(),
-            PopKeyboardEnhancementFlags,
-            DisableMouseCapture,
-            LeaveAlternateScreen
-        );
+        leave_tui_mode_best_effort(&mut io::stdout());
         default_panic_hook(panic_info);
     }));
 
-    // 2. Initialize terminal with mouse capture and enhanced keyboard protocol
-    enable_raw_mode()?;
+    // 2. Initialize terminal with mouse capture, enhanced keyboard protocol, and RAII Drop guard
     let mut stdout = io::stdout();
-    let _ = execute!(
-        stdout,
-        EnterAlternateScreen,
-        SetTitle("RcloneDash"),
-        EnableMouseCapture,
-        PushKeyboardEnhancementFlags(
-            KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-        )
-    );
+    enter_tui_mode(&mut stdout)?;
+    let mut tui_guard = TerminalSessionGuard { active: true };
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
@@ -238,35 +223,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = EventStream::new();
     let mut data_interval = interval(app.stats_interval_duration());
     let mut ui_interval = interval(Duration::from_millis(50));
+    let mut last_drawn_sec = current_epoch_secs();
 
     // Initial immediate render
     terminal.draw(|f| ui::render(f, &mut app))?;
 
-    // 5. Main event loop (keyboard + mouse + timer ticks)
+    // 5. Main event loop (keyboard + mouse + background events + adaptive timer ticks)
     while app.running {
         tokio::select! {
             _ = data_interval.tick() => {
                 app.on_tick().await;
+                last_drawn_sec = current_epoch_secs();
                 terminal.draw(|f| ui::render(f, &mut app))?;
+            }
+            Some(bg_ev) = app.recv_bg_event() => {
+                app.handle_bg_event(bg_ev);
+                app.drain_bg_events();
+                if app.running {
+                    last_drawn_sec = current_epoch_secs();
+                    terminal.draw(|f| ui::render(f, &mut app))?;
+                }
             }
             _ = ui_interval.tick() => {
                 if app.running {
-                    terminal.draw(|f| ui::render(f, &mut app))?;
+                    let now_sec = current_epoch_secs();
+                    let toast_expired = app.toast.as_ref().is_some_and(|(_, t)| t.elapsed().as_secs() > 4);
+                    if toast_expired {
+                        app.toast = None;
+                    }
+                    // Redraw at 20 FPS during active sync animations, or once per wall-clock second when idle
+                    if app.is_syncing() || toast_expired || now_sec != last_drawn_sec {
+                        last_drawn_sec = now_sec;
+                        terminal.draw(|f| ui::render(f, &mut app))?;
+                    }
                 }
             }
             maybe_event = reader.next() => {
                 if let Some(Ok(event)) = maybe_event {
-                    let mut needs_draw = handle_single_event(event, &mut app, &mut terminal)?;
+                    let mut needs_draw = handle_single_event(event, &mut app, &mut terminal, &mut tui_guard)?;
 
                     // Prevent backlog during fast mouse wheel / trackpad scrolling
                     // Drain all immediately available events in the buffer without overwriting the Tokio waker
                     while let Ok(Some(Ok(buffered_event))) = tokio::time::timeout(Duration::ZERO, reader.next()).await {
-                        if handle_single_event(buffered_event, &mut app, &mut terminal)? {
+                        if handle_single_event(buffered_event, &mut app, &mut terminal, &mut tui_guard)? {
                             needs_draw = true;
                         }
                     }
 
                     if needs_draw && app.running {
+                        last_drawn_sec = current_epoch_secs();
                         terminal.draw(|f| ui::render(f, &mut app))?;
                     }
                 }
@@ -278,56 +283,133 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // 6. Clean and silent terminal restoration
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)?;
+    // 6. Clean and symmetric terminal restoration (including PopKeyboardEnhancementFlags)
+    tui_guard.active = false;
+    leave_tui_mode(terminal.backend_mut())?;
     terminal.show_cursor()?;
 
     Ok(())
 }
 
+/// RAII guard ensuring the terminal leaves raw/alternate/enhanced-keyboard mode
+/// even if `main` exits early via `?`.
+struct TerminalSessionGuard {
+    active: bool,
+}
+
+impl Drop for TerminalSessionGuard {
+    fn drop(&mut self) {
+        if self.active {
+            leave_tui_mode_best_effort(&mut io::stdout());
+        }
+    }
+}
+
+fn current_epoch_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn enter_tui_mode<W: io::Write>(out: &mut W) -> io::Result<()> {
+    enable_raw_mode()?;
+    let _ = execute!(
+        out,
+        EnterAlternateScreen,
+        SetTitle("RcloneDash"),
+        EnableMouseCapture,
+        PushKeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        )
+    );
+    Ok(())
+}
+
+fn leave_tui_mode<W: io::Write>(out: &mut W) -> io::Result<()> {
+    let _ = execute!(out, PopKeyboardEnhancementFlags);
+    disable_raw_mode()?;
+    execute!(out, DisableMouseCapture, LeaveAlternateScreen)
+}
+
+fn leave_tui_mode_best_effort<W: io::Write>(out: &mut W) {
+    let _ = disable_raw_mode();
+    let _ = execute!(
+        out,
+        PopKeyboardEnhancementFlags,
+        DisableMouseCapture,
+        LeaveAlternateScreen,
+        crossterm::cursor::Show
+    );
+}
+
+fn suspend_tui(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    guard: &mut TerminalSessionGuard,
+) -> io::Result<()> {
+    guard.active = false;
+    leave_tui_mode(terminal.backend_mut())?;
+    terminal.show_cursor()
+}
+
+fn resume_tui(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    guard: &mut TerminalSessionGuard,
+) -> io::Result<()> {
+    enter_tui_mode(terminal.backend_mut())?;
+    guard.active = true;
+    terminal.clear()
+}
+
+fn secure_temp_log_path() -> std::path::PathBuf {
+    let base_dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_dir())
+        .unwrap_or_else(std::env::temp_dir);
+    base_dir.join(format!("rclonedash-full-{}.log", std::process::id()))
+}
+
+fn write_private_temp_file(path: &std::path::Path, bytes: &[u8]) {
+    use std::io::Write;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    if let Ok(mut f) = opts.open(path) {
+        let _ = f.write_all(bytes);
+    }
+}
+
 fn open_full_logs(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     app: &mut app::App,
+    guard: &mut TerminalSessionGuard,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        PopKeyboardEnhancementFlags,
-        DisableMouseCapture,
-        LeaveAlternateScreen
-    )?;
-    terminal.show_cursor()?;
+    suspend_tui(terminal, guard)?;
 
-    let log_path = "/tmp/rclone-bisync-full.log";
+    let log_path = secure_temp_log_path();
     // Retrieve complete logs via journalctl if possible
     let output = std::process::Command::new("journalctl")
         .args(["--user", "-u", "rclone-bisync", "--no-pager", "-n", "10000"])
         .output();
-    if let Ok(out) = output {
-        if !out.stdout.is_empty() {
-            let _ = std::fs::write(log_path, &out.stdout);
-        } else {
-            let text = app.live.log_lines.iter().cloned().collect::<Vec<_>>().join("\n");
-            let _ = std::fs::write(log_path, text);
+    match output {
+        Ok(out) if !out.stdout.is_empty() => {
+            write_private_temp_file(&log_path, &out.stdout);
         }
-    } else {
-        let text = app.live.log_lines.iter().cloned().collect::<Vec<_>>().join("\n");
-        let _ = std::fs::write(log_path, text);
+        _ => {
+            let text = app.live.log_lines.iter().cloned().collect::<Vec<_>>().join("\n");
+            write_private_temp_file(&log_path, text.as_bytes());
+        }
     }
 
-    let _ = cmd::open_in_pager(std::path::Path::new(log_path));
+    let _ = cmd::open_in_pager(&log_path);
+    let _ = std::fs::remove_file(&log_path);
 
-    enable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        EnterAlternateScreen,
-        EnableMouseCapture,
-        PushKeyboardEnhancementFlags(
-            KeyboardEnhancementFlags::REPORT_EVENT_TYPES | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-        )
-    )?;
-    terminal.clear()?;
+    resume_tui(terminal, guard)?;
 
     app.set_toast("✔ Full logs viewer closed");
     Ok(())
@@ -337,6 +419,7 @@ fn handle_single_event(
     event: Event,
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    guard: &mut TerminalSessionGuard,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     match event {
         Event::Key(key) => {
@@ -345,35 +428,18 @@ fn handle_single_event(
             {
                 let action = app.handle_key(key);
                 if action == app::Action::OpenEditor {
-                    disable_raw_mode()?;
-                    execute!(
-                        terminal.backend_mut(),
-                        PopKeyboardEnhancementFlags,
-                        DisableMouseCapture,
-                        LeaveAlternateScreen
-                    )?;
-                    terminal.show_cursor()?;
+                    suspend_tui(terminal, guard)?;
 
                     let path = config::filters_file();
                     let _ = cmd::open_in_editor(&path);
 
-                    enable_raw_mode()?;
-                    execute!(
-                        terminal.backend_mut(),
-                        EnterAlternateScreen,
-                        EnableMouseCapture,
-                        PushKeyboardEnhancementFlags(
-                            KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                                | KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        )
-                    )?;
-                    terminal.clear()?;
+                    resume_tui(terminal, guard)?;
 
                     app.filters = config::read_filters();
                     app.reload_files();
                     app.set_toast(format!("✔ {} reloaded!", config::filters_display_name()));
                 } else if action == app::Action::OpenFullLogs {
-                    open_full_logs(terminal, app)?;
+                    open_full_logs(terminal, app, guard)?;
                 }
                 Ok(true)
             } else {
@@ -383,7 +449,7 @@ fn handle_single_event(
         Event::Mouse(mouse) => {
             let action = app.handle_mouse(mouse);
             if action == app::Action::OpenFullLogs {
-                open_full_logs(terminal, app)?;
+                open_full_logs(terminal, app, guard)?;
             }
             Ok(true)
         }

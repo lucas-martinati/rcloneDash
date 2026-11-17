@@ -62,6 +62,9 @@ pub fn get_service_info() -> ServiceInfo {
         }
     }
 
+    // Load config once for both timer & safety-net calculations
+    let cfg = config::load_config();
+
     // 2. Timer status
     let timer_out = Command::new("systemctl")
         .args(["--user", "list-timers", "--no-legend", "-l", "rclone-bisync.timer"])
@@ -70,7 +73,7 @@ pub fn get_service_info() -> ServiceInfo {
     if let Ok(out) = timer_out {
         let text = String::from_utf8_lossy(&out.stdout);
         let line = text.trim();
-        let cfg_interval = config::load_config().timer_interval;
+        let cfg_interval = &cfg.timer_interval;
         if cfg_interval.eq_ignore_ascii_case("never") {
             info.timer_left = "Disabled".to_string();
             info.timer_next = "Disabled".to_string();
@@ -90,21 +93,16 @@ pub fn get_service_info() -> ServiceInfo {
                 let last_time_opt = parts.iter().find(|p| p.contains(':') && p.len() >= 5);
                 if let Some(lt) = last_time_opt {
                     if let Ok(last_chrono) = chrono::NaiveTime::parse_from_str(lt, "%H:%M:%S") {
-                        let next_dt = last_chrono + chrono::Duration::minutes(interval_mins as i64);
                         let now = chrono::Local::now().time();
-                        let diff_secs = (next_dt - now).num_seconds();
-                        if diff_secs > 0 {
-                            let mins = diff_secs / 60;
-                            let secs = diff_secs % 60;
-                            info.timer_next = next_dt.format("%H:%M:%S").to_string();
-                            info.timer_left = format!("{}m {:02}s", mins, secs);
-                        } else if info.state == ServiceState::Active {
-                            info.timer_next = "In progress".to_string();
-                            info.timer_left = format!("after sync ({})", cfg_interval);
-                        } else {
-                            info.timer_next = next_dt.format("%H:%M:%S").to_string();
-                            info.timer_left = "imminent".to_string();
-                        }
+                        let (next_str, left_str) = compute_inactive_timer_countdown(
+                            last_chrono,
+                            now,
+                            interval_mins,
+                            info.state == ServiceState::Active,
+                            cfg_interval,
+                        );
+                        info.timer_next = next_str;
+                        info.timer_left = left_str;
                     } else {
                         info.timer_next = format!("~{}", cfg_interval);
                         info.timer_left = format!("in ~{}", cfg_interval);
@@ -143,7 +141,6 @@ pub fn get_service_info() -> ServiceInfo {
     }
 
     // 3. Cloud safety net (periodic full sync)
-    let cfg = config::load_config();
     if cfg.full_sync_interval.eq_ignore_ascii_case("never") {
         info.cloud_safety_net = "Disabled".to_string();
     } else {
@@ -245,6 +242,71 @@ pub fn get_disk_usage(path: &str) -> (f64, f64, f64, f64) {
         (used_gb, free_gb, total_gb, pct)
     } else {
         (0.0, 0.0, 0.0, 0.0)
+    }
+}
+
+/// Computes `(timer_next, timer_left)` from the last run's wall-clock time,
+/// correctly handling midnight wraparound (e.g. `last_run = 23:55:00` + `10min` -> `00:05:00`).
+fn compute_inactive_timer_countdown(
+    last_run: chrono::NaiveTime,
+    now: chrono::NaiveTime,
+    interval_mins: u64,
+    is_active: bool,
+    cfg_interval: &str,
+) -> (String, String) {
+    let next_dt = last_run + chrono::Duration::minutes(interval_mins as i64);
+    let raw_elapsed = (now - last_run).num_seconds();
+    let elapsed_secs = if raw_elapsed < 0 {
+        raw_elapsed + 86_400
+    } else {
+        raw_elapsed
+    };
+    let diff_secs = (interval_mins as i64 * 60) - elapsed_secs;
+
+    if diff_secs > 0 {
+        let mins = diff_secs / 60;
+        let secs = diff_secs % 60;
+        (
+            next_dt.format("%H:%M:%S").to_string(),
+            format!("{}m {:02}s", mins, secs),
+        )
+    } else if is_active {
+        (
+            "In progress".to_string(),
+            format!("after sync ({})", cfg_interval),
+        )
+    } else {
+        (
+            next_dt.format("%H:%M:%S").to_string(),
+            "imminent".to_string(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveTime;
+
+    #[test]
+    fn test_compute_inactive_timer_countdown_midnight_wraparound() {
+        let last = NaiveTime::from_hms_opt(23, 55, 0).unwrap();
+        let before_midnight = NaiveTime::from_hms_opt(23, 57, 0).unwrap();
+        let (next_str, left_str) =
+            compute_inactive_timer_countdown(last, before_midnight, 10, false, "10min");
+        assert_eq!(next_str, "00:05:00");
+        assert_eq!(left_str, "8m 00s");
+
+        let after_midnight = NaiveTime::from_hms_opt(0, 2, 30).unwrap();
+        let (next_str2, left_str2) =
+            compute_inactive_timer_countdown(last, after_midnight, 10, false, "10min");
+        assert_eq!(next_str2, "00:05:00");
+        assert_eq!(left_str2, "2m 30s");
+
+        let overdue = NaiveTime::from_hms_opt(0, 6, 0).unwrap();
+        let (_, left_overdue) =
+            compute_inactive_timer_countdown(last, overdue, 10, false, "10min");
+        assert_eq!(left_overdue, "imminent");
     }
 }
 

@@ -59,6 +59,7 @@ pub fn list_directory(base: &Path, rel: &str, filters: &[String]) -> Result<Vec<
         });
     }
 
+    let compiled_filters = CompiledFilters::new(filters);
     let rd = fs::read_dir(&full_target)?;
     for entry_res in rd {
         let entry = entry_res?;
@@ -70,14 +71,17 @@ pub fn list_directory(base: &Path, rel: &str, filters: &[String]) -> Result<Vec<
         }
 
         let full_path = entry.path();
-        let is_dir = full_path.is_dir();
-        let metadata = entry.metadata().ok();
+        let metadata = fs::metadata(&full_path).ok();
+        let is_dir = metadata.as_ref().is_some_and(|m| m.is_dir());
         let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
 
-        let mtime = metadata.and_then(|m| m.modified().ok()).map(|t| {
-            let dt: chrono::DateTime<chrono::Local> = t.into();
-            dt.format("%Y-%m-%d %H:%M").to_string()
-        }).unwrap_or_default();
+        let mtime = metadata
+            .and_then(|m| m.modified().ok())
+            .map(|t| {
+                let dt: chrono::DateTime<chrono::Local> = t.into();
+                dt.format("%Y-%m-%d %H:%M").to_string()
+            })
+            .unwrap_or_default();
 
         let item_rel = if rel.is_empty() {
             file_name.clone()
@@ -85,7 +89,7 @@ pub fn list_directory(base: &Path, rel: &str, filters: &[String]) -> Result<Vec<
             format!("{}/{}", rel, file_name)
         };
 
-        let ignored = is_path_ignored(&item_rel, is_dir, filters);
+        let ignored = compiled_filters.is_ignored(&item_rel, is_dir);
 
         entries.push(FileEntry {
             name: file_name,
@@ -97,17 +101,16 @@ pub fn list_directory(base: &Path, rel: &str, filters: &[String]) -> Result<Vec<
         });
     }
 
-    // Tri : dossiers d'abord, puis fichiers, par ordre alphabétique
-    entries.sort_by(|a, b| {
-        if a.name.starts_with("..") {
-            std::cmp::Ordering::Less
-        } else if b.name.starts_with("..") {
-            std::cmp::Ordering::Greater
-        } else if a.is_dir != b.is_dir {
-            b.is_dir.cmp(&a.is_dir)
+    // Tri : parent ".." en tête, puis dossiers, puis fichiers, par ordre alphabétique
+    entries.sort_by_cached_key(|e| {
+        let rank = if e.name.starts_with("..") {
+            0u8
+        } else if e.is_dir {
+            1u8
         } else {
-            a.name.to_lowercase().cmp(&b.name.to_lowercase())
-        }
+            2u8
+        };
+        (rank, e.name.to_lowercase())
     });
 
     Ok(entries)
@@ -132,7 +135,8 @@ pub fn glob_to_regex(pat: &str) -> String {
             out.push_str("[^/]");
             i += 1;
         } else {
-            out.push_str(&regex::escape(&chars[i].to_string()));
+            let mut buf = [0u8; 4];
+            out.push_str(&regex::escape(chars[i].encode_utf8(&mut buf)));
             i += 1;
         }
     }
@@ -140,77 +144,112 @@ pub fn glob_to_regex(pat: &str) -> String {
     out
 }
 
-fn match_any_level(rx_str: &str, path: &str, anchored: bool) -> bool {
-    let Ok(rx) = regex::Regex::new(rx_str) else {
+/// Zero-allocation subpath matcher: tests `clean_path` directly, and when unanchored,
+/// tests every suffix starting after a `'/'` separator.
+fn match_any_level(rx: &regex::Regex, clean_path: &str, anchored: bool) -> bool {
+    if rx.is_match(clean_path) {
+        return true;
+    }
+    if anchored {
         return false;
-    };
-    let segs: Vec<&str> = path.split('/').collect();
-    let start_indices: Vec<usize> = if anchored {
-        vec![0]
-    } else {
-        (0..segs.len()).collect()
-    };
-
-    for i in start_indices {
-        let subpath = segs[i..].join("/");
-        if rx.is_match(&subpath) {
+    }
+    for (idx, ch) in clean_path.char_indices() {
+        if ch == '/' && rx.is_match(&clean_path[idx + 1..]) {
             return true;
         }
     }
     false
 }
 
-pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool {
-    let clean = rel_path.trim_matches('/');
-    if clean.is_empty() {
-        return false;
+struct CompiledRule {
+    anchored: bool,
+    rx_full: regex::Regex,
+    rx_sub_all: Option<regex::Regex>,
+    rx_dir_slash: Option<regex::Regex>,
+}
+
+/// Pre-compiled set of rclone exclusion filters. Compiling once per directory
+/// listing turns `O(files * filters)` regex builds into `O(filters)`.
+pub struct CompiledFilters {
+    rules: Vec<CompiledRule>,
+}
+
+impl CompiledFilters {
+    pub fn new(filters: &[String]) -> Self {
+        let mut rules = Vec::new();
+        for rule in filters {
+            let trimmed = rule.trim();
+            let pat = if let Some(stripped) = trimmed.strip_prefix("- ") {
+                stripped.trim()
+            } else if let Some(stripped) = trimmed.strip_prefix('-') {
+                stripped.trim()
+            } else {
+                continue;
+            };
+
+            if pat.is_empty() {
+                continue;
+            }
+
+            let anchored = pat.starts_with('/');
+            let body = if anchored { pat.trim_start_matches('/') } else { pat };
+            if body.is_empty() {
+                continue;
+            }
+
+            let Ok(rx_full) = regex::Regex::new(&glob_to_regex(body)) else {
+                continue;
+            };
+            let rx_sub_all = body
+                .strip_suffix("/**")
+                .and_then(|base| regex::Regex::new(&glob_to_regex(base)).ok());
+            let rx_dir_slash = body
+                .strip_suffix('/')
+                .and_then(|base| regex::Regex::new(&glob_to_regex(base)).ok());
+
+            rules.push(CompiledRule {
+                anchored,
+                rx_full,
+                rx_sub_all,
+                rx_dir_slash,
+            });
+        }
+        Self { rules }
     }
 
-    for rule in filters {
-        let trimmed = rule.trim();
-        let pat = if let Some(stripped) = trimmed.strip_prefix("- ") {
-            stripped.trim()
-        } else if let Some(stripped) = trimmed.strip_prefix('-') {
-            stripped.trim()
-        } else {
-            continue;
-        };
-
-        if pat.is_empty() {
-            continue;
+    pub fn is_ignored(&self, rel_path: &str, is_dir: bool) -> bool {
+        let clean = rel_path.trim_matches('/');
+        if clean.is_empty() {
+            return false;
         }
 
-        let anchored = pat.starts_with('/');
-        let body = if anchored { pat.trim_start_matches('/') } else { pat };
-        if body.is_empty() {
-            continue;
-        }
-
-        let rx_full = glob_to_regex(body);
-        if match_any_level(&rx_full, clean, anchored) {
-            return true;
-        }
-
-        // « base/** » : le dossier « base » lui-même est aussi considéré exclu
-        if let Some(base_body) = body.strip_suffix("/**") {
-            let rx_base = glob_to_regex(base_body);
-            if match_any_level(&rx_base, clean, anchored) {
+        for rule in &self.rules {
+            if match_any_level(&rule.rx_full, clean, rule.anchored) {
                 return true;
             }
-        }
-
-        // Si c'est un dossier et que le motif se termine par '/', tester la base
-        if is_dir {
-            if let Some(base_body) = body.strip_suffix('/') {
-                let rx_base = glob_to_regex(base_body);
-                if match_any_level(&rx_base, clean, anchored) {
+            // « base/** » : le dossier « base » lui-même est aussi considéré exclu
+            if let Some(ref rx_base) = rule.rx_sub_all {
+                if match_any_level(rx_base, clean, rule.anchored) {
                     return true;
                 }
             }
+            // Si c'est un dossier et que le motif se termine par '/', tester la base
+            if is_dir {
+                if let Some(ref rx_dir) = rule.rx_dir_slash {
+                    if match_any_level(rx_dir, clean, rule.anchored) {
+                        return true;
+                    }
+                }
+            }
         }
-    }
 
-    false
+        false
+    }
+}
+
+#[cfg(test)]
+pub fn is_path_ignored(rel_path: &str, is_dir: bool, filters: &[String]) -> bool {
+    CompiledFilters::new(filters).is_ignored(rel_path, is_dir)
 }
 
 pub fn open_with_xdg(base: &Path, rel_path: &str) -> Result<(), String> {

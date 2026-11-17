@@ -1,132 +1,96 @@
+#[cfg(not(test))]
 use std::io::Write;
+#[cfg(not(test))]
 use std::process::{Command, Stdio};
+
+#[cfg(not(test))]
+fn try_pipe_to_command(prog: &str, args: &[&str], text: &str) -> bool {
+    let Ok(mut child) = Command::new(prog)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+
+    if let Some(mut stdin) = child.stdin.take() {
+        if stdin.write_all(text.as_bytes()).is_ok() {
+            drop(stdin);
+            if let Ok(status) = child.wait() {
+                return status.success();
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(test))]
+fn try_read_command(prog: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(prog).args(args).output().ok()?;
+    if output.status.success() {
+        let s = String::from_utf8(output.stdout).ok()?;
+        if !s.is_empty() {
+            return Some(s);
+        }
+    }
+    None
+}
 
 /// Copie une chaîne dans le presse-papiers du système Linux.
 /// Tente wl-copy (Wayland), xclip/xsel (X11) et la séquence ANSI OSC 52 (terminaux modernes).
+/// Isolé en `#[cfg(test)]` pour ne jamais écraser le vrai presse-papiers de l'utilisateur durant `cargo test`.
 pub fn copy_to_clipboard(text: &str) -> bool {
-    let mut success = false;
-
-    // 1. Essai wl-copy (Wayland)
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-        if let Ok(mut child) = Command::new("wl-copy")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            if let Some(mut stdin) = child.stdin.take() {
-                if stdin.write_all(text.as_bytes()).is_ok() {
-                    drop(stdin);
-                    if let Ok(status) = child.wait() {
-                        if status.success() {
-                            success = true;
-                        }
-                    }
-                }
-            }
-        }
+    #[cfg(test)]
+    {
+        !text.is_empty()
     }
 
-    // 2. Essai xclip (X11)
-    if !success {
-        if let Ok(mut child) = Command::new("xclip")
-            .arg("-selection")
-            .arg("clipboard")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            if let Some(mut stdin) = child.stdin.take() {
-                if stdin.write_all(text.as_bytes()).is_ok() {
-                    drop(stdin);
-                    if let Ok(status) = child.wait() {
-                        if status.success() {
-                            success = true;
-                        }
-                    }
-                }
-            }
+    #[cfg(not(test))]
+    {
+        let mut success = false;
+
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            success = try_pipe_to_command("wl-copy", &[], text);
         }
-    }
-
-    // 3. Essai xsel (alternative X11)
-    if !success {
-        if let Ok(mut child) = Command::new("xsel")
-            .arg("--clipboard")
-            .arg("--input")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            if let Some(mut stdin) = child.stdin.take() {
-                if stdin.write_all(text.as_bytes()).is_ok() {
-                    drop(stdin);
-                    if let Ok(status) = child.wait() {
-                        if status.success() {
-                            success = true;
-                        }
-                    }
-                }
-            }
+        if !success {
+            success = try_pipe_to_command("xclip", &["-selection", "clipboard"], text);
         }
+        if !success {
+            success = try_pipe_to_command("xsel", &["--clipboard", "--input"], text);
+        }
+
+        // Émission de la séquence ANSI OSC 52 vers stdout pour les émulateurs de terminal
+        // Format : \x1b]52;c;<base64-string>\x07
+        let b64 = base64_encode(text);
+        let osc52 = format!("\x1b]52;c;{}\x07", b64);
+        let _ = std::io::stdout().write_all(osc52.as_bytes());
+        let _ = std::io::stdout().flush();
+
+        success || !text.is_empty()
     }
-
-    // 4. Émission de la séquence ANSI OSC 52 vers stdout pour les émulateurs de terminal
-    // Format : \x1b]52;c;<base64-string>\x07
-    let b64 = base64_encode(text);
-    let osc52 = format!("\x1b]52;c;{}\x07", b64);
-    let _ = std::io::stdout().write_all(osc52.as_bytes());
-    let _ = std::io::stdout().flush();
-
-    success || !text.is_empty()
 }
 
 /// Reads text content from the system clipboard on Linux (Wayland via wl-paste, or X11 via xclip/xsel).
 pub fn paste_from_clipboard() -> Option<String> {
-    // 1. Try wl-paste (Wayland)
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-        if let Ok(output) = Command::new("wl-paste").arg("--no-newline").output() {
-            if output.status.success() {
-                if let Ok(s) = String::from_utf8(output.stdout) {
-                    if !s.is_empty() {
-                        return Some(s);
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. Try xclip (X11)
-    if let Ok(output) = Command::new("xclip")
-        .args(["-selection", "clipboard", "-out"])
-        .output()
+    #[cfg(test)]
     {
-        if output.status.success() {
-            if let Ok(s) = String::from_utf8(output.stdout) {
-                if !s.is_empty() {
-                    return Some(s);
-                }
-            }
-        }
+        None
     }
 
-    // 3. Try xsel (alternative X11)
-    if let Ok(output) = Command::new("xsel")
-        .args(["--clipboard", "--output"])
-        .output()
+    #[cfg(not(test))]
     {
-        if output.status.success() {
-            if let Ok(s) = String::from_utf8(output.stdout) {
-                if !s.is_empty() {
-                    return Some(s);
-                }
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            if let Some(s) = try_read_command("wl-paste", &["--no-newline"]) {
+                return Some(s);
             }
         }
+        if let Some(s) = try_read_command("xclip", &["-selection", "clipboard", "-out"]) {
+            return Some(s);
+        }
+        try_read_command("xsel", &["--clipboard", "--output"])
     }
-
-    None
 }
 
 pub fn base64_encode(data: &str) -> String {

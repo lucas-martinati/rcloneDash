@@ -3101,7 +3101,11 @@ use crate::monitor::history::{PastRun, RunStatus};
                 if trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*') {
                     continue;
                 }
-                if trimmed.starts_with("#[allow(") && (trimmed.contains("dead_code") || trimmed.contains("unused")) {
+                if trimmed.starts_with("#[allow(")
+                    && (trimmed.contains("dead_code")
+                        || trimmed.contains("unused")
+                        || trimmed.contains("too_many_arguments"))
+                {
                     allow_violations.push(format!("{}:{}: {}", file_path.display(), line_no + 1, trimmed));
                 }
             }
@@ -3162,4 +3166,149 @@ use crate::monitor::history::{PastRun, RunStatus};
             "cargo clippy failed:\n{}",
             String::from_utf8_lossy(&clippy_output.stderr)
         );
+    }
+
+    #[tokio::test]
+    async fn test_bg_event_pipeline_and_state_transitions() {
+        let _guard = config::test_support::hold_test_config_lock();
+        let mut app = App::new();
+
+        // 1. UpdateAvailable
+        app.handle_bg_event(BgEvent::UpdateAvailable("2.0.0".to_string()));
+        assert_eq!(app.available_update.as_deref(), Some("2.0.0"));
+
+        // 2. QuotaFetched
+        let quota = CloudQuota {
+            total_bytes: 1000,
+            used_bytes: 400,
+            free_bytes: 600,
+        };
+        app.handle_bg_event(BgEvent::QuotaFetched(quota.clone()));
+        assert_eq!(app.cloud_quota, Some(quota));
+
+        // 3. FileCounted
+        app.handle_bg_event(BgEvent::FileCounted(42));
+        assert_eq!(app.tracked_files_count, 42);
+
+        // 4. ServiceInfoUpdated (Active -> populates sync_start from running_elapsed_secs)
+        app.live.sync_start = None;
+        app.handle_bg_event(BgEvent::ServiceInfoUpdated {
+            info: ServiceInfo {
+                state: ServiceState::Active,
+                active_substate: "Running".to_string(),
+                ..Default::default()
+            },
+            running_elapsed_secs: Some(360),
+        });
+        assert_eq!(app.service_info.state, ServiceState::Active);
+        assert!(app.live.sync_start.is_some());
+        assert!(
+            app.active_alerts()
+                .iter()
+                .any(|a| a.message.contains("Abnormally long sync duration")),
+            "Active sync over 300s must trigger warning without spawning ps during render"
+        );
+
+        // ServiceInfoUpdated (Idle -> clears live sync state)
+        app.live.is_syncing = true;
+        app.live.path1_modified = true;
+        app.handle_bg_event(BgEvent::ServiceInfoUpdated {
+            info: ServiceInfo {
+                state: ServiceState::Idle,
+                ..Default::default()
+            },
+            running_elapsed_secs: None,
+        });
+        assert!(!app.live.is_syncing);
+        assert!(app.live.sync_start.is_none());
+        assert!(!app.live.path1_modified);
+
+        // 5. PastRunsUpdated
+        app.handle_bg_event(BgEvent::PastRunsUpdated(vec![PastRun {
+            id: 7,
+            date: "2026-11-17".into(),
+            time: "12:00:00".into(),
+            duration: "3s".into(),
+            status: RunStatus::Success,
+            files_copied: vec![],
+            files_modified: vec![],
+            files_deleted: vec![],
+            synced_files: vec![],
+            errors: vec![],
+        }]));
+        assert_eq!(app.past_runs.len(), 1);
+        assert_eq!(app.past_runs[0].id, 7);
+
+        // 6. DryRunCompleted
+        app.dry_run_running = true;
+        app.handle_bg_event(BgEvent::DryRunCompleted {
+            lines: vec!["line 1".into()],
+            raw_lines: vec!["{\"msg\":\"line 1\"}".into()],
+        });
+        assert!(!app.dry_run_running);
+        assert_eq!(app.dry_run_logs, vec!["line 1"]);
+        assert_eq!(app.dry_run_raw_logs, vec!["{\"msg\":\"line 1\"}"]);
+
+        // 7. RcloneInstallFinished
+        app.open_first_run();
+        app.handle_bg_event(BgEvent::RcloneInstallFinished(Ok("rclone v1.68".into())));
+        if let Modal::FirstRun(ref state) = app.modal {
+            assert_eq!(state.rclone_status, RcloneInstallStatus::Installed("rclone v1.68".into()));
+            assert_eq!(state.active_field, FirstRunField::ContinueButton);
+        } else {
+            panic!("Expected FirstRun modal");
+        }
+    }
+
+    #[test]
+    fn test_count_dir_files_ignores_symlink_loops_and_hidden_dirs() {
+        let tmp_dir = std::env::temp_dir().join(format!("rclonedash_symlink_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        std::fs::create_dir_all(tmp_dir.join("sub")).unwrap();
+        std::fs::create_dir_all(tmp_dir.join(".git/objects")).unwrap();
+        std::fs::write(tmp_dir.join("a.txt"), "hello").unwrap();
+        std::fs::write(tmp_dir.join("sub/b.txt"), "world").unwrap();
+        std::fs::write(tmp_dir.join(".git/objects/hidden"), "ignored").unwrap();
+
+        #[cfg(unix)]
+        {
+            // Self-referencing symlink cycle that previously caused infinite recursion
+            std::os::unix::fs::symlink(&tmp_dir, tmp_dir.join("sub/cycle_loop")).unwrap();
+            std::os::unix::fs::symlink(tmp_dir.join("a.txt"), tmp_dir.join("symlink_file.txt")).unwrap();
+        }
+
+        assert_eq!(count_dir_files(&tmp_dir), 2);
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_streamer_generation_skips_redundant_clones_on_tick() {
+        let mut app = App::new();
+        {
+            let mut st = app.streamer.write().await;
+            st.log_lines.push_back("first log".to_string());
+            st.generation = 42;
+        }
+        // Prevent periodic background tasks from firing during the unit test
+        app.last_quota_check = Instant::now();
+        app.last_file_count_check = Instant::now();
+
+        app.on_tick().await;
+        assert_eq!(app.last_streamer_gen, 42);
+        assert_eq!(app.live.log_lines.len(), 1);
+
+        // Mutate local copy without bumping streamer generation: next tick must skip cloning
+        app.live.log_lines.push_back("local marker".to_string());
+        app.on_tick().await;
+        assert_eq!(app.live.log_lines.len(), 2, "Unchanged generation must skip cloning StreamerState");
+
+        // Bump streamer generation: next tick must sync fresh state
+        {
+            let mut st = app.streamer.write().await;
+            st.log_lines.push_back("second stream log".to_string());
+            st.generation = 43;
+        }
+        app.on_tick().await;
+        assert_eq!(app.last_streamer_gen, 43);
+        assert_eq!(app.live.log_lines.back().map(String::as_str), Some("second stream log"));
     }

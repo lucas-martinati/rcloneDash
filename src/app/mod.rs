@@ -386,7 +386,6 @@ pub struct App {
     /// car le formatage détruit la structure JSON attendue par le parseur.
     pub dry_run_raw_logs: Vec<String>,
     pub dry_run_scroll: usize,
-    pub dry_run_rx: Option<std::sync::mpsc::Receiver<(Vec<String>, Vec<String>)>>,
 
     // Interactive item selection
     pub history_selected_file_idx: usize,
@@ -399,12 +398,16 @@ pub struct App {
     pub cloud_quota: Option<CloudQuota>,
     pub tracked_files_count: usize,
     pub available_update: Option<String>,
-    update_rx: Option<std::sync::mpsc::Receiver<String>>,
-    quota_rx: Option<std::sync::mpsc::Receiver<CloudQuota>>,
-    file_count_rx: Option<std::sync::mpsc::Receiver<usize>>,
-    service_info_rx: Option<std::sync::mpsc::Receiver<ServiceInfo>>,
-    past_runs_rx: Option<std::sync::mpsc::Receiver<Vec<PastRun>>>,
-    pub rclone_install_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
+
+    // Unified async background event pipeline (replaces 7 polling std::sync::mpsc channels)
+    bg_tx: tokio::sync::mpsc::UnboundedSender<BgEvent>,
+    bg_rx: tokio::sync::mpsc::UnboundedReceiver<BgEvent>,
+    bg_in_flight: BgInFlight,
+    last_streamer_gen: u64,
+
+    // Short-lived render I/O caches (keyed / TTL-bounded so direct field mutations stay fresh)
+    disk_stats_cache: std::cell::RefCell<Option<DiskStatsCache>>,
+    recent_size_cache: std::cell::RefCell<std::collections::HashMap<std::path::PathBuf, (Instant, String)>>,
 
     last_systemd_check: Instant,
     last_history_check: Instant,
@@ -412,7 +415,40 @@ pub struct App {
     last_file_count_check: Instant,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
+struct BgInFlight {
+    systemd: bool,
+    history: bool,
+    quota: bool,
+    file_count: bool,
+    rclone_install: bool,
+}
+
+struct DiskStatsCache {
+    local_dir: String,
+    fetched_at: Instant,
+    stats: (f64, f64, f64, f64),
+}
+
+/// Asynchronous notifications pushed by background tasks into the main UI loop.
+#[derive(Debug)]
+pub enum BgEvent {
+    UpdateAvailable(String),
+    QuotaFetched(CloudQuota),
+    FileCounted(usize),
+    ServiceInfoUpdated {
+        info: ServiceInfo,
+        running_elapsed_secs: Option<u64>,
+    },
+    PastRunsUpdated(Vec<PastRun>),
+    DryRunCompleted {
+        lines: Vec<String>,
+        raw_lines: Vec<String>,
+    },
+    RcloneInstallFinished(Result<String, String>),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CloudQuota {
     pub total_bytes: u64,
     pub used_bytes: u64,
@@ -430,9 +466,29 @@ impl App {
         let config = config::load_config();
         let current_theme = config.theme.unwrap_or(ThemeChoice::TokyoNight);
         let log_filter = config.log_filter;
-        let service_info = get_service_info();
-        let past_runs = fetch_past_runs(50);
+        #[cfg(not(test))]
+        let (service_info, past_runs, live, last_streamer_gen) = {
+            let info = get_service_info();
+            let runs = fetch_past_runs(50);
+            let initial_live = streamer
+                .try_read()
+                .map(|st| st.clone())
+                .unwrap_or_default();
+            let gen = initial_live.generation;
+            (info, runs, initial_live, gen)
+        };
+        #[cfg(test)]
+        let (service_info, past_runs, live, last_streamer_gen) = (
+            ServiceInfo {
+                state: ServiceState::Idle,
+                ..Default::default()
+            },
+            Vec::new(),
+            StreamerState::default(),
+            0,
+        );
         let filters = config::read_filters();
+        let (bg_tx, bg_rx) = tokio::sync::mpsc::unbounded_channel();
 
         let mut app = Self {
             running: true,
@@ -443,7 +499,7 @@ impl App {
             term_caps: TermCaps::full(),
             service_info,
             streamer,
-            live: StreamerState::default(),
+            live,
             past_runs,
             selected_run_idx: None,
             filters,
@@ -484,7 +540,6 @@ impl App {
             dry_run_logs: Vec::new(),
             dry_run_raw_logs: Vec::new(),
             dry_run_scroll: 0,
-            dry_run_rx: None,
 
             history_selected_file_idx: 0,
             recent_selected_idx: None,
@@ -499,12 +554,12 @@ impl App {
             }),
             tracked_files_count: 0,
             available_update: None,
-            update_rx: None,
-            quota_rx: None,
-            file_count_rx: None,
-            service_info_rx: None,
-            past_runs_rx: None,
-            rclone_install_rx: None,
+            bg_tx,
+            bg_rx,
+            bg_in_flight: BgInFlight::default(),
+            last_streamer_gen,
+            disk_stats_cache: std::cell::RefCell::new(None),
+            recent_size_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
 
             last_systemd_check: Instant::now(),
             last_history_check: Instant::now(),
@@ -520,11 +575,10 @@ impl App {
 
         #[cfg(not(test))]
         {
-            let (tx, rx) = std::sync::mpsc::channel();
-            app.update_rx = Some(rx);
+            let tx = app.bg_tx.clone();
             tokio::spawn(async move {
                 if let Ok(Some(info)) = crate::updater::check_for_updates().await {
-                    let _ = tx.send(info.latest_version);
+                    let _ = tx.send(BgEvent::UpdateAvailable(info.latest_version));
                 }
             });
         }
@@ -540,17 +594,17 @@ impl App {
     }
 
     pub fn start_rclone_install(&mut self) {
-        if self.rclone_install_rx.is_some() {
+        if self.bg_in_flight.rclone_install {
             return;
         }
         if let Modal::FirstRun(ref mut state) = self.modal {
             state.rclone_status = RcloneInstallStatus::Installing;
         }
-        let (tx, rx) = std::sync::mpsc::channel();
-        self.rclone_install_rx = Some(rx);
+        self.bg_in_flight.rclone_install = true;
+        let tx = self.bg_tx.clone();
         tokio::spawn(async move {
             let res = crate::installer::install_rclone_user().await;
-            let _ = tx.send(res);
+            let _ = tx.send(BgEvent::RcloneInstallFinished(res));
         });
     }
 
@@ -818,15 +872,80 @@ impl App {
         }
     }
 
-    pub async fn on_tick(&mut self) {
-        {
-            let st = self.streamer.read().await;
-            self.live = st.clone();
-        }
+    /// Awaits the next asynchronous background notification (cancel-safe for `tokio::select!`).
+    pub async fn recv_bg_event(&mut self) -> Option<BgEvent> {
+        self.bg_rx.recv().await
+    }
 
-        if let Some(rx) = &self.rclone_install_rx {
-            if let Ok(res) = rx.try_recv() {
-                self.rclone_install_rx = None;
+    /// Drains all immediately available background events without blocking.
+    pub fn drain_bg_events(&mut self) {
+        while let Ok(ev) = self.bg_rx.try_recv() {
+            self.handle_bg_event(ev);
+        }
+    }
+
+    /// Applies a single background event to the application state.
+    pub fn handle_bg_event(&mut self, event: BgEvent) {
+        match event {
+            BgEvent::UpdateAvailable(latest_ver) => {
+                self.available_update = Some(latest_ver);
+            }
+            BgEvent::QuotaFetched(q) => {
+                self.bg_in_flight.quota = false;
+                let _ = config::save_quota_cache(&config::CloudQuotaCache {
+                    total_bytes: q.total_bytes,
+                    used_bytes: q.used_bytes,
+                    free_bytes: q.free_bytes,
+                });
+                self.cloud_quota = Some(q);
+            }
+            BgEvent::FileCounted(count) => {
+                self.bg_in_flight.file_count = false;
+                self.tracked_files_count = count;
+            }
+            BgEvent::ServiceInfoUpdated {
+                info,
+                running_elapsed_secs,
+            } => {
+                self.bg_in_flight.systemd = false;
+                self.service_info = info;
+                if self.service_info.state == ServiceState::Idle
+                    || self.service_info.state == ServiceState::Failed
+                {
+                    self.live.is_syncing = false;
+                    self.live.sync_start = None;
+                    self.live.transfer = crate::monitor::parser::TransferStats::default();
+                    self.live.active_files.clear();
+                    self.live.synced_files.clear();
+                    self.live.changes_local.clear();
+                    self.live.changes_remote.clear();
+                    self.live.changes_local_details.clear();
+                    self.live.changes_remote_details.clear();
+                    self.live.path1_modified = false;
+                    self.live.path2_modified = false;
+                } else if self.service_info.state == ServiceState::Active && self.live.sync_start.is_none() {
+                    let secs = running_elapsed_secs.unwrap_or(0);
+                    self.live.sync_start = Some(
+                        Instant::now()
+                            .checked_sub(std::time::Duration::from_secs(secs))
+                            .unwrap_or_else(Instant::now),
+                    );
+                }
+            }
+            BgEvent::PastRunsUpdated(runs) => {
+                self.bg_in_flight.history = false;
+                self.past_runs = runs;
+            }
+            BgEvent::DryRunCompleted { lines, raw_lines } => {
+                if self.dry_run_running {
+                    self.dry_run_logs = lines;
+                    self.dry_run_raw_logs = raw_lines;
+                    self.dry_run_running = false;
+                    self.set_toast("✔ Dry-Run simulation completed!");
+                }
+            }
+            BgEvent::RcloneInstallFinished(res) => {
+                self.bg_in_flight.rclone_install = false;
                 if let Modal::FirstRun(ref mut state) = self.modal {
                     match res {
                         Ok(msg) => {
@@ -843,58 +962,45 @@ impl App {
                 }
             }
         }
+    }
 
-        if let Some(rx) = &self.service_info_rx {
-            if let Ok(info) = rx.try_recv() {
-                self.service_info = info;
-                self.service_info_rx = None;
-                if self.service_info.state == ServiceState::Idle || self.service_info.state == ServiceState::Failed {
-                    self.live.is_syncing = false;
-                    self.live.sync_start = None;
-                    self.live.transfer = crate::monitor::parser::TransferStats::default();
-                    self.live.active_files.clear();
-                    self.live.synced_files.clear();
-                    self.live.changes_local.clear();
-                    self.live.changes_remote.clear();
-                    self.live.changes_local_details.clear();
-                    self.live.changes_remote_details.clear();
-                    self.live.path1_modified = false;
-                    self.live.path2_modified = false;
-                }
+    pub async fn on_tick(&mut self) {
+        {
+            let st = self.streamer.read().await;
+            if st.generation != self.last_streamer_gen {
+                self.live = st.clone();
+                self.last_streamer_gen = st.generation;
             }
         }
 
-        if let Some(rx) = &self.past_runs_rx {
-            if let Ok(runs) = rx.try_recv() {
-                self.past_runs = runs;
-                self.past_runs_rx = None;
-            }
-        }
+        self.drain_bg_events();
 
-        if let Some(rx) = &self.update_rx {
-            if let Ok(latest_ver) = rx.try_recv() {
-                self.available_update = Some(latest_ver);
-                self.update_rx = None;
-            }
-        }
-
-        if self.last_systemd_check.elapsed().as_secs() >= 1 && self.service_info_rx.is_none() {
+        if self.last_systemd_check.elapsed().as_secs() >= 1 && !self.bg_in_flight.systemd {
             self.last_systemd_check = Instant::now();
-            let (tx, rx) = std::sync::mpsc::channel();
-            self.service_info_rx = Some(rx);
-            std::thread::spawn(move || {
+            self.bg_in_flight.systemd = true;
+            let tx = self.bg_tx.clone();
+            let need_elapsed = self.live.sync_start.is_none();
+            tokio::task::spawn_blocking(move || {
                 let info = get_service_info();
-                let _ = tx.send(info);
+                let running_elapsed_secs = if info.state == ServiceState::Active && need_elapsed {
+                    crate::monitor::streamer::get_running_sync_elapsed_seconds()
+                } else {
+                    None
+                };
+                let _ = tx.send(BgEvent::ServiceInfoUpdated {
+                    info,
+                    running_elapsed_secs,
+                });
             });
         }
 
-        if self.last_history_check.elapsed().as_secs() >= 6 && self.past_runs_rx.is_none() {
+        if self.last_history_check.elapsed().as_secs() >= 6 && !self.bg_in_flight.history {
             self.last_history_check = Instant::now();
-            let (tx, rx) = std::sync::mpsc::channel();
-            self.past_runs_rx = Some(rx);
-            std::thread::spawn(move || {
+            self.bg_in_flight.history = true;
+            let tx = self.bg_tx.clone();
+            tokio::task::spawn_blocking(move || {
                 let runs = fetch_past_runs(50);
-                let _ = tx.send(runs);
+                let _ = tx.send(BgEvent::PastRunsUpdated(runs));
             });
         }
 
@@ -904,48 +1010,18 @@ impl App {
             }
         }
 
-        if let Some(rx) = &self.quota_rx {
-            if let Ok(q) = rx.try_recv() {
-                let _ = config::save_quota_cache(&config::CloudQuotaCache {
-                    total_bytes: q.total_bytes,
-                    used_bytes: q.used_bytes,
-                    free_bytes: q.free_bytes,
-                });
-                self.cloud_quota = Some(q);
-            }
-        }
-
-        if let Some(rx) = &self.file_count_rx {
-            if let Ok(count) = rx.try_recv() {
-                self.tracked_files_count = count;
-            }
-        }
-
-        if self.last_quota_check.elapsed().as_secs() >= 300 {
+        if self.last_quota_check.elapsed().as_secs() >= 300 && !self.bg_in_flight.quota {
             self.last_quota_check = Instant::now();
-            let (tx, rx) = std::sync::mpsc::channel();
-            self.quota_rx = Some(rx);
+            self.bg_in_flight.quota = true;
             let remote = self.config.remote.clone();
-            spawn_quota_fetch(remote, tx);
+            spawn_quota_fetch(remote, self.bg_tx.clone());
         }
 
-        if self.last_file_count_check.elapsed().as_secs() >= 60 {
+        if self.last_file_count_check.elapsed().as_secs() >= 60 && !self.bg_in_flight.file_count {
             self.last_file_count_check = Instant::now();
-            let (tx, rx) = std::sync::mpsc::channel();
-            self.file_count_rx = Some(rx);
+            self.bg_in_flight.file_count = true;
             let base = config::expand_tilde(&self.config.local_dir);
-            spawn_file_count(base, tx);
-        }
-
-        if self.dry_run_running {
-            if let Some(rx) = &self.dry_run_rx {
-                if let Ok((lines, raw_lines)) = rx.try_recv() {
-                    self.dry_run_logs = lines;
-                    self.dry_run_raw_logs = raw_lines;
-                    self.dry_run_running = false;
-                    self.set_toast("✔ Dry-Run simulation completed!");
-                }
-            }
+            spawn_file_count(base, self.bg_tx.clone());
         }
     }
     pub fn get_tracked_files_count(&self) -> usize {
@@ -1013,16 +1089,14 @@ impl App {
         let local_dir = config::expand_tilde(&self.config.local_dir).to_string_lossy().to_string();
         let filters_path = config::filters_file().to_string_lossy().to_string();
         let filters_exists = config::filters_file().exists();
-        let rclone_conf_path = config::rclone_config_file().to_string_lossy().to_string();
+        let rclone_conf_path = config::rclone_config_file();
+        let tx = self.bg_tx.clone();
 
-        let (tx, rx) = std::sync::mpsc::channel();
-        self.dry_run_rx = Some(rx);
-
-        std::thread::spawn(move || {
+        tokio::spawn(async move {
             let mut args: Vec<String> = vec![
                 "bisync".to_string(),
-                remote.clone(),
-                local_dir.clone(),
+                remote,
+                local_dir,
                 "--dry-run".to_string(),
                 "-v".to_string(),
                 "--use-json-log".to_string(),
@@ -1031,7 +1105,7 @@ impl App {
             ];
             if filters_exists {
                 args.push("--filter-from".to_string());
-                args.push(filters_path.clone());
+                args.push(filters_path);
             }
             args.extend(drive_args);
             args.extend([
@@ -1039,12 +1113,12 @@ impl App {
                 "newer".to_string(),
                 "--resilient".to_string(),
             ]);
-            let mut cmd = std::process::Command::new("rclone");
+            let mut cmd = tokio::process::Command::new("rclone");
             cmd.args(&args);
-            if std::path::Path::new(&rclone_conf_path).exists() {
-                cmd.args(["--config", &rclone_conf_path]);
+            if rclone_conf_path.exists() {
+                cmd.arg("--config").arg(&rclone_conf_path);
             }
-            let output = cmd.output();
+            let output = cmd.output().await;
 
             let mut lines = Vec::new();
             let mut raw_lines = Vec::new();
@@ -1074,7 +1148,7 @@ impl App {
                     lines.push(msg);
                 }
             }
-            let _ = tx.send((lines, raw_lines));
+            let _ = tx.send(BgEvent::DryRunCompleted { lines, raw_lines });
         });
     }
 
@@ -1201,13 +1275,30 @@ impl App {
         }
 
         let base = config::expand_tilde(&self.config.local_dir);
+        let now = Instant::now();
+        let ttl = std::time::Duration::from_secs(5);
+        let mut size_cache = self.recent_size_cache.borrow_mut();
+        if size_cache.len() > 256 {
+            size_cache.retain(|_, (ts, _)| now.duration_since(*ts) < ttl);
+            if size_cache.len() > 256 {
+                size_cache.clear();
+            }
+        }
         for item in list.iter_mut() {
             let full = base.join(&item.1);
-            if let Ok(meta) = std::fs::metadata(&full) {
-                item.2 = fs_tree::format_bytes(meta.len());
-            } else {
-                item.2 = "--".to_string();
+            if let Some((ts, cached)) = size_cache.get(&full) {
+                if now.duration_since(*ts) < ttl {
+                    item.2 = cached.clone();
+                    continue;
+                }
             }
+            let formatted = if let Ok(meta) = std::fs::metadata(&full) {
+                fs_tree::format_bytes(meta.len())
+            } else {
+                "--".to_string()
+            };
+            size_cache.insert(full, (now, formatted.clone()));
+            item.2 = formatted;
         }
 
         list
@@ -1307,7 +1398,19 @@ impl App {
     }
 
     pub fn local_disk_stats(&self) -> (f64, f64, f64, f64) {
-        systemd::get_disk_usage(&self.config.local_dir)
+        let ttl = std::time::Duration::from_secs(2);
+        if let Some(ref cached) = *self.disk_stats_cache.borrow() {
+            if cached.local_dir == self.config.local_dir && cached.fetched_at.elapsed() < ttl {
+                return cached.stats;
+            }
+        }
+        let stats = systemd::get_disk_usage(&self.config.local_dir);
+        *self.disk_stats_cache.borrow_mut() = Some(DiskStatsCache {
+            local_dir: self.config.local_dir.clone(),
+            fetched_at: Instant::now(),
+            stats,
+        });
+        stats
     }
 
     pub fn disk_pct(&self) -> f64 {
@@ -1347,11 +1450,7 @@ impl App {
         }
 
         if self.is_syncing() {
-            let duration_s = if let Some(start) = self.live.sync_start {
-                start.elapsed().as_secs()
-            } else {
-                crate::monitor::streamer::get_running_sync_elapsed_seconds().unwrap_or_default()
-            };
+            let duration_s = self.live.sync_start.map(|s| s.elapsed().as_secs()).unwrap_or(0);
             if duration_s > 300 {
                 alerts.push(Alert {
                     level: AlertLevel::Warning,
@@ -1513,10 +1612,17 @@ impl App {
     }
 }
 
-fn spawn_quota_fetch(remote: String, tx: std::sync::mpsc::Sender<CloudQuota>) {
+fn spawn_quota_fetch(remote: String, tx: tokio::sync::mpsc::UnboundedSender<BgEvent>) {
+    let rclone_conf_path = config::rclone_config_file();
     tokio::spawn(async move {
+        if remote.trim().is_empty() {
+            return;
+        }
         let mut cmd = tokio::process::Command::new("rclone");
         cmd.args(["about", &remote, "--json"]);
+        if rclone_conf_path.exists() {
+            cmd.arg("--config").arg(&rclone_conf_path);
+        }
         if let Ok(output) = cmd.output().await {
             if output.status.success() {
                 if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
@@ -1524,11 +1630,11 @@ fn spawn_quota_fetch(remote: String, tx: std::sync::mpsc::Sender<CloudQuota>) {
                     let used = val.get("used").and_then(|v| v.as_u64()).unwrap_or(0);
                     let free = val.get("free").and_then(|v| v.as_u64()).unwrap_or(0);
                     if total > 0 {
-                        let _ = tx.send(CloudQuota {
+                        let _ = tx.send(BgEvent::QuotaFetched(CloudQuota {
                             total_bytes: total,
                             used_bytes: used,
                             free_bytes: free,
-                        });
+                        }));
                     }
                 }
             }
@@ -1536,16 +1642,21 @@ fn spawn_quota_fetch(remote: String, tx: std::sync::mpsc::Sender<CloudQuota>) {
     });
 }
 
-fn count_dir_files(p: &std::path::Path) -> usize {
+/// Recursively counts non-hidden regular files using `entry.file_type()` (does NOT
+/// follow symlinks, preventing infinite recursion on symlink cycles and avoiding
+/// redundant `stat` syscalls on modern filesystems).
+pub(crate) fn count_dir_files(p: &std::path::Path) -> usize {
     let mut count = 0;
     if let Ok(entries) = std::fs::read_dir(p) {
         for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
+            let Ok(ft) = entry.file_type() else {
+                continue;
+            };
+            if ft.is_dir() {
                 if !entry.file_name().to_string_lossy().starts_with('.') {
-                    count += count_dir_files(&path);
+                    count += count_dir_files(&entry.path());
                 }
-            } else if path.is_file() {
+            } else if ft.is_file() {
                 count += 1;
             }
         }
@@ -1553,10 +1664,10 @@ fn count_dir_files(p: &std::path::Path) -> usize {
     count
 }
 
-fn spawn_file_count(dir_path: std::path::PathBuf, tx: std::sync::mpsc::Sender<usize>) {
+fn spawn_file_count(dir_path: std::path::PathBuf, tx: tokio::sync::mpsc::UnboundedSender<BgEvent>) {
     tokio::task::spawn_blocking(move || {
         let c = count_dir_files(&dir_path);
-        let _ = tx.send(c);
+        let _ = tx.send(BgEvent::FileCounted(c));
     });
 }
 

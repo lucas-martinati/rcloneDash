@@ -1,7 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::RwLock;
 
 pub use crate::monitor::events::{
@@ -12,6 +11,9 @@ pub use crate::monitor::parser::strip_ansi;
 
 #[derive(Debug, Clone)]
 pub struct StreamerState {
+    /// Monotonically increasing version counter bumped on every stream update,
+    /// allowing UI ticks to skip cloning unchanged log history and vectors.
+    pub generation: u64,
     pub is_syncing: bool,
     pub sync_start: Option<Instant>,
     pub phase: String,
@@ -32,6 +34,7 @@ pub struct StreamerState {
 
 impl StreamerState {
     pub fn reset_for_new_sync(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
         self.is_syncing = true;
         self.sync_start = Some(Instant::now());
         // Nouvelle observation : un resync requis ne vaut que pour le run
@@ -53,6 +56,7 @@ impl StreamerState {
     }
 
     pub fn mark_finished(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
         self.is_syncing = false;
         self.sync_start = None;
         self.phase = "6. Done".to_string();
@@ -113,6 +117,7 @@ impl StreamerState {
 
     /// Applique un événement universel de synchronisation à l'état du streamer
     pub fn apply_event(&mut self, event: SyncEvent) {
+        self.generation = self.generation.wrapping_add(1);
         match event {
             SyncEvent::SyncStarted { .. } => {
                 self.reset_for_new_sync();
@@ -190,6 +195,7 @@ impl StreamerState {
 impl Default for StreamerState {
     fn default() -> Self {
         Self {
+            generation: 1,
             is_syncing: false,
             sync_start: None,
             phase: "Idle".to_string(),
@@ -237,93 +243,108 @@ pub fn get_running_sync_elapsed_seconds() -> Option<u64> {
 }
 
 pub fn spawn_log_streamer() -> SharedStreamer {
-    let mut initial_state = StreamerState::default();
-    let service = "rclone-bisync.service";
-
-    // 1. Pré-remplir le tampon d'historique des logs (200 dernières lignes)
-    if let Ok(out) = std::process::Command::new("journalctl")
-        .args(["--user", "-u", service, "-n", "200", "--output=cat"])
-        .output()
+    #[cfg(test)]
     {
-        let text = String::from_utf8_lossy(&out.stdout);
-        for raw_line in text.lines() {
-            for line in raw_line.split('\r') {
-                let clean = strip_ansi(line).trim().to_string();
-                if !clean.is_empty() {
-                    for disp in format_log_line_for_display(&clean) {
-                        if initial_state.log_lines.len() >= 500 {
-                            initial_state.log_lines.pop_front();
-                        }
-                        initial_state.log_lines.push_back(disp);
-                    }
-                }
-            }
-        }
+        Arc::new(RwLock::new(StreamerState::default()))
     }
 
-    // 2. Initialisation de l'état : vérifier si rclone tourne déjà en ce moment
-    let is_running = {
-        let out = std::process::Command::new("systemctl")
-            .args(["--user", "is-active", service])
-            .output();
-        if let Ok(o) = out {
-            String::from_utf8_lossy(&o.stdout).trim() == "active"
-        } else {
-            false
-        }
-    };
+    #[cfg(not(test))]
+    {
+        use tokio::io::{AsyncBufReadExt, BufReader};
 
-    if is_running {
-        initial_state.is_syncing = true;
-        let elapsed_ps = get_running_sync_elapsed_seconds().unwrap_or(0);
-        initial_state.sync_start = Some(Instant::now().checked_sub(std::time::Duration::from_secs(elapsed_ps)).unwrap_or_else(Instant::now));
-        initial_state.phase = "1. Listings".to_string();
-        initial_state.phase_index = 0;
-    }
+        let mut initial_state = StreamerState::default();
+        let service = "rclone-bisync.service";
 
-    let state = Arc::new(RwLock::new(initial_state));
-
-    // 3. Tâche de streaming en temps réel (uniquement les nouvelles lignes avec -n 0)
-    let state_clone = Arc::clone(&state);
-    tokio::spawn(async move {
-        loop {
-            let mut child = match tokio::process::Command::new("journalctl")
-                .args(["--user", "-u", service, "-f", "-n", "0", "--output=cat"])
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-            {
-                Ok(c) => c,
-                Err(_) => {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    continue;
-                }
-            };
-
-            if let Some(stdout) = child.stdout.take() {
-                let reader = BufReader::new(stdout);
-                let mut lines = reader.lines();
-
-                while let Ok(Some(raw_line)) = lines.next_line().await {
-                    for line in raw_line.split('\r') {
-                        let clean = strip_ansi(line).trim().to_string();
-                        if !clean.is_empty() {
-                            let mut st = state_clone.write().await;
-                            parse_stream_line(&clean, &mut st);
+        // 1. Pré-remplir le tampon d'historique des logs (200 dernières lignes)
+        if let Ok(out) = std::process::Command::new("journalctl")
+            .args(["--user", "-u", service, "-n", "200", "--output=cat"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&out.stdout);
+            for raw_line in text.lines() {
+                for line in raw_line.split('\r') {
+                    let clean = strip_ansi(line).trim().to_string();
+                    if !clean.is_empty() {
+                        for disp in format_log_line_for_display(&clean) {
+                            if initial_state.log_lines.len() >= 500 {
+                                initial_state.log_lines.pop_front();
+                            }
+                            initial_state.log_lines.push_back(disp);
                         }
                     }
                 }
             }
-
-            let _ = child.wait().await;
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
-    });
 
-    state
+        // 2. Initialisation de l'état : vérifier si rclone tourne déjà en ce moment
+        let is_running = {
+            let out = std::process::Command::new("systemctl")
+                .args(["--user", "is-active", service])
+                .output();
+            if let Ok(o) = out {
+                String::from_utf8_lossy(&o.stdout).trim() == "active"
+            } else {
+                false
+            }
+        };
+
+        if is_running {
+            initial_state.is_syncing = true;
+            let elapsed_ps = get_running_sync_elapsed_seconds().unwrap_or(0);
+            initial_state.sync_start = Some(
+                Instant::now()
+                    .checked_sub(std::time::Duration::from_secs(elapsed_ps))
+                    .unwrap_or_else(Instant::now),
+            );
+            initial_state.phase = "1. Listings".to_string();
+            initial_state.phase_index = 0;
+        }
+
+        let state = Arc::new(RwLock::new(initial_state));
+
+        // 3. Tâche de streaming en temps réel (uniquement les nouvelles lignes avec -n 0)
+        let state_clone = Arc::clone(&state);
+        tokio::spawn(async move {
+            loop {
+                let mut child = match tokio::process::Command::new("journalctl")
+                    .args(["--user", "-u", service, "-f", "-n", "0", "--output=cat"])
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                {
+                    Ok(c) => c,
+                    Err(_) => {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                        continue;
+                    }
+                };
+
+                if let Some(stdout) = child.stdout.take() {
+                    let reader = BufReader::new(stdout);
+                    let mut lines = reader.lines();
+
+                    while let Ok(Some(raw_line)) = lines.next_line().await {
+                        for line in raw_line.split('\r') {
+                            let clean = strip_ansi(line).trim().to_string();
+                            if !clean.is_empty() {
+                                let mut st = state_clone.write().await;
+                                parse_stream_line(&clean, &mut st);
+                            }
+                        }
+                    }
+                }
+
+                let _ = child.wait().await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            }
+        });
+
+        state
+    }
 }
 
 fn parse_stream_line(line: &str, state: &mut StreamerState) {
+    state.generation = state.generation.wrapping_add(1);
     // Formatage propre pour affichage dans le panneau des logs
     for disp in format_log_line_for_display(line) {
         if state.log_lines.len() >= 500 {
