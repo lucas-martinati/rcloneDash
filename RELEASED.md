@@ -1,5 +1,17 @@
 # 🚀 RcloneDash - Notes de version (Release Notes)
 
+## [v1.0.37] - Récupération Automatique Bisync (`--recover`)
+
+Cette version fiabilise la reprise après interruption ou erreur critique de `rclone bisync` en privilégiant la récupération automatique des listes plutôt qu'un `--resync` complet créateur de doublons.
+
+---
+
+### 🛡️ Améliorations et Corrections
+- **Reprise automatique avec `--recover`** : Ajout du flag `--recover` à côté de `--resilient` dans `rclone-bisync-guard.sh` ainsi que dans l'aperçu `--dry-run` du dashboard.
+- **Garde de cache plus précise** : Filtrage des fichiers `.path1.lst` / `.path2.lst` sur le remote actif (`${REMOTE%%:*}_*`) pour éviter les faux positifs dus à d'autres fichiers du cache, et utilisation prioritaire des sauvegardes `.lst-old` avec `--recover` avant de recourir à un `--resync`.
+
+---
+
 ## [v1.0.36] - Optimisation Temps Réel, Pipeline Asynchrone & Sécurité Système
 
 Cette version apporte une refonte profonde du moteur interne de RcloneDash : consommation CPU et appels disque divisés drastiquement au repos, pipeline asynchrone Tokio unifié sans latence, écritures de configuration atomiques et durcissement de la gestion du terminal.
