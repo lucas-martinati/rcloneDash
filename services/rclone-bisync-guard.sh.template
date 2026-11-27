@@ -98,6 +98,7 @@ run_bisync() {
         --stats-file-name-length 0 \
         --conflict-resolve newer \
         --resilient \
+        --recover \
         "${extra_args[@]}"
     local rc=$?
     # On n'horodate le dernier sync complet que si rclone a réussi.
@@ -170,17 +171,23 @@ if [ "${1:-}" = "--resync" ] || [ -f "$RESYNC_FILE" ]; then
 
 # 1. Sécurité anti-blocage : listes de référence préalables absentes du cache
 # (premier lancement, ou invalidées suite à une erreur critique précédente).
-# Un bisync standard échouerait obligatoirement : auto-récupération immédiate.
+# Si des sauvegardes .lst-old existent, on laisse --recover tenter une reprise
+# sans --resync (pour éviter les doublons). Sinon, auto-récupération --resync.
 elif [ ! -d "$HOME/.cache/rclone/bisync" ] || \
-     [ -z "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "*.path1.lst" -print -quit 2>/dev/null)" ] || \
-     [ -z "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "*.path2.lst" -print -quit 2>/dev/null)" ]; then
-    is_resync=1
-    # Ne notifier d'une récupération automatique que si ce n'est PAS la toute première installation
-    # (i.e. si un sync préalable avait déjà réussi, attesté par la présence de $STAMP).
-    if [ -f "$STAMP" ]; then
-        is_auto_resync=1
+     [ -z "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "${REMOTE%%:*}_*.path1.lst" -print -quit 2>/dev/null)" ] || \
+     [ -z "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "${REMOTE%%:*}_*.path2.lst" -print -quit 2>/dev/null)" ]; then
+    if [ -n "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "${REMOTE%%:*}_*.path1.lst-old" -print -quit 2>/dev/null)" ] && \
+       [ -n "$(find "$HOME/.cache/rclone/bisync" -maxdepth 1 -name "${REMOTE%%:*}_*.path2.lst-old" -print -quit 2>/dev/null)" ]; then
+        reason="récupération automatique des listes (--recover)"
+    else
+        is_resync=1
+        # Ne notifier d'une récupération automatique que si ce n'est PAS la toute première installation
+        # (i.e. si un sync préalable avait déjà réussi, attesté par la présence de $STAMP).
+        if [ -f "$STAMP" ]; then
+            is_auto_resync=1
+        fi
+        reason="initialisation / auto-récupération (listes de référence absentes -> --resync-mode newer)"
     fi
-    reason="initialisation / auto-récupération (listes de référence absentes -> --resync-mode newer)"
 
 # 2. Sync manuel forcé depuis le dashboard ?
 elif [ -f "$FORCE_FILE" ]; then

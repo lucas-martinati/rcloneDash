@@ -1112,6 +1112,7 @@ impl App {
                 "--conflict-resolve".to_string(),
                 "newer".to_string(),
                 "--resilient".to_string(),
+                "--recover".to_string(),
             ]);
             let mut cmd = tokio::process::Command::new("rclone");
             cmd.args(&args);
